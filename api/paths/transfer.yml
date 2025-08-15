@@ -1,0 +1,106 @@
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+responses:
+  ValidationError:
+    description: PublicHTTPValidationError
+    schema:
+      $ref: "../definitions/errors.yml#/definitions/PublicHTTPValidationError"
+  AuthUnauthorizedResponse:
+    description: PublicHTTPError
+    schema:
+      $ref: ../definitions/errors.yml#/definitions/PublicHTTPError
+  AuthForbiddenResponse:
+    description: "PublicHTTPError, type `USER_DEACTIVATED`/`NOT_LOCAL_USER`"
+    schema:
+      $ref: ../definitions/errors.yml#/definitions/PublicHTTPError
+  RateLimitResponse:
+    description: "PublicHTTPError, type `RATE_LIMIT_EXCEEDED`"
+    schema:
+      $ref: ../definitions/errors.yml#/definitions/PublicHTTPError
+paths:
+  /api/v1/transfer:
+    post:
+      security:
+        - Bearer: []
+      tags:
+        - transfer
+      summary: "Create a new transfer"
+      description: "Initiate a transfer operation that will be processed in batch"
+      operationId: "postTransfer"
+      parameters:
+        - name: "payload"
+          in: "body"
+          required: true
+          schema:
+            $ref: "../definitions/transfer.yml#/definitions/TransferRequest"
+      responses:
+        "200":
+          description: "Transfer created successfully"
+          schema:
+            $ref: "../definitions/transfer.yml#/definitions/TransferResponse"
+        "400":
+          $ref: "#/responses/ValidationError"
+        "401":
+          $ref: "#/responses/AuthUnauthorizedResponse"
+        "403":
+          description: "Insufficient balance or permission denied"
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/PublicHTTPError"
+        "429":
+          $ref: "#/responses/RateLimitResponse"
+
+  /api/v1/transfer/p2p:
+    post:
+      security:
+        - Bearer: []
+      tags:
+        - transfer
+      summary: "Create P2P transfer between users"
+      description: "Transfer assets between two users using their user IDs"
+      operationId: "postTransferP2P"
+      parameters:
+        - name: "payload"
+          in: "body"
+          required: true
+          schema:
+            $ref: "../definitions/transfer.yml#/definitions/TransferP2PRequest"
+      responses:
+        "200":
+          description: "P2P transfer created successfully"
+          schema:
+            $ref: "../definitions/transfer.yml#/definitions/TransferResponse"
+        "400":
+          $ref: "#/responses/ValidationError"
+        "401":
+          $ref: "#/responses/AuthUnauthorizedResponse"
+        "403":
+          description: "Insufficient balance"
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/PublicHTTPError"
+
+  /api/v1/transfer/batch:
+    post:
+      security:
+        - Bearer: []
+      tags:
+        - batch
+      summary: "Create batch transfers"
+      description: "Create multiple transfers in a single request for gas optimization"
+      operationId: "postTransferBatch"
+      parameters:
+        - name: "payload"
+          in: "body"
+          required: true
+          schema:
+            $ref: "../definitions/transfer.yml#/definitions/TransferBatchRequest"
+      responses:
+        "200":
+          description: "Batch transfer created successfully"
+          schema:
+            $ref: "../definitions/transfer.yml#/definitions/TransferBatchResponse"
+        "400":
+          $ref: "#/responses/ValidationError"
+        "401":
+          $ref: "#/responses/AuthUnauthorizedResponse"

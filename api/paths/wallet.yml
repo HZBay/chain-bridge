@@ -1,0 +1,79 @@
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths:
+  /api/v1/wallet/{user_id}:
+    get:
+      security:
+        - Bearer: []
+      tags: ["wallet"]
+      summary: "Get user wallet info"
+      description: "Get wallet information for a specific user"
+      operationId: "getWallet"
+      parameters:
+        - name: "user_id"
+          in: "path"
+          required: true
+          type: "string"
+          format: "uuid"
+          description: "User ID"
+        - name: "chain_id"
+          in: "query"
+          type: "integer"
+          format: "int64"
+          description: "Blockchain network ID (optional, returns all chains if omitted)"
+      responses:
+        200:
+          description: "Wallet information"
+          schema:
+            $ref: "#/definitions/WalletResponse"
+        400:
+          description: "Invalid request"
+          schema:
+          $ref: "#/definitions/publicHttpValidationError"
+      401:
+        description: "Unauthorized"
+        schema:
+          $ref: "#/definitions/publicHttpError"
+      404:
+        description: "User not found"
+        schema:
+          $ref: "#/definitions/publicHttpError"
+
+deploy_wallet:
+  post:
+    security:
+      - Bearer: []
+    tags: ["wallet"]
+    summary: "Deploy AA wallet for user"
+    description: "Deploy Account Abstraction wallet for a user on specified chain"
+    operationId: "deployWallet"
+    parameters:
+      - name: "user_id"
+        in: "path"
+        required: true
+        type: "string"
+        format: "uuid"
+      - name: "payload"
+        in: "body"
+        required: true
+        schema:
+          $ref: "#/definitions/DeployWalletRequest"
+    responses:
+      200:
+        description: "Wallet deployed successfully"
+        schema:
+          $ref: "#/definitions/DeployWalletResponse"
+      400:
+        description: "Invalid request"
+        schema:
+          $ref: "#/definitions/publicHttpValidationError"
+      401:
+        description: "Unauthorized"
+        schema:
+          $ref: "#/definitions/publicHttpError"
+      409:
+        description: "Wallet already exists"
+        schema:
+          $ref: "#/definitions/publicHttpError"

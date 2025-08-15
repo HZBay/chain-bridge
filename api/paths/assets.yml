@@ -1,0 +1,134 @@
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+responses:
+  ValidationError:
+    description: PublicHTTPValidationError
+    schema:
+      $ref: "../definitions/errors.yml#/definitions/PublicHTTPValidationError"
+  AuthUnauthorizedResponse:
+    description: PublicHTTPError
+    schema:
+      $ref: ../definitions/errors.yml#/definitions/PublicHTTPError
+  AuthForbiddenResponse:
+    description: "PublicHTTPError, type `USER_DEACTIVATED`/`NOT_LOCAL_USER`"
+    schema:
+      $ref: ../definitions/errors.yml#/definitions/PublicHTTPError
+paths:
+  /api/v1/users/{user_id}/assets:
+    get:
+      security:
+        - Bearer: []
+      tags:
+        - assets
+      summary: "Get user assets"
+      description: "Get all assets for a user across multiple chains (Alchemy enhanced)"
+      operationId: "getAssets"
+      parameters:
+        - name: "user_id"
+          in: "path"
+          required: true
+          type: "string"
+          format: "uuid"
+        - name: "chain_id"
+          in: "query"
+          type: "integer"
+          format: "int64"
+          description: "Filter by chain ID"
+        - name: "asset_type"
+          in: "query"
+          type: "string"
+          enum: ["ETH", "ERC20", "CPOP", "NFT"]
+          description: "Filter by asset type"
+      responses:
+        "200":
+          description: "User assets"
+          schema:
+            $ref: "../definitions/assets.yml#/definitions/AssetsResponse"
+        "400":
+          $ref: "#/responses/ValidationError"
+        "401":
+          $ref: "#/responses/AuthUnauthorizedResponse"
+        "404":
+          description: "User not found"
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/PublicHTTPError"
+
+  /api/v1/users/{user_id}/balance:
+    get:
+      security:
+        - Bearer: []
+      tags:
+        - assets
+      summary: "Get user balance"
+      description: "Get balance for specific asset (Alchemy enhanced)"
+      operationId: "getBalance"
+      parameters:
+        - name: "user_id"
+          in: "path"
+          required: true
+          type: "string"
+          format: "uuid"
+        - name: "chain_id"
+          in: "query"
+          required: true
+          type: "integer"
+          format: "int64"
+        - name: "asset_type"
+          in: "query"
+          required: true
+          type: "string"
+          enum: ["ETH", "ERC20", "CPOP"]
+        - name: "contract_address"
+          in: "query"
+          type: "string"
+          pattern: "^0x[a-fA-F0-9]{40}$"
+          description: "Required for ERC20 tokens"
+      responses:
+        "200":
+          description: "User balance"
+          schema:
+            $ref: "../definitions/assets.yml#/definitions/BalanceResponse"
+        "400":
+          $ref: "#/responses/ValidationError"
+        "401":
+          $ref: "#/responses/AuthUnauthorizedResponse"
+
+  /api/v1/users/{user_id}/transactions:
+    get:
+      security:
+        - Bearer: []
+      tags:
+        - assets
+      summary: "Get transaction history"
+      description: "Get transaction history for user (Alchemy enhanced)"
+      operationId: "getTransactions"
+      parameters:
+        - name: "user_id"
+          in: "path"
+          required: true
+          type: "string"
+          format: "uuid"
+        - name: "chain_id"
+          in: "query"
+          type: "integer"
+          format: "int64"
+        - name: "limit"
+          in: "query"
+          type: "integer"
+          default: 20
+          maximum: 100
+        - name: "offset"
+          in: "query"
+          type: "integer"
+          default: 0
+      responses:
+        "200":
+          description: "Transaction history"
+          schema:
+            $ref: "../definitions/assets.yml#/definitions/TransactionHistoryResponse"
+        "400":
+          $ref: "#/responses/ValidationError"
+        "401":
+          $ref: "#/responses/AuthUnauthorizedResponse"

@@ -1,0 +1,957 @@
+# ChainBridge API - Based on go-starter framework with Alchemy Integration
+swagger: "2.0"
+info:
+  title: "ChainBridge API"
+  version: "2.0.0"
+  description: "Universal Wallet Relayer with Alchemy Integration for Web2 developers. CPOP Account Abstraction based blockchain asset management service."
+  contact:
+    name: "ChainBridge Team"
+    email: "tech@chain-bridge.com"
+
+host: "api.chain-bridge.com"
+basePath: "/api/v1"
+schemes: ["https"]
+
+consumes:
+  - "application/json"
+produces:
+  - "application/json"
+
+securityDefinitions:
+  ApiKeyAuth:
+    type: apiKey
+    name: X-API-Key
+    in: header
+    description: "API Key for authentication"
+  Bearer:
+    description: |-
+      Access token for application access, **must** include "Bearer " prefix.
+      Example: `Bearer b4a94a42-3ea2-4af3-9699-8bcbfee6e6d2`
+    type: apiKey
+    name: Authorization
+    in: header
+    x-keyPrefix: 'Bearer '
+  Management:
+    description: Management secret, used for monitoring and infrastructure related calls
+    type: apiKey
+    name: mgmt-secret
+    in: query
+
+security:
+  - ApiKeyAuth: []
+
+tags:
+  - name: "common"
+    description: "Common system operations"
+  - name: "auth"
+    description: "Authentication operations"
+  - name: "wallet"
+    description: "Wallet management operations"
+  - name: "transfer"
+    description: "Transfer operations"
+  - name: "assets"
+    description: "Asset management operations (Alchemy enhanced)"
+  - name: "batch"
+    description: "Batch processing operations"
+  - name: "application"
+    description: "Application layer services"
+
+paths:
+  # Common endpoints
+  /-/healthy:
+    get:
+      security:
+      - Management: []
+      description: |-
+        This endpoint returns 200 when the service is healthy.
+        Returns an human readable string about the current service status.
+        In addition to readiness probes, it performs actual write probes.
+        Note that /-/healthy is private (shielded by the mgmt-secret) as it may expose sensitive information about your service.
+      produces:
+      - text/plain
+      tags:
+      - common
+      summary: Get healthy (liveness probe)
+      operationId: GetHealthyRoute
+      responses:
+        "200":
+          description: Ready.
+        "521":
+          description: Not ready.
+
+  /-/ready:
+    get:
+      description: |-
+        This endpoint returns 200 when the service is ready to serve traffic.
+        Does read-only probes apart from the general server ready state.
+        Note that /-/ready is typically public (and not shielded by a mgmt-secret), we thus prevent information leakage here and only return `"Ready."`.
+      produces:
+      - text/plain
+      tags:
+      - common
+      summary: Get ready (readiness probe)
+      operationId: GetReadyRoute
+      responses:
+        "200":
+          description: Ready.
+        "521":
+          description: Not ready.
+
+  /swagger.yml:
+    get:
+      description: |-
+        OpenAPI Specification ver. 2 (fka Swagger)
+        Returns our handcrafted and validated `swagger.yml`.
+      produces:
+      - text/plain
+      tags:
+      - common
+      summary: Get swagger.yml
+      operationId: GetSwaggerRoute
+      responses:
+        "200":
+          description: OK
+
+  # Wallet management endpoints
+  /wallet/{user_id}:
+    get:
+      tags: ["wallet"]
+      summary: "Get user wallet info"
+      description: "Get wallet information for a specific user"
+      operationId: "getWallet"
+      parameters:
+        - name: "user_id"
+          in: "path"
+          required: true
+          type: "string"
+          format: "uuid"
+          description: "User ID"
+        - name: "chain_id"
+          in: "query"
+          type: "integer"
+          format: "int64"
+          description: "Blockchain network ID (optional, returns all chains if omitted)"
+      responses:
+        200:
+          description: "Wallet information"
+          schema:
+            $ref: "#/definitions/WalletResponse"
+        400:
+          description: "Invalid request"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        404:
+          description: "User not found"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+
+  /wallet/{user_id}/deploy:
+    post:
+      tags: ["wallet"]
+      summary: "Deploy AA wallet for user"
+      description: "Deploy Account Abstraction wallet for a user on specified chain"
+      operationId: "deployWallet"
+      parameters:
+        - name: "user_id"
+          in: "path"
+          required: true
+          type: "string"
+          format: "uuid"
+        - name: "payload"
+          in: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/DeployWalletRequest"
+      responses:
+        200:
+          description: "Wallet deployed successfully"
+          schema:
+            $ref: "#/definitions/DeployWalletResponse"
+        400:
+          description: "Invalid request"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        409:
+          description: "Wallet already exists"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+
+  # Transfer endpoints
+  /transfer:
+    post:
+      tags: ["transfer"]
+      summary: "Create a new transfer"
+      description: "Initiate a transfer operation that will be processed in batch"
+      operationId: "postTransfer"
+      parameters:
+        - name: "payload"
+          in: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/TransferRequest"
+      responses:
+        200:
+          description: "Transfer created successfully"
+          schema:
+            $ref: "#/definitions/TransferResponse"
+        400:
+          description: "Invalid request"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        403:
+          description: "Insufficient balance or permission denied"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        429:
+          description: "Rate limit exceeded"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+
+  /transfer/p2p:
+    post:
+      tags: ["transfer"]
+      summary: "Create P2P transfer between users"
+      description: "Transfer assets between two users using their user IDs"
+      operationId: "postTransferP2P"
+      parameters:
+        - name: "payload"
+          in: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/TransferP2PRequest"
+      responses:
+        200:
+          description: "P2P transfer created successfully"
+          schema:
+            $ref: "#/definitions/TransferResponse"
+        400:
+          description: "Invalid request"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        403:
+          description: "Insufficient balance"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+
+  /transfer/batch:
+    post:
+      tags: ["batch"]
+      summary: "Create batch transfers"
+      description: "Create multiple transfers in a single request for gas optimization"
+      operationId: "postTransferBatch"
+      parameters:
+        - name: "payload"
+          in: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/TransferBatchRequest"
+      responses:
+        200:
+          description: "Batch transfer created successfully"
+          schema:
+            $ref: "#/definitions/TransferBatchResponse"
+        400:
+          description: "Invalid request"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+
+  # Assets endpoints
+  /assets/{user_id}:
+    get:
+      tags: ["assets"]
+      summary: "Get user assets"
+      description: "Get all assets for a user across multiple chains (Alchemy enhanced)"
+      operationId: "getAssets"
+      parameters:
+        - name: "user_id"
+          in: "path"
+          required: true
+          type: "string"
+          format: "uuid"
+        - name: "chain_id"
+          in: "query"
+          type: "integer"
+          format: "int64"
+          description: "Filter by chain ID"
+        - name: "asset_type"
+          in: "query"
+          type: "string"
+          enum: ["ETH", "ERC20", "CPOP", "NFT"]
+          description: "Filter by asset type"
+      responses:
+        200:
+          description: "User assets"
+          schema:
+            $ref: "#/definitions/AssetsResponse"
+        400:
+          description: "Invalid request"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+        404:
+          description: "User not found"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+
+  /assets/{user_id}/balance:
+    get:
+      tags: ["assets"]
+      summary: "Get user balance"
+      description: "Get balance for specific asset (Alchemy enhanced)"
+      operationId: "getBalance"
+      parameters:
+        - name: "user_id"
+          in: "path"
+          required: true
+          type: "string"
+          format: "uuid"
+        - name: "chain_id"
+          in: "query"
+          required: true
+          type: "integer"
+          format: "int64"
+        - name: "asset_type"
+          in: "query"
+          required: true
+          type: "string"
+          enum: ["ETH", "ERC20", "CPOP"]
+        - name: "contract_address"
+          in: "query"
+          type: "string"
+          pattern: "^0x[a-fA-F0-9]{40}$"
+          description: "Required for ERC20 tokens"
+      responses:
+        200:
+          description: "User balance"
+          schema:
+            $ref: "#/definitions/BalanceResponse"
+        400:
+          description: "Invalid request"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+
+  # Transaction history
+  /transactions/{user_id}:
+    get:
+      tags: ["assets"]
+      summary: "Get transaction history"
+      description: "Get transaction history for user (Alchemy enhanced)"
+      operationId: "getTransactions"
+      parameters:
+        - name: "user_id"
+          in: "path"
+          required: true
+          type: "string"
+          format: "uuid"
+        - name: "chain_id"
+          in: "query"
+          type: "integer"
+          format: "int64"
+        - name: "limit"
+          in: "query"
+          type: "integer"
+          default: 20
+          maximum: 100
+        - name: "offset"
+          in: "query"
+          type: "integer"
+          default: 0
+      responses:
+        200:
+          description: "Transaction history"
+          schema:
+            $ref: "#/definitions/TransactionHistoryResponse"
+        400:
+          description: "Invalid request"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+
+  # Application layer endpoints
+  /application/batch-reward:
+    post:
+      tags: ["application"]
+      summary: "Batch reward distribution"
+      description: "Distribute CPOP rewards to multiple users efficiently"
+      operationId: "postBatchReward"
+      parameters:
+        - name: "payload"
+          in: "body"
+          required: true
+          schema:
+            $ref: "#/definitions/BatchRewardRequest"
+      responses:
+        200:
+          description: "Batch reward distribution initiated"
+          schema:
+            $ref: "#/definitions/BatchRewardResponse"
+        400:
+          description: "Invalid request"
+          schema:
+            $ref: "#/definitions/ErrorResponse"
+
+definitions:
+  # Common definitions
+  ErrorResponse:
+    type: "object"
+    required:
+      - "error"
+    properties:
+      error:
+        type: "string"
+        description: "Error message"
+        example: "Insufficient balance"
+      error_code:
+        type: "integer"
+        description: "Numeric error code"
+        example: 2001
+      details:
+        type: "object"
+        description: "Additional error details"
+        additionalProperties: true
+      request_id:
+        type: "string"
+        format: "uuid"
+        description: "Unique request identifier for tracking"
+
+  # Wallet definitions
+  WalletResponse:
+    type: "object"
+    required:
+      - "user_id"
+      - "wallets"
+    properties:
+      user_id:
+        type: "string"
+        format: "uuid"
+        description: "User ID"
+      wallets:
+        type: "array"
+        items:
+          $ref: "#/definitions/WalletInfo"
+
+  WalletInfo:
+    type: "object"
+    required:
+      - "chain_id"
+      - "address"
+      - "status"
+    properties:
+      chain_id:
+        type: "integer"
+        format: "int64"
+        description: "Blockchain network ID"
+        example: 1
+      address:
+        type: "string"
+        pattern: "^0x[a-fA-F0-9]{40}$"
+        description: "Wallet address"
+        example: "0x1234567890123456789012345678901234567890"
+      status:
+        type: "string"
+        enum: ["deployed", "pending", "failed"]
+        description: "Wallet deployment status"
+      master_signer:
+        type: "string"
+        pattern: "^0x[a-fA-F0-9]{40}$"
+        description: "Master signer address (if configured)"
+      deposit_balance:
+        type: "string"
+        description: "ETH deposit balance for gas payments"
+        example: "0.1"
+
+  DeployWalletRequest:
+    type: "object"
+    required:
+      - "chain_id"
+    properties:
+      chain_id:
+        type: "integer"
+        format: "int64"
+        description: "Blockchain network ID"
+        example: 1
+        enum: [1, 56, 137, 42161]
+      master_signer:
+        type: "string"
+        pattern: "^0x[a-fA-F0-9]{40}$"
+        description: "Optional master signer address"
+
+  DeployWalletResponse:
+    type: "object"
+    required:
+      - "transaction_id"
+      - "wallet_address"
+      - "status"
+    properties:
+      transaction_id:
+        type: "string"
+        format: "uuid"
+        description: "Deployment transaction ID"
+      wallet_address:
+        type: "string"
+        pattern: "^0x[a-fA-F0-9]{40}$"
+        description: "Deployed wallet address"
+      status:
+        type: "string"
+        enum: ["pending", "submitted", "confirmed"]
+        description: "Deployment status"
+      explorer_url:
+        type: "string"
+        format: "uri"
+        description: "Blockchain explorer URL"
+
+  # Transfer definitions
+  TransferRequest:
+    type: "object"
+    required:
+      - "from_user_id"
+      - "to_address"
+      - "chain_id"
+      - "asset_type"
+      - "amount"
+    properties:
+      from_user_id:
+        type: "string"
+        format: "uuid"
+        description: "Source user ID"
+        example: "550e8400-e29b-41d4-a716-446655440000"
+      to_address:
+        type: "string"
+        pattern: "^0x[a-fA-F0-9]{40}$"
+        description: "Destination address"
+        example: "0x1234567890123456789012345678901234567890"
+      chain_id:
+        type: "integer"
+        format: "int64"
+        description: "Blockchain network ID"
+        example: 1
+        enum: [1, 56, 137, 42161]
+      asset_type:
+        type: "string"
+        description: "Type of asset to transfer"
+        example: "ERC20"
+        enum: ["ETH", "ERC20", "CPOP", "NFT"]
+      contract_address:
+        type: "string"
+        pattern: "^0x[a-fA-F0-9]{40}$"
+        description: "Contract address (required for ERC20 and NFT)"
+        example: "0xdAC17F958D2ee523a2206206994597C13D831ec7"
+      amount:
+        type: "string"
+        pattern: "^[0-9]+\\.?[0-9]*$"
+        description: "Amount to transfer (in token units)"
+        example: "100.500000"
+      memo:
+        type: "string"
+        maxLength: 256
+        description: "Optional memo for the transfer"
+        example: "Payment for services"
+      gas_mode:
+        type: "string"
+        description: "Gas payment mode"
+        example: "sponsored"
+        enum: ["sponsored", "self"]
+        default: "sponsored"
+      priority:
+        type: "string"
+        description: "Transaction priority"
+        example: "normal"
+        enum: ["low", "normal", "high"]
+        default: "normal"
+
+  TransferResponse:
+    type: "object"
+    required:
+      - "transaction_id"
+      - "status"
+      - "estimated_confirmation"
+    properties:
+      transaction_id:
+        type: "string"
+        format: "uuid"
+        description: "Unique transaction identifier"
+        example: "tx_550e8400-e29b-41d4-a716-446655440000"
+      status:
+        type: "string"
+        description: "Current transaction status"
+        example: "pending"
+        enum: ["pending", "submitted", "confirmed", "failed"]
+      estimated_confirmation:
+        type: "integer"
+        description: "Estimated confirmation time in seconds"
+        example: 45
+      gas_fee_usd:
+        type: "number"
+        format: "float"
+        description: "Estimated gas fee in USD"
+        example: 2.50
+      from_address:
+        type: "string"
+        pattern: "^0x[a-fA-F0-9]{40}$"
+        description: "Source address"
+      to_address:
+        type: "string"
+        pattern: "^0x[a-fA-F0-9]{40}$"
+        description: "Destination address"
+      explorer_url:
+        type: "string"
+        format: "uri"
+        description: "Blockchain explorer URL (available after submission)"
+      batch_info:
+        $ref: "#/definitions/BatchInfo"
+
+  BatchInfo:
+    type: "object"
+    properties:
+      will_be_batched:
+        type: "boolean"
+        description: "Whether this transaction will be batched"
+        example: true
+      estimated_batch_time:
+        type: "integer"
+        description: "Estimated time until batch processing in seconds"
+        example: 15
+      current_batch_size:
+        type: "integer"
+        description: "Current number of operations in the batch"
+        example: 23
+
+  TransferP2PRequest:
+    type: "object"
+    required:
+      - "from_user_id"
+      - "to_user_id"
+      - "chain_id"
+      - "asset_type"
+      - "amount"
+    properties:
+      from_user_id:
+        type: "string"
+        format: "uuid"
+        description: "Source user ID"
+      to_user_id:
+        type: "string"
+        format: "uuid"
+        description: "Destination user ID"
+      chain_id:
+        type: "integer"
+        format: "int64"
+        description: "Blockchain network ID"
+      asset_type:
+        type: "string"
+        enum: ["ETH", "ERC20", "CPOP", "NFT"]
+      contract_address:
+        type: "string"
+        pattern: "^0x[a-fA-F0-9]{40}$"
+        description: "Contract address (required for ERC20)"
+      amount:
+        type: "string"
+        pattern: "^[0-9]+\\.?[0-9]*$"
+        description: "Amount to transfer"
+      memo:
+        type: "string"
+        maxLength: 256
+        description: "Optional memo"
+
+  TransferBatchRequest:
+    type: "object"
+    required:
+      - "from_user_id"
+      - "transfers"
+    properties:
+      from_user_id:
+        type: "string"
+        format: "uuid"
+        description: "Source user ID for all transfers"
+      transfers:
+        type: "array"
+        minItems: 1
+        maxItems: 100
+        items:
+          $ref: "#/definitions/BatchTransferItem"
+      gas_mode:
+        type: "string"
+        enum: ["sponsored", "self"]
+        default: "sponsored"
+
+  BatchTransferItem:
+    type: "object"
+    required:
+      - "chain_id"
+      - "asset_type"
+      - "amount"
+    properties:
+      to_address:
+        type: "string"
+        pattern: "^0x[a-fA-F0-9]{40}$"
+        description: "Destination address (use this OR to_user_id)"
+      to_user_id:
+        type: "string"
+        format: "uuid"
+        description: "Destination user ID (use this OR to_address)"
+      chain_id:
+        type: "integer"
+        format: "int64"
+      asset_type:
+        type: "string"
+        enum: ["ETH", "ERC20", "CPOP", "NFT"]
+      contract_address:
+        type: "string"
+        pattern: "^0x[a-fA-F0-9]{40}$"
+      amount:
+        type: "string"
+        pattern: "^[0-9]+\\.?[0-9]*$"
+      memo:
+        type: "string"
+        maxLength: 256
+
+  TransferBatchResponse:
+    type: "object"
+    required:
+      - "batch_id"
+      - "transactions"
+    properties:
+      batch_id:
+        type: "string"
+        format: "uuid"
+        description: "Batch identifier"
+      transactions:
+        type: "array"
+        items:
+          $ref: "#/definitions/TransferResponse"
+      total_gas_fee_usd:
+        type: "number"
+        format: "float"
+        description: "Total estimated gas fee for all transfers"
+
+  # Assets definitions
+  AssetsResponse:
+    type: "object"
+    required:
+      - "user_id"
+      - "assets"
+    properties:
+      user_id:
+        type: "string"
+        format: "uuid"
+      assets:
+        type: "array"
+        items:
+          $ref: "#/definitions/AssetInfo"
+      total_value_usd:
+        type: "number"
+        format: "float"
+        description: "Total portfolio value in USD"
+
+  AssetInfo:
+    type: "object"
+    required:
+      - "chain_id"
+      - "asset_type"
+      - "balance"
+    properties:
+      chain_id:
+        type: "integer"
+        format: "int64"
+      asset_type:
+        type: "string"
+        enum: ["ETH", "ERC20", "CPOP", "NFT"]
+      contract_address:
+        type: "string"
+        pattern: "^0x[a-fA-F0-9]{40}$"
+        description: "Contract address (for ERC20/NFT)"
+      symbol:
+        type: "string"
+        description: "Token symbol"
+        example: "USDT"
+      name:
+        type: "string"
+        description: "Token name"
+        example: "Tether USD"
+      decimals:
+        type: "integer"
+        description: "Token decimals"
+        example: 6
+      balance:
+        type: "string"
+        description: "Token balance"
+        example: "1000.500000"
+      value_usd:
+        type: "number"
+        format: "float"
+        description: "USD value of balance"
+        example: 1000.50
+
+  BalanceResponse:
+    type: "object"
+    required:
+      - "user_id"
+      - "chain_id"
+      - "balance"
+    properties:
+      user_id:
+        type: "string"
+        format: "uuid"
+      chain_id:
+        type: "integer"
+        format: "int64"
+      asset_type:
+        type: "string"
+        enum: ["ETH", "ERC20", "CPOP"]
+      balance:
+        type: "string"
+        description: "Token balance"
+        example: "1000.500000"
+      symbol:
+        type: "string"
+        example: "USDT"
+      decimals:
+        type: "integer"
+        example: 6
+      value_usd:
+        type: "number"
+        format: "float"
+        example: 1000.50
+
+  # Transaction history
+  TransactionHistoryResponse:
+    type: "object"
+    required:
+      - "user_id"
+      - "transactions"
+      - "total"
+    properties:
+      user_id:
+        type: "string"
+        format: "uuid"
+      transactions:
+        type: "array"
+        items:
+          $ref: "#/definitions/TransactionInfo"
+      total:
+        type: "integer"
+        description: "Total number of transactions"
+      limit:
+        type: "integer"
+      offset:
+        type: "integer"
+
+  TransactionInfo:
+    type: "object"
+    required:
+      - "transaction_id"
+      - "hash"
+      - "status"
+      - "timestamp"
+    properties:
+      transaction_id:
+        type: "string"
+        format: "uuid"
+      hash:
+        type: "string"
+        pattern: "^0x[a-fA-F0-9]{64}$"
+        description: "Transaction hash"
+      chain_id:
+        type: "integer"
+        format: "int64"
+      from_address:
+        type: "string"
+        pattern: "^0x[a-fA-F0-9]{40}$"
+      to_address:
+        type: "string"
+        pattern: "^0x[a-fA-F0-9]{40}$"
+      asset_type:
+        type: "string"
+        enum: ["ETH", "ERC20", "CPOP", "NFT"]
+      amount:
+        type: "string"
+        description: "Transfer amount"
+      status:
+        type: "string"
+        enum: ["pending", "confirmed", "failed"]
+      timestamp:
+        type: "integer"
+        format: "int64"
+        description: "Unix timestamp"
+      gas_fee:
+        type: "string"
+        description: "Gas fee paid"
+      explorer_url:
+        type: "string"
+        format: "uri"
+
+  # Application layer definitions
+  BatchRewardRequest:
+    type: "object"
+    required:
+      - "chain_id"
+      - "recipients"
+    properties:
+      chain_id:
+        type: "integer"
+        format: "int64"
+        description: "Blockchain network ID"
+        example: 1
+      recipients:
+        type: "array"
+        minItems: 1
+        maxItems: 1000
+        items:
+          $ref: "#/definitions/RewardRecipient"
+      activity_id:
+        type: "string"
+        description: "Activity identifier for tracking"
+        example: "activity_weekly_reward_2024_01"
+
+  RewardRecipient:
+    type: "object"
+    required:
+      - "user_id"
+      - "amount"
+    properties:
+      user_id:
+        type: "string"
+        format: "uuid"
+        description: "Recipient user ID"
+      amount:
+        type: "string"
+        pattern: "^[0-9]+\\.?[0-9]*$"
+        description: "CPOP reward amount"
+        example: "100.0"
+      reason:
+        type: "string"
+        maxLength: 256
+        description: "Reason for reward"
+        example: "Weekly activity completion"
+
+  BatchRewardResponse:
+    type: "object"
+    required:
+      - "batch_id"
+      - "status"
+      - "total_recipients"
+      - "total_amount"
+    properties:
+      batch_id:
+        type: "string"
+        format: "uuid"
+        description: "Batch processing ID"
+      status:
+        type: "string"
+        enum: ["pending", "processing", "completed", "failed"]
+        description: "Batch processing status"
+      total_recipients:
+        type: "integer"
+        description: "Number of recipients"
+        example: 150
+      total_amount:
+        type: "string"
+        description: "Total CPOP amount distributed"
+        example: "15000.0"
+      estimated_completion:
+        type: "integer"
+        description: "Estimated completion time in seconds"
+        example: 120
+      gas_savings_percent:
+        type: "number"
+        format: "float"
+        description: "Gas savings percentage vs individual transfers"
+        example: 82.5

@@ -1,0 +1,86 @@
+# ChainBridge Wallet Related Models
+definitions:
+  WalletResponse:
+  type: "object"
+  required:
+    - "user_id"
+    - "wallets"
+  properties:
+    user_id:
+      type: "string"
+      format: "uuid"
+      description: "User ID"
+    wallets:
+      type: "array"
+      items:
+        $ref: "#/definitions/WalletInfo"
+
+  WalletInfo:
+    type: "object"
+  required:
+    - "chain_id"
+    - "address"
+    - "status"
+  properties:
+    chain_id:
+      type: "integer"
+      format: "int64"
+      description: "Blockchain network ID"
+      example: 1
+    address:
+      type: "string"
+      pattern: "^0x[a-fA-F0-9]{40}$"
+      description: "Wallet address"
+      example: "0x1234567890123456789012345678901234567890"
+    status:
+      type: "string"
+      enum: ["deployed", "pending", "failed"]
+      description: "Wallet deployment status"
+    master_signer:
+      type: "string"
+      pattern: "^0x[a-fA-F0-9]{40}$"
+      description: "Master signer address (if configured)"
+    deposit_balance:
+      type: "string"
+      description: "ETH deposit balance for gas payments"
+      example: "0.1"
+
+  DeployWalletRequest:
+    type: "object"
+  required:
+    - "chain_id"
+  properties:
+    chain_id:
+      type: "integer"
+      format: "int64"
+      description: "Blockchain network ID"
+      example: 1
+      enum: [1, 56, 137, 42161]
+    master_signer:
+      type: "string"
+      pattern: "^0x[a-fA-F0-9]{40}$"
+      description: "Optional master signer address"
+
+  DeployWalletResponse:
+    type: "object"
+  required:
+    - "transaction_id"
+    - "wallet_address"
+    - "status"
+  properties:
+    transaction_id:
+      type: "string"
+      format: "uuid"
+      description: "Deployment transaction ID"
+    wallet_address:
+      type: "string"
+      pattern: "^0x[a-fA-F0-9]{40}$"
+      description: "Deployed wallet address"
+    status:
+      type: "string"
+      enum: ["pending", "submitted", "confirmed"]
+      description: "Deployment status"
+    explorer_url:
+      type: "string"
+      format: "uri"
+      description: "Blockchain explorer URL"

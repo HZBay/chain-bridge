@@ -1,0 +1,155 @@
+# ChainBridge Assets Related Models
+
+AssetsResponse:
+  type: "object"
+  required:
+    - "user_id"
+    - "assets"
+  properties:
+    user_id:
+      type: "string"
+      format: "uuid"
+    assets:
+      type: "array"
+      items:
+        $ref: "#/definitions/AssetInfo"
+    total_value_usd:
+      type: "number"
+      format: "float"
+      description: "Total portfolio value in USD"
+
+AssetInfo:
+  type: "object"
+  required:
+    - "chain_id"
+    - "asset_type"
+    - "balance"
+  properties:
+    chain_id:
+      type: "integer"
+      format: "int64"
+    asset_type:
+      type: "string"
+      enum: ["ETH", "ERC20", "CPOP", "NFT"]
+    contract_address:
+      type: "string"
+      pattern: "^0x[a-fA-F0-9]{40}$"
+      description: "Contract address (for ERC20/NFT)"
+    symbol:
+      type: "string"
+      description: "Token symbol"
+      example: "USDT"
+    name:
+      type: "string"
+      description: "Token name"
+      example: "Tether USD"
+    decimals:
+      type: "integer"
+      description: "Token decimals"
+      example: 6
+    balance:
+      type: "string"
+      description: "Token balance"
+      example: "1000.500000"
+    value_usd:
+      type: "number"
+      format: "float"
+      description: "USD value of balance"
+      example: 1000.50
+
+BalanceResponse:
+  type: "object"
+  required:
+    - "user_id"
+    - "chain_id"
+    - "balance"
+  properties:
+    user_id:
+      type: "string"
+      format: "uuid"
+    chain_id:
+      type: "integer"
+      format: "int64"
+    asset_type:
+      type: "string"
+      enum: ["ETH", "ERC20", "CPOP"]
+    balance:
+      type: "string"
+      description: "Token balance"
+      example: "1000.500000"
+    symbol:
+      type: "string"
+      example: "USDT"
+    decimals:
+      type: "integer"
+      example: 6
+    value_usd:
+      type: "number"
+      format: "float"
+      example: 1000.50
+
+TransactionHistoryResponse:
+  type: "object"
+  required:
+    - "user_id"
+    - "transactions"
+    - "total"
+  properties:
+    user_id:
+      type: "string"
+      format: "uuid"
+    transactions:
+      type: "array"
+      items:
+        $ref: "#/definitions/TransactionInfo"
+    total:
+      type: "integer"
+      description: "Total number of transactions"
+    limit:
+      type: "integer"
+    offset:
+      type: "integer"
+
+TransactionInfo:
+  type: "object"
+  required:
+    - "transaction_id"
+    - "hash"
+    - "status"
+    - "timestamp"
+  properties:
+    transaction_id:
+      type: "string"
+      format: "uuid"
+    hash:
+      type: "string"
+      pattern: "^0x[a-fA-F0-9]{64}$"
+      description: "Transaction hash"
+    chain_id:
+      type: "integer"
+      format: "int64"
+    from_address:
+      type: "string"
+      pattern: "^0x[a-fA-F0-9]{40}$"
+    to_address:
+      type: "string"
+      pattern: "^0x[a-fA-F0-9]{40}$"
+    asset_type:
+      type: "string"
+      enum: ["ETH", "ERC20", "CPOP", "NFT"]
+    amount:
+      type: "string"
+      description: "Transfer amount"
+    status:
+      type: "string"
+      enum: ["pending", "confirmed", "failed"]
+    timestamp:
+      type: "integer"
+      format: "int64"
+      description: "Unix timestamp"
+    gas_fee:
+      type: "string"
+      description: "Gas fee paid"
+    explorer_url:
+      type: "string"
+      format: "uri"

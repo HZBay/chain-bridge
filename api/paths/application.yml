@@ -1,0 +1,46 @@
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+responses:
+  ValidationError:
+    description: PublicHTTPValidationError
+    schema:
+      $ref: "../definitions/errors.yml#/definitions/PublicHTTPValidationError"
+  AuthUnauthorizedResponse:
+    description: PublicHTTPError
+    schema:
+      $ref: ../definitions/errors.yml#/definitions/PublicHTTPError
+  AuthForbiddenResponse:
+    description: "PublicHTTPError, type `USER_DEACTIVATED`/`NOT_LOCAL_USER`"
+    schema:
+      $ref: ../definitions/errors.yml#/definitions/PublicHTTPError
+paths:
+  /api/v1/application/batch-reward:
+    post:
+      security:
+        - Bearer: []
+      tags:
+        - application
+      summary: "Batch reward distribution"
+      description: "Distribute CPOP rewards to multiple users efficiently"
+      operationId: "postBatchReward"
+      parameters:
+        - name: "payload"
+          in: "body"
+          required: true
+          schema:
+            $ref: "../definitions/application.yml#/definitions/BatchRewardRequest"
+      responses:
+        "200":
+          description: "Batch reward distribution initiated"
+          schema:
+            $ref: "../definitions/application.yml#/definitions/BatchRewardResponse"
+        "400":
+          $ref: "#/responses/ValidationError"
+        "401":
+          $ref: "#/responses/AuthUnauthorizedResponse"
+        "403":
+          description: "Insufficient permissions"
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/PublicHTTPError"
