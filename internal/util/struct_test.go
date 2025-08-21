@@ -7,8 +7,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/go-openapi/swag"
+	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/stretchr/testify/assert"
 )
 

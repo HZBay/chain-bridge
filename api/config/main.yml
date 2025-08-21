@@ -1,4 +1,4 @@
-# ChainBridge API - Base swagger configuration
+# This is our base swagger file and the primary mixin target.
 # Everything in definitions|paths/*.yml will be mixed through
 # and finally flattened into the actual swagger.yml in this dir.
 consumes:
@@ -7,30 +7,10 @@ produces:
   - application/json
 swagger: "2.0"
 info:
-  title: "ChainBridge API"
-  version: "2.0.0"
-  description: "Universal Wallet Relayer with Alchemy Integration for Web2 developers. CPOP Account Abstraction based blockchain asset management service."
-  contact:
-    name: "ChainBridge Team"
-    email: "tech@chain-bridge.com"
-
-host: "api.chain-bridge.com"
-basePath: "/api/v1"
-schemes: ["https"]
-
-tags:
-  - name: "wallet"
-    description: "Wallet management operations"
-  - name: "transfer"
-    description: "Transfer operations"
-  - name: "assets"
-    description: "Asset management operations (Alchemy enhanced)"
-  - name: "batch"
-    description: "Batch processing operations"
-  - name: "application"
-    description: "Application layer services"
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+  description: API documentation
 paths: {}
-
 securityDefinitions:
   Bearer:
     type: apiKey
@@ -46,56 +26,13 @@ securityDefinitions:
     description: Management secret, used for monitoring and infrastructure related calls
     name: mgmt-secret
 definitions:
-  # ChainBridge model definitions - referenced from paths/*.yml
-  # Wallet models
-  WalletResponse:
-    $ref: "../definitions/wallet.yml#/WalletResponse"
-  WalletInfo:
-    $ref: "../definitions/wallet.yml#/WalletInfo"
-  DeployWalletRequest:
-    $ref: "../definitions/wallet.yml#/DeployWalletRequest"
-  DeployWalletResponse:
-    $ref: "../definitions/wallet.yml#/DeployWalletResponse"
-  
-  # Transfer models
-  TransferRequest:
-    $ref: "../definitions/transfer.yml#/TransferRequest"
-  TransferResponse:
-    $ref: "../definitions/transfer.yml#/TransferResponse"
-  BatchInfo:
-    $ref: "../definitions/transfer.yml#/BatchInfo"
-  TransferP2PRequest:
-    $ref: "../definitions/transfer.yml#/TransferP2PRequest"
-  TransferBatchRequest:
-    $ref: "../definitions/transfer.yml#/TransferBatchRequest"
-  BatchTransferItem:
-    $ref: "../definitions/transfer.yml#/BatchTransferItem"
-  TransferBatchResponse:
-    $ref: "../definitions/transfer.yml#/TransferBatchResponse"
-  
-  # Assets models
-  AssetsResponse:
-    $ref: "../definitions/assets.yml#/AssetsResponse"
-  AssetInfo:
-    $ref: "../definitions/assets.yml#/AssetInfo"
-  BalanceResponse:
-    $ref: "../definitions/assets.yml#/BalanceResponse"
-  TransactionHistoryResponse:
-    $ref: "../definitions/assets.yml#/TransactionHistoryResponse"
-  TransactionInfo:
-    $ref: "../definitions/assets.yml#/TransactionInfo"
-  
-  # Application layer models
-  BatchRewardRequest:
-    $ref: "../definitions/application.yml#/BatchRewardRequest"
-  RewardRecipient:
-    $ref: "../definitions/application.yml#/RewardRecipient"
-  BatchRewardResponse:
-    $ref: "../definitions/application.yml#/BatchRewardResponse"
-  
-  # Keep original go-starter definitions for compatibility
+  # Any definitions that are not yet used within paths/*.yml are automatically removed from the resulting swagger.yml.
+  # You may reference some definitions that you *always* want to be included here.
+  # --
+  # Always include nullables so we can test deserialization
   nullables:
     $ref: "../definitions/nullable.yml#/definitions/Nullables"
+  # Always include orderDir so we can test binding it to db queries directly.
   orderDir:
     type: string
     enum:

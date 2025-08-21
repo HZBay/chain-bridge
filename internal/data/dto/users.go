@@ -3,12 +3,12 @@ package dto
 import (
 	"time"
 
-	"github.com/hzbay/chain-bridge/internal/models"
-	"github.com/hzbay/chain-bridge/internal/types"
-	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/strfmt/conv"
 	"github.com/go-openapi/swag"
+	"github.com/hzbay/chain-bridge/internal/models"
+	"github.com/hzbay/chain-bridge/internal/types"
+	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/volatiletech/null/v8"
 )
 

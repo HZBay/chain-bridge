@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/go-openapi/strfmt"
 	"github.com/hzbay/chain-bridge/internal/api"
 	"github.com/hzbay/chain-bridge/internal/api/httperrors"
 	"github.com/hzbay/chain-bridge/internal/auth"
@@ -13,7 +14,6 @@ import (
 	"github.com/hzbay/chain-bridge/internal/test"
 	"github.com/hzbay/chain-bridge/internal/test/fixtures"
 	"github.com/hzbay/chain-bridge/internal/types"
-	"github.com/go-openapi/strfmt"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"github.com/volatiletech/null/v8"

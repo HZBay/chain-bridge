@@ -59,3 +59,52 @@ definitions:
       key:
         description: Key of field failing validation
         type: string
+  
+  APIError:
+    type: object
+    required:
+      - message
+    properties:
+      message:
+        type: string
+        description: "Error message"
+        example: "Bad request"
+      errors:
+        type: array
+        items:
+          type: object
+          properties:
+            field:
+              type: string
+              description: "Field name"
+            code:
+              type: string
+              description: "Error code"
+            message:
+              type: string
+              description: "Error message"
+
+responses:
+  BadRequestError:
+    description: "Bad request error"
+    schema:
+      $ref: "#/definitions/APIError"
+    examples:
+      application/json:
+        message: "Bad request"
+        
+  UnauthorizedError:
+    description: "Unauthorized error"
+    schema:
+      $ref: "#/definitions/APIError"
+    examples:
+      application/json:
+        message: "Unauthorized"
+        
+  InternalError:
+    description: "Internal server error"
+    schema:
+      $ref: "#/definitions/APIError"
+    examples:
+      application/json:
+        message: "Internal server error"

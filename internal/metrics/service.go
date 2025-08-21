@@ -4,10 +4,10 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/dlmiddlecote/sqlstats"
 	"github.com/hzbay/chain-bridge/internal/config"
 	"github.com/hzbay/chain-bridge/internal/metrics/users"
 	"github.com/hzbay/chain-bridge/internal/util"
-	"github.com/dlmiddlecote/sqlstats"
 	"github.com/prometheus/client_golang/prometheus"
 )
 

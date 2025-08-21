@@ -2,105 +2,223 @@ swagger: "2.0"
 info:
   title: github.com/hzbay/chain-bridge
   version: 0.1.0
-responses:
-  ValidationError:
-    description: PublicHTTPValidationError
-    schema:
-      $ref: "../definitions/errors.yml#/definitions/PublicHTTPValidationError"
-  AuthUnauthorizedResponse:
-    description: PublicHTTPError
-    schema:
-      $ref: ../definitions/errors.yml#/definitions/PublicHTTPError
-  AuthForbiddenResponse:
-    description: "PublicHTTPError, type `USER_DEACTIVATED`/`NOT_LOCAL_USER`"
-    schema:
-      $ref: ../definitions/errors.yml#/definitions/PublicHTTPError
-  RateLimitResponse:
-    description: "PublicHTTPError, type `RATE_LIMIT_EXCEEDED`"
-    schema:
-      $ref: ../definitions/errors.yml#/definitions/PublicHTTPError
 paths:
-  /api/v1/transfer:
+  # 1. 用户转账接口
+  /transfer:
     post:
-      security:
-        - Bearer: []
       tags:
         - transfer
-      summary: "Create a new transfer"
-      description: "Initiate a transfer operation that will be processed in batch"
-      operationId: "postTransfer"
+      summary: User to user transfer
+      description: "用户间资产转账，支持智能批处理和CPOP优化"
+      operationId: transferAssets
+      security:
+        - Management: [ ]
       parameters:
-        - name: "payload"
-          in: "body"
+        - name: request
+          in: body
+          description: Transfer request
           required: true
           schema:
             $ref: "../definitions/transfer.yml#/definitions/TransferRequest"
       responses:
         "200":
-          description: "Transfer created successfully"
+          description: Transfer recorded successfully
           schema:
-            $ref: "../definitions/transfer.yml#/definitions/TransferResponse"
+            type: object
+            properties:
+              data:
+                $ref: "../definitions/transfer.yml#/definitions/TransferResponse"
+              batch_info:
+                $ref: "../definitions/assets.yml#/definitions/BatchInfo"
+          examples:
+            application/json:
+              data:
+                operation_id: "op_transfer_001"
+                from_user_id: "user_123"
+                to_user_id: "user_456"
+                chain_id: 56
+                token_symbol: "CPOP"
+                amount: "50.000000000000000000"
+                status: "recorded"
+                transfer_records:
+                  - tx_id: "tx_outgoing_001"
+                    user_id: "user_123"
+                    transfer_direction: "outgoing"
+                    amount: "-50.000000000000000000"
+                  - tx_id: "tx_incoming_001"
+                    user_id: "user_456"
+                    transfer_direction: "incoming"
+                    amount: "50.000000000000000000"
+              batch_info:
+                will_be_batched: true
+                batch_type: "batchTransferFrom"
+                current_batch_size: 12
+                optimal_batch_size: 25
+                expected_efficiency: "74-76%"
         "400":
-          $ref: "#/responses/ValidationError"
-        "401":
-          $ref: "#/responses/AuthUnauthorizedResponse"
-        "403":
-          description: "Insufficient balance or permission denied"
+          description: Invalid transfer parameters
           schema:
-            $ref: "../definitions/errors.yml#/definitions/PublicHTTPError"
-        "429":
-          $ref: "#/responses/RateLimitResponse"
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+          examples:
+            application/json:
+              message: "Invalid transfer amount"
+              errors:
+                - field: "amount"
+                  code: "INVALID_AMOUNT"
+                  message: "Transfer amount must be positive"
+        "401":
+          $ref: "../definitions/errors.yml#/responses/UnauthorizedError"
+        "422":
+          description: Insufficient balance or business rule violation
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+          examples:
+            application/json:
+              message: "Insufficient balance for transfer"
+              errors:
+                - field: "from_user_balance"
+                  code: "INSUFFICIENT_BALANCE"
+                  message: "User balance 30.0 CPOP is insufficient for transfer 50.0 CPOP"
+        "500":
+          $ref: "../definitions/errors.yml#/responses/InternalError"
 
-  /api/v1/transfer/p2p:
-    post:
-      security:
-        - Bearer: []
+  # 2. 查询用户交易记录
+  /users/{user_id}/transactions:
+    get:
       tags:
         - transfer
-      summary: "Create P2P transfer between users"
-      description: "Transfer assets between two users using their user IDs"
-      operationId: "postTransferP2P"
-      parameters:
-        - name: "payload"
-          in: "body"
-          required: true
-          schema:
-            $ref: "../definitions/transfer.yml#/definitions/TransferP2PRequest"
-      responses:
-        "200":
-          description: "P2P transfer created successfully"
-          schema:
-            $ref: "../definitions/transfer.yml#/definitions/TransferResponse"
-        "400":
-          $ref: "#/responses/ValidationError"
-        "401":
-          $ref: "#/responses/AuthUnauthorizedResponse"
-        "403":
-          description: "Insufficient balance"
-          schema:
-            $ref: "../definitions/errors.yml#/definitions/PublicHTTPError"
-
-  /api/v1/transfer/batch:
-    post:
+      summary: Get user transaction history
+      description: "获取用户交易历史记录，支持筛选和分页"
+      operationId: getUserTransactions
       security:
-        - Bearer: []
-      tags:
-        - batch
-      summary: "Create batch transfers"
-      description: "Create multiple transfers in a single request for gas optimization"
-      operationId: "postTransferBatch"
+        - Management: [ ]
       parameters:
-        - name: "payload"
-          in: "body"
+        - name: user_id
+          in: path
+          description: User identifier
           required: true
-          schema:
-            $ref: "../definitions/transfer.yml#/definitions/TransferBatchRequest"
+          type: string
+        - name: chain_id
+          in: query
+          description: Filter by chain ID
+          required: false
+          type: integer
+          format: int64
+        - name: token_symbol
+          in: query
+          description: Filter by token symbol
+          required: false
+          type: string
+        - name: tx_type
+          in: query
+          description: Filter by transaction type
+          required: false
+          type: string
+          enum: [ mint, burn, transfer ]
+        - name: page
+          in: query
+          description: Page number (1-based)
+          required: false
+          type: integer
+          minimum: 1
+          default: 1
+        - name: limit
+          in: query
+          description: Number of records per page
+          required: false
+          type: integer
+          minimum: 1
+          maximum: 100
+          default: 20
+        - name: start_date
+          in: query
+          description: Filter from date (ISO 8601 format)
+          required: false
+          type: string
+          format: date
+        - name: end_date
+          in: query
+          description: Filter to date (ISO 8601 format)
+          required: false
+          type: string
+          format: date
       responses:
         "200":
-          description: "Batch transfer created successfully"
+          description: User transactions retrieved successfully
           schema:
-            $ref: "../definitions/transfer.yml#/definitions/TransferBatchResponse"
+            type: object
+            properties:
+              data:
+                $ref: "../definitions/transfer.yml#/definitions/TransactionHistoryResponse"
+              summary:
+                $ref: "../definitions/transfer.yml#/definitions/TransactionSummary"
+          examples:
+            application/json:
+              data:
+                user_id: "user_123"
+                total_count: 156
+                page: 1
+                limit: 20
+                transactions:
+                  - tx_id: "tx_001"
+                    operation_id: "op_transfer_001"
+                    chain_id: 56
+                    chain_name: "BSC"
+                    token_symbol: "CPOP"
+                    tx_type: "transfer"
+                    business_type: "transfer"
+                    transfer_direction: "outgoing"
+                    related_user_id: "user_456"
+                    amount: "-50.000000000000000000"
+                    amount_usd: "-2.50"
+                    status: "confirmed"
+                    tx_hash: "0xabc123..."
+                    reason_type: "user_transfer"
+                    reason_detail: "朋友转账"
+                    is_batch_operation: true
+                    batch_id: "batch_transfer_001"
+                    gas_saved_percentage: 76.8
+                    created_at: "2024-12-15T10:30:00Z"
+                    confirmed_at: "2024-12-15T10:35:00Z"
+                  - tx_id: "tx_002"
+                    operation_id: "op_reward_daily_001"
+                    chain_id: 56
+                    chain_name: "BSC"
+                    token_symbol: "CPOP"
+                    tx_type: "mint"
+                    business_type: "reward"
+                    amount: "100.000000000000000000"
+                    amount_usd: "5.00"
+                    status: "confirmed"
+                    tx_hash: "0xdef456..."
+                    reason_type: "daily_checkin"
+                    reason_detail: "每日签到奖励"
+                    is_batch_operation: true
+                    batch_id: "batch_mint_002"
+                    gas_saved_percentage: 78.2
+                    created_at: "2024-12-14T09:00:00Z"
+                    confirmed_at: "2024-12-14T09:05:00Z"
+              summary:
+                total_incoming: "2150.000000000000000000"
+                total_outgoing: "1850.000000000000000000"
+                net_change: "300.000000000000000000"
+                gas_saved_total: "45.80 USD"
         "400":
-          $ref: "#/responses/ValidationError"
+          description: Invalid query parameters
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+          examples:
+            application/json:
+              message: "Invalid date range"
+              errors:
+                - field: "date_range"
+                  code: "INVALID_DATE_RANGE"
+                  message: "start_date must be before end_date"
         "401":
-          $ref: "#/responses/AuthUnauthorizedResponse"
+          $ref: "../definitions/errors.yml#/responses/UnauthorizedError"
+        "404":
+          description: User not found
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "500":
+          $ref: "../definitions/errors.yml#/responses/InternalError"

@@ -11,13 +11,13 @@ import (
 	"net/http"
 	"strings"
 
-	"github.com/hzbay/chain-bridge/internal/api/httperrors"
-	"github.com/hzbay/chain-bridge/internal/types"
 	"github.com/gabriel-vasile/mimetype"
 	oerrors "github.com/go-openapi/errors"
 	"github.com/go-openapi/runtime"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
+	"github.com/hzbay/chain-bridge/internal/api/httperrors"
+	"github.com/hzbay/chain-bridge/internal/types"
 	"github.com/labstack/echo/v4"
 )
 

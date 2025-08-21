@@ -192,7 +192,7 @@ make build
 app probe readiness -v
 
 # Migrate up the database
-app db migrate
+app db migrat
 
 # Seed the database (if you have any fixtures defined in `/internal/data/fixtures.go`)
 app db seed

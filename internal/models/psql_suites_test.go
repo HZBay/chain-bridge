@@ -10,11 +10,23 @@ func TestUpsert(t *testing.T) {
 
 	t.Run("AppUserProfiles", testAppUserProfilesUpsert)
 
+	t.Run("Batches", testBatchesUpsert)
+
+	t.Run("Chains", testChainsUpsert)
+
 	t.Run("PasswordResetTokens", testPasswordResetTokensUpsert)
 
 	t.Run("PushTokens", testPushTokensUpsert)
 
 	t.Run("RefreshTokens", testRefreshTokensUpsert)
+
+	t.Run("SupportedTokens", testSupportedTokensUpsert)
+
+	t.Run("Transactions", testTransactionsUpsert)
+
+	t.Run("UserBalances", testUserBalancesUpsert)
+
+	t.Run("UserWallets", testUserWalletsUpsert)
 
 	t.Run("Users", testUsersUpsert)
 }

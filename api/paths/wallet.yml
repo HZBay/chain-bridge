@@ -3,77 +3,78 @@ info:
   title: github.com/hzbay/chain-bridge
   version: 0.1.0
 paths:
-  /api/v1/wallet/{user_id}:
+  # 1. 获取用户钱包信息
+  /wallet/{user_id}:
     get:
+      tags:
+        - wallet
+      summary: Get user wallet information
+      description: "获取用户跨链钱包信息"
+      operationId: getUserWallet
       security:
-        - Bearer: []
-      tags: ["wallet"]
-      summary: "Get user wallet info"
-      description: "Get wallet information for a specific user"
-      operationId: "getWallet"
+        - Management: []
       parameters:
-        - name: "user_id"
-          in: "path"
+        - name: user_id
+          in: path
+          description: User identifier
           required: true
-          type: "string"
-          format: "uuid"
-          description: "User ID"
-        - name: "chain_id"
-          in: "query"
-          type: "integer"
-          format: "int64"
-          description: "Blockchain network ID (optional, returns all chains if omitted)"
+          type: string
       responses:
-        200:
-          description: "Wallet information"
+        "200":
+          description: User wallet information retrieved successfully
           schema:
-            $ref: "#/definitions/WalletResponse"
-        400:
-          description: "Invalid request"
+            $ref: "../definitions/wallet.yml#/definitions/WalletResponse"
+        "400":
+          $ref: "../definitions/errors.yml#/responses/BadRequestError"
+        "401":
+          $ref: "../definitions/errors.yml#/responses/UnauthorizedError"
+        "404":
+          description: User or wallet not found
           schema:
-          $ref: "#/definitions/publicHttpValidationError"
-      401:
-        description: "Unauthorized"
-        schema:
-          $ref: "#/definitions/publicHttpError"
-      404:
-        description: "User not found"
-        schema:
-          $ref: "#/definitions/publicHttpError"
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "500":
+          $ref: "../definitions/errors.yml#/responses/InternalError"
 
-deploy_wallet:
-  post:
-    security:
-      - Bearer: []
-    tags: ["wallet"]
-    summary: "Deploy AA wallet for user"
-    description: "Deploy Account Abstraction wallet for a user on specified chain"
-    operationId: "deployWallet"
-    parameters:
-      - name: "user_id"
-        in: "path"
-        required: true
-        type: "string"
-        format: "uuid"
-      - name: "payload"
-        in: "body"
-        required: true
-        schema:
-          $ref: "#/definitions/DeployWalletRequest"
-    responses:
-      200:
-        description: "Wallet deployed successfully"
-        schema:
-          $ref: "#/definitions/DeployWalletResponse"
-      400:
-        description: "Invalid request"
-        schema:
-          $ref: "#/definitions/publicHttpValidationError"
-      401:
-        description: "Unauthorized"
-        schema:
-          $ref: "#/definitions/publicHttpError"
-      409:
-        description: "Wallet already exists"
-        schema:
-          $ref: "#/definitions/publicHttpError"
+  # 2. 创建用户钱包
+  /wallet/{user_id}/create:
+    post:
+      tags:
+        - wallet
+      summary: Create user wallet
+      description: "为用户在指定链上创建新的账户抽象钱包"
+      operationId: createUserWallet
+      security:
+        - Management: []
+      parameters:
+        - name: user_id
+          in: path
+          description: User identifier
+          required: true
+          type: string
+        - name: request
+          in: body
+          description: Wallet creation request
+          required: true
+          schema:
+            $ref: "../definitions/wallet.yml#/definitions/CreateWalletRequest"
+      responses:
+        "200":
+          description: Wallet created successfully
+          schema:
+            $ref: "../definitions/wallet.yml#/definitions/CreateWalletResponse"
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "401":
+          $ref: "../definitions/errors.yml#/responses/UnauthorizedError"
+        "409":
+          description: Wallet already exists
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "422":
+          description: Chain not supported or disabled
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "500":
+          $ref: "../definitions/errors.yml#/responses/InternalError"

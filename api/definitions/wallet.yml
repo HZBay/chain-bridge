@@ -1,86 +1,118 @@
-# ChainBridge Wallet Related Models
+# ChainBridge Wallet Data Models
+# 钱包管理相关的数据模型定义
+
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths: {}
 definitions:
-  WalletResponse:
-  type: "object"
-  required:
-    - "user_id"
-    - "wallets"
-  properties:
-    user_id:
-      type: "string"
-      format: "uuid"
-      description: "User ID"
-    wallets:
-      type: "array"
-      items:
-        $ref: "#/definitions/WalletInfo"
-
+  # 钱包信息模型
   WalletInfo:
-    type: "object"
-  required:
-    - "chain_id"
-    - "address"
-    - "status"
-  properties:
-    chain_id:
-      type: "integer"
-      format: "int64"
-      description: "Blockchain network ID"
-      example: 1
-    address:
-      type: "string"
-      pattern: "^0x[a-fA-F0-9]{40}$"
-      description: "Wallet address"
-      example: "0x1234567890123456789012345678901234567890"
-    status:
-      type: "string"
-      enum: ["deployed", "pending", "failed"]
-      description: "Wallet deployment status"
-    master_signer:
-      type: "string"
-      pattern: "^0x[a-fA-F0-9]{40}$"
-      description: "Master signer address (if configured)"
-    deposit_balance:
-      type: "string"
-      description: "ETH deposit balance for gas payments"
-      example: "0.1"
+    type: object
+    required: [id, user_id, chain_id, aa_address, owner, is_deployed]
+    properties:
+      id:
+        type: integer
+        description: "Wallet ID"
+        example: 1
+      user_id:
+        type: string
+        description: "User identifier"
+        example: "user_123"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      chain_name:
+        type: string
+        description: "Chain name"
+        example: "BSC"
+      aa_address:
+        type: string
+        description: "Account Abstraction wallet address"
+        example: "0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3"
+      owner:
+        type: string
+        description: "Owner EOA address"
+        example: "0x1234567890123456789012345678901234567890"
+      is_deployed:
+        type: boolean
+        description: "Whether wallet is deployed on-chain"
+        example: true
+      deployment_tx_hash:
+        type: string
+        description: "Deployment transaction hash"
+        example: "0xabc123..."
+      master_signer:
+        type: string
+        description: "Master signer address"
+        example: "0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3"
+      created_at:
+        type: string
+        format: date-time
+        description: "Creation timestamp"
 
-  DeployWalletRequest:
-    type: "object"
-  required:
-    - "chain_id"
-  properties:
-    chain_id:
-      type: "integer"
-      format: "int64"
-      description: "Blockchain network ID"
-      example: 1
-      enum: [1, 56, 137, 42161]
-    master_signer:
-      type: "string"
-      pattern: "^0x[a-fA-F0-9]{40}$"
-      description: "Optional master signer address"
+  # 创建钱包请求
+  CreateWalletRequest:
+    type: object
+    required: [owner_address, chain_id]
+    properties:
+      owner_address:
+        type: string
+        description: "Owner EOA address"
+        example: "0x1234567890123456789012345678901234567890"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Target chain ID"
+        example: 56
 
-  DeployWalletResponse:
-    type: "object"
-  required:
-    - "transaction_id"
-    - "wallet_address"
-    - "status"
-  properties:
-    transaction_id:
-      type: "string"
-      format: "uuid"
-      description: "Deployment transaction ID"
-    wallet_address:
-      type: "string"
-      pattern: "^0x[a-fA-F0-9]{40}$"
-      description: "Deployed wallet address"
-    status:
-      type: "string"
-      enum: ["pending", "submitted", "confirmed"]
-      description: "Deployment status"
-    explorer_url:
-      type: "string"
-      format: "uri"
-      description: "Blockchain explorer URL"
+  # 创建钱包响应
+  CreateWalletResponse:
+    type: object
+    properties:
+      user_id:
+        type: string
+        description: "User identifier"
+        example: "user_123"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      aa_address:
+        type: string
+        description: "Generated AA wallet address"
+        example: "0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3"
+      owner:
+        type: string
+        description: "Owner EOA address"
+        example: "0x1234567890123456789012345678901234567890"
+      is_deployed:
+        type: boolean
+        description: "Deployment status"
+        example: false
+      wallet_created:
+        type: boolean
+        description: "Whether wallet was created successfully"
+        example: true
+      binding_status:
+        type: string
+        description: "Binding status"
+        example: "success"
+
+  # 钱包响应
+  WalletResponse:
+    type: object
+    required: [user_id, wallets]
+    properties:
+      user_id:
+        type: string
+        description: "User identifier"
+        example: "user_123"
+      wallets:
+        type: array
+        items:
+          $ref: "#/definitions/WalletInfo"

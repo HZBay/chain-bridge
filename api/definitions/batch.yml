@@ -1,0 +1,74 @@
+# ChainBridge Batch Processing Data Models
+# 批量处理相关的数据模型定义
+
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths: {}
+definitions:
+  # 批量指标
+  BatchMetrics:
+    type: object
+    properties:
+      operation_count:
+        type: integer
+        description: "Number of operations in batch"
+        example: 25
+      actual_efficiency:
+        type: number
+        format: float
+        description: "Actual processing efficiency"
+        example: 76.8
+      batch_strategy:
+        type: string
+        description: "Batch processing strategy"
+        example: "medium_congestion_adaptive"
+
+  # Gas分析
+  GasAnalysis:
+    type: object
+    properties:
+      gas_saved_percentage:
+        type: number
+        format: float
+        description: "Gas saved percentage"
+        example: 76.8
+      gas_saved_usd:
+        type: number
+        format: float
+        description: "Gas saved in USD"
+        example: 156.80
+
+  # CPOP信息
+  CPOPInfo:
+    type: object
+    properties:
+      cpop_operation_type:
+        type: string
+        enum: [batch_mint, batch_burn, batch_transfer]
+        description: "CPOP operation type"
+      master_aggregator_used:
+        type: boolean
+        description: "Whether master aggregator was used"
+        example: true
+
+  # 批量状态响应
+  BatchStatusResponse:
+    type: object
+    required: [batch_id, status]
+    properties:
+      batch_id:
+        type: string
+        description: "Batch ID"
+        example: "batch_xyz789"
+      status:
+        type: string
+        enum: [preparing, submitted, confirmed, failed]
+        description: "Batch status"
+      batch_metrics:
+        $ref: "#/definitions/BatchMetrics"
+      gas_analysis:
+        $ref: "#/definitions/GasAnalysis"
+      cpop_info:
+        $ref: "#/definitions/CPOPInfo"

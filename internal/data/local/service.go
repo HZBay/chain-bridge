@@ -3,8 +3,8 @@ package local
 import (
 	"database/sql"
 
-	"github.com/hzbay/chain-bridge/internal/config"
 	"github.com/dropbox/godropbox/time2"
+	"github.com/hzbay/chain-bridge/internal/config"
 )
 
 type Service struct {

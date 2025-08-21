@@ -51,6 +51,68 @@ func makeCacheKey(cols boil.Columns, nzDefaults []string) string {
 	return str
 }
 
+// Enum values for BatchType
+const (
+	BatchTypeMint     string = "mint"
+	BatchTypeBurn     string = "burn"
+	BatchTypeTransfer string = "transfer"
+)
+
+func AllBatchType() []string {
+	return []string{
+		BatchTypeMint,
+		BatchTypeBurn,
+		BatchTypeTransfer,
+	}
+}
+
+// Enum values for NetworkCondition
+const (
+	NetworkConditionLow    string = "low"
+	NetworkConditionMedium string = "medium"
+	NetworkConditionHigh   string = "high"
+)
+
+func AllNetworkCondition() []string {
+	return []string{
+		NetworkConditionLow,
+		NetworkConditionMedium,
+		NetworkConditionHigh,
+	}
+}
+
+// Enum values for CpopOperationType
+const (
+	CpopOperationTypeBatchMint     string = "batch_mint"
+	CpopOperationTypeBatchBurn     string = "batch_burn"
+	CpopOperationTypeBatchTransfer string = "batch_transfer"
+)
+
+func AllCpopOperationType() []string {
+	return []string{
+		CpopOperationTypeBatchMint,
+		CpopOperationTypeBatchBurn,
+		CpopOperationTypeBatchTransfer,
+	}
+}
+
+// Enum values for BatchStatus
+const (
+	BatchStatusPreparing string = "preparing"
+	BatchStatusSubmitted string = "submitted"
+	BatchStatusConfirmed string = "confirmed"
+	BatchStatusFailed    string = "failed"
+)
+
+func AllBatchStatus() []string {
+	return []string{
+		BatchStatusPreparing,
+		BatchStatusSubmitted,
+		BatchStatusConfirmed,
+		BatchStatusFailed,
+	}
+}
+
 // Enum values for ProviderType
 const (
 	ProviderTypeFCM string = "fcm"
@@ -61,5 +123,86 @@ func AllProviderType() []string {
 	return []string{
 		ProviderTypeFCM,
 		ProviderTypeApn,
+	}
+}
+
+// Enum values for TokenType
+const (
+	TokenTypeNative string = "native"
+	TokenTypeErc20  string = "erc20"
+	TokenTypeCpop   string = "cpop"
+)
+
+func AllTokenType() []string {
+	return []string{
+		TokenTypeNative,
+		TokenTypeErc20,
+		TokenTypeCpop,
+	}
+}
+
+// Enum values for TXType
+const (
+	TXTypeMint     string = "mint"
+	TXTypeBurn     string = "burn"
+	TXTypeTransfer string = "transfer"
+)
+
+func AllTXType() []string {
+	return []string{
+		TXTypeMint,
+		TXTypeBurn,
+		TXTypeTransfer,
+	}
+}
+
+// Enum values for BusinessType
+const (
+	BusinessTypeTransfer    string = "transfer"
+	BusinessTypeReward      string = "reward"
+	BusinessTypeGasFee      string = "gas_fee"
+	BusinessTypeConsumption string = "consumption"
+	BusinessTypeRefund      string = "refund"
+)
+
+func AllBusinessType() []string {
+	return []string{
+		BusinessTypeTransfer,
+		BusinessTypeReward,
+		BusinessTypeGasFee,
+		BusinessTypeConsumption,
+		BusinessTypeRefund,
+	}
+}
+
+// Enum values for TransferDirection
+const (
+	TransferDirectionOutgoing string = "outgoing"
+	TransferDirectionIncoming string = "incoming"
+)
+
+func AllTransferDirection() []string {
+	return []string{
+		TransferDirectionOutgoing,
+		TransferDirectionIncoming,
+	}
+}
+
+// Enum values for TransactionStatus
+const (
+	TransactionStatusPending   string = "pending"
+	TransactionStatusBatching  string = "batching"
+	TransactionStatusSubmitted string = "submitted"
+	TransactionStatusConfirmed string = "confirmed"
+	TransactionStatusFailed    string = "failed"
+)
+
+func AllTransactionStatus() []string {
+	return []string{
+		TransactionStatusPending,
+		TransactionStatusBatching,
+		TransactionStatusSubmitted,
+		TransactionStatusConfirmed,
+		TransactionStatusFailed,
 	}
 }

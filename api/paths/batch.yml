@@ -1,0 +1,57 @@
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths:
+  # 1. 获取批量处理状态
+  /batches/{batch_id}:
+    get:
+      tags:
+        - batch
+      summary: Get batch processing status
+      description: "获取特定批量处理操作的详细信息，包含CPOP效率指标"
+      operationId: getBatchStatus
+      security:
+        - Management: [ ]
+      parameters:
+        - name: batch_id
+          in: path
+          description: Batch identifier
+          required: true
+          type: string
+      responses:
+        "200":
+          description: Batch status retrieved successfully
+          schema:
+            $ref: "../definitions/batch.yml#/definitions/BatchStatusResponse"
+          examples:
+            application/json:
+              batch_id: "batch_xyz789"
+              status: "confirmed"
+              batch_metrics:
+                operation_count: 25
+                actual_efficiency: 76.8
+                batch_strategy: "medium_congestion_adaptive"
+              gas_analysis:
+                gas_saved_percentage: 76.8
+                gas_saved_usd: 156.80
+              cpop_info:
+                cpop_operation_type: "batch_mint"
+                master_aggregator_used: true
+        "400":
+          $ref: "../definitions/errors.yml#/responses/BadRequestError"
+        "401":
+          $ref: "../definitions/errors.yml#/responses/UnauthorizedError"
+        "404":
+          description: Batch not found
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+          examples:
+            application/json:
+              message: "Batch not found"
+              errors:
+                - field: "batch_id"
+                  code: "BATCH_NOT_FOUND"
+                  message: "No batch found with ID batch_xyz789"
+        "500":
+          $ref: "../definitions/errors.yml#/responses/InternalError"

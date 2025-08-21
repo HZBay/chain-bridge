@@ -5,9 +5,9 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/go-openapi/swag"
 	"github.com/hzbay/chain-bridge/internal/api/httperrors"
 	"github.com/hzbay/chain-bridge/internal/types"
-	"github.com/go-openapi/swag"
 	"github.com/stretchr/testify/require"
 )
 

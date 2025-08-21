@@ -6,8 +6,8 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/hzbay/chain-bridge/internal/types"
 	"github.com/go-openapi/swag"
+	"github.com/hzbay/chain-bridge/internal/types"
 	"github.com/labstack/echo/v4"
 )
 

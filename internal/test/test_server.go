@@ -6,10 +6,10 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dropbox/godropbox/time2"
 	"github.com/hzbay/chain-bridge/internal/api"
 	"github.com/hzbay/chain-bridge/internal/api/router"
 	"github.com/hzbay/chain-bridge/internal/config"
-	"github.com/dropbox/godropbox/time2"
 )
 
 // WithTestServer returns a fully configured server (using the default server config).

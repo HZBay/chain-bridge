@@ -1,0 +1,36 @@
+# ChainBridge Common Data Models
+# 通用的响应和数据模型定义
+
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths: {}
+definitions:
+  # 链配置信息
+  ChainInfo:
+    type: object
+    properties:
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      name:
+        type: string
+        description: "Chain name"
+        example: "BSC"
+      short_name:
+        type: string
+        description: "Chain short name"
+        example: "BSC"
+      rpc_url:
+        type: string
+        description: "RPC endpoint URL"
+      explorer_url:
+        type: string
+        description: "Block explorer URL"
+      is_enabled:
+        type: boolean
+        description: "Whether this chain is enabled"
+        default: true

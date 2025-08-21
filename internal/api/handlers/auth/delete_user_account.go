@@ -3,12 +3,12 @@ package auth
 import (
 	"net/http"
 
+	"github.com/go-openapi/swag"
 	"github.com/hzbay/chain-bridge/internal/api"
 	"github.com/hzbay/chain-bridge/internal/auth"
 	"github.com/hzbay/chain-bridge/internal/data/dto"
 	"github.com/hzbay/chain-bridge/internal/types"
 	"github.com/hzbay/chain-bridge/internal/util"
-	"github.com/go-openapi/swag"
 	"github.com/labstack/echo/v4"
 )
 

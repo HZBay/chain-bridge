@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 
+	"github.com/dropbox/godropbox/time2"
 	"github.com/hzbay/chain-bridge/internal/api/httperrors"
 	"github.com/hzbay/chain-bridge/internal/config"
 	"github.com/hzbay/chain-bridge/internal/data/dto"
@@ -13,7 +14,6 @@ import (
 	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/hzbay/chain-bridge/internal/util/db"
 	"github.com/hzbay/chain-bridge/internal/util/hashing"
-	"github.com/dropbox/godropbox/time2"
 	"github.com/labstack/echo/v4"
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"

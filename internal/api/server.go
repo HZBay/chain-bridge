@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/dropbox/godropbox/time2"
 	"github.com/hzbay/chain-bridge/internal/auth"
 	"github.com/hzbay/chain-bridge/internal/config"
 	"github.com/hzbay/chain-bridge/internal/data/dto"
@@ -18,7 +19,6 @@ import (
 	"github.com/hzbay/chain-bridge/internal/metrics"
 	"github.com/hzbay/chain-bridge/internal/push"
 	"github.com/hzbay/chain-bridge/internal/push/provider"
-	"github.com/dropbox/godropbox/time2"
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog/log"
 

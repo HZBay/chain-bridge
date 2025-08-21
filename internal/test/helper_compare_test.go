@@ -8,10 +8,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/hzbay/chain-bridge/internal/test"
-	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/strfmt/conv"
+	"github.com/hzbay/chain-bridge/internal/test"
+	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/stretchr/testify/require"
 )
 

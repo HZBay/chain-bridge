@@ -14,8 +14,8 @@ import (
 	"github.com/hzbay/chain-bridge/internal/test/mocks"
 	"github.com/hzbay/chain-bridge/internal/util"
 
-	apitypes "github.com/hzbay/chain-bridge/internal/types"
 	"github.com/go-openapi/swag"
+	apitypes "github.com/hzbay/chain-bridge/internal/types"
 	"github.com/stretchr/testify/mock"
 	"github.com/stretchr/testify/require"
 	"github.com/volatiletech/sqlboiler/v4/types"

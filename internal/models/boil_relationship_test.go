@@ -10,9 +10,17 @@ import "testing"
 func TestToOne(t *testing.T) {
 	t.Run("AccessTokenToUserUsingUser", testAccessTokenToOneUserUsingUser)
 	t.Run("AppUserProfileToUserUsingUser", testAppUserProfileToOneUserUsingUser)
+	t.Run("BatchToChainUsingChain", testBatchToOneChainUsingChain)
+	t.Run("BatchToSupportedTokenUsingToken", testBatchToOneSupportedTokenUsingToken)
 	t.Run("PasswordResetTokenToUserUsingUser", testPasswordResetTokenToOneUserUsingUser)
 	t.Run("PushTokenToUserUsingUser", testPushTokenToOneUserUsingUser)
 	t.Run("RefreshTokenToUserUsingUser", testRefreshTokenToOneUserUsingUser)
+	t.Run("SupportedTokenToChainUsingChain", testSupportedTokenToOneChainUsingChain)
+	t.Run("TransactionToChainUsingChain", testTransactionToOneChainUsingChain)
+	t.Run("TransactionToSupportedTokenUsingToken", testTransactionToOneSupportedTokenUsingToken)
+	t.Run("UserBalanceToChainUsingChain", testUserBalanceToOneChainUsingChain)
+	t.Run("UserBalanceToSupportedTokenUsingToken", testUserBalanceToOneSupportedTokenUsingToken)
+	t.Run("UserWalletToChainUsingChain", testUserWalletToOneChainUsingChain)
 }
 
 // TestOneToOne tests cannot be run in parallel
@@ -24,6 +32,14 @@ func TestOneToOne(t *testing.T) {
 // TestToMany tests cannot be run in parallel
 // or deadlocks can occur.
 func TestToMany(t *testing.T) {
+	t.Run("ChainToBatches", testChainToManyBatches)
+	t.Run("ChainToSupportedTokens", testChainToManySupportedTokens)
+	t.Run("ChainToTransactions", testChainToManyTransactions)
+	t.Run("ChainToUserBalances", testChainToManyUserBalances)
+	t.Run("ChainToUserWallets", testChainToManyUserWallets)
+	t.Run("SupportedTokenToTokenBatches", testSupportedTokenToManyTokenBatches)
+	t.Run("SupportedTokenToTokenTransactions", testSupportedTokenToManyTokenTransactions)
+	t.Run("SupportedTokenToTokenUserBalances", testSupportedTokenToManyTokenUserBalances)
 	t.Run("UserToAccessTokens", testUserToManyAccessTokens)
 	t.Run("UserToPasswordResetTokens", testUserToManyPasswordResetTokens)
 	t.Run("UserToPushTokens", testUserToManyPushTokens)
@@ -35,9 +51,17 @@ func TestToMany(t *testing.T) {
 func TestToOneSet(t *testing.T) {
 	t.Run("AccessTokenToUserUsingAccessTokens", testAccessTokenToOneSetOpUserUsingUser)
 	t.Run("AppUserProfileToUserUsingAppUserProfile", testAppUserProfileToOneSetOpUserUsingUser)
+	t.Run("BatchToChainUsingBatches", testBatchToOneSetOpChainUsingChain)
+	t.Run("BatchToSupportedTokenUsingTokenBatches", testBatchToOneSetOpSupportedTokenUsingToken)
 	t.Run("PasswordResetTokenToUserUsingPasswordResetTokens", testPasswordResetTokenToOneSetOpUserUsingUser)
 	t.Run("PushTokenToUserUsingPushTokens", testPushTokenToOneSetOpUserUsingUser)
 	t.Run("RefreshTokenToUserUsingRefreshTokens", testRefreshTokenToOneSetOpUserUsingUser)
+	t.Run("SupportedTokenToChainUsingSupportedTokens", testSupportedTokenToOneSetOpChainUsingChain)
+	t.Run("TransactionToChainUsingTransactions", testTransactionToOneSetOpChainUsingChain)
+	t.Run("TransactionToSupportedTokenUsingTokenTransactions", testTransactionToOneSetOpSupportedTokenUsingToken)
+	t.Run("UserBalanceToChainUsingUserBalances", testUserBalanceToOneSetOpChainUsingChain)
+	t.Run("UserBalanceToSupportedTokenUsingTokenUserBalances", testUserBalanceToOneSetOpSupportedTokenUsingToken)
+	t.Run("UserWalletToChainUsingUserWallets", testUserWalletToOneSetOpChainUsingChain)
 }
 
 // TestToOneRemove tests cannot be run in parallel
@@ -57,6 +81,14 @@ func TestOneToOneRemove(t *testing.T) {}
 // TestToManyAdd tests cannot be run in parallel
 // or deadlocks can occur.
 func TestToManyAdd(t *testing.T) {
+	t.Run("ChainToBatches", testChainToManyAddOpBatches)
+	t.Run("ChainToSupportedTokens", testChainToManyAddOpSupportedTokens)
+	t.Run("ChainToTransactions", testChainToManyAddOpTransactions)
+	t.Run("ChainToUserBalances", testChainToManyAddOpUserBalances)
+	t.Run("ChainToUserWallets", testChainToManyAddOpUserWallets)
+	t.Run("SupportedTokenToTokenBatches", testSupportedTokenToManyAddOpTokenBatches)
+	t.Run("SupportedTokenToTokenTransactions", testSupportedTokenToManyAddOpTokenTransactions)
+	t.Run("SupportedTokenToTokenUserBalances", testSupportedTokenToManyAddOpTokenUserBalances)
 	t.Run("UserToAccessTokens", testUserToManyAddOpAccessTokens)
 	t.Run("UserToPasswordResetTokens", testUserToManyAddOpPasswordResetTokens)
 	t.Run("UserToPushTokens", testUserToManyAddOpPushTokens)

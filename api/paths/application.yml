@@ -2,45 +2,85 @@ swagger: "2.0"
 info:
   title: github.com/hzbay/chain-bridge
   version: 0.1.0
-responses:
-  ValidationError:
-    description: PublicHTTPValidationError
-    schema:
-      $ref: "../definitions/errors.yml#/definitions/PublicHTTPValidationError"
-  AuthUnauthorizedResponse:
-    description: PublicHTTPError
-    schema:
-      $ref: ../definitions/errors.yml#/definitions/PublicHTTPError
-  AuthForbiddenResponse:
-    description: "PublicHTTPError, type `USER_DEACTIVATED`/`NOT_LOCAL_USER`"
-    schema:
-      $ref: ../definitions/errors.yml#/definitions/PublicHTTPError
 paths:
-  /api/v1/application/batch-reward:
-    post:
-      security:
-        - Bearer: []
+  # 1. 建立WebSocket连接（实时通知）
+  /subscribe:
+    get:
       tags:
         - application
-      summary: "Batch reward distribution"
-      description: "Distribute CPOP rewards to multiple users efficiently"
-      operationId: "postBatchReward"
+      summary: Establish WebSocket connection
+      description: "建立应用级WebSocket连接，用于接收实时通知"
+      operationId: subscribeNotifications
+      security:
+        - Management: [ ]
       parameters:
-        - name: "payload"
-          in: "body"
+        - name: events
+          in: query
+          description: Event types to subscribe to (comma-separated)
+          required: false
+          type: string
+        - name: chains
+          in: query
+          description: Chain IDs to monitor (comma-separated)
+          required: false
+          type: string
+        - name: app_id
+          in: query
+          description: Application identifier
           required: true
-          schema:
-            $ref: "../definitions/application.yml#/definitions/BatchRewardRequest"
+          type: string
       responses:
-        "200":
-          description: "Batch reward distribution initiated"
+        "101":
+          description: WebSocket connection established
           schema:
-            $ref: "../definitions/application.yml#/definitions/BatchRewardResponse"
+            type: object
+            properties:
+              type:
+                type: string
+                example: "connection_established"
+              data:
+                type: object
+                properties:
+                  connection_id:
+                    type: string
+                    example: "conn_abc123"
+                  app_id:
+                    type: string
+                    example: "your_app_id"
+                  subscribed_events:
+                    type: array
+                    items:
+                      type: string
+                    example: [ "transaction", "batch", "balance" ]
+                  subscribed_chains:
+                    type: array
+                    items:
+                      type: integer
+                    example: [ 56, 1 ]
+                  rate_limit:
+                    type: string
+                    example: "1000 events/minute"
+          examples:
+            application/json:
+              type: "connection_established"
+              data:
+                connection_id: "conn_abc123"
+                app_id: "your_app_id"
+                subscribed_events: [ "transaction", "batch", "balance" ]
+                subscribed_chains: [ 56, 1 ]
+                rate_limit: "1000 events/minute"
         "400":
-          $ref: "#/responses/ValidationError"
-        "401":
-          $ref: "#/responses/AuthUnauthorizedResponse"
-        "403":
-          description: "Insufficient permissions"
+          description: Invalid connection parameters
           schema:
-            $ref: "../definitions/errors.yml#/definitions/PublicHTTPError"
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+          examples:
+            application/json:
+              message: "Invalid app_id parameter"
+              errors:
+                - field: "app_id"
+                  code: "INVALID_APP_ID"
+                  message: "app_id is required for WebSocket connection"
+        "401":
+          $ref: "../definitions/errors.yml#/responses/UnauthorizedError"
+        "500":
+          $ref: "../definitions/errors.yml#/responses/InternalError"

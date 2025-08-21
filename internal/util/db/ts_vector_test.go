@@ -3,8 +3,8 @@ package db_test
 import (
 	"testing"
 
-	"github.com/hzbay/chain-bridge/internal/util/db"
 	"github.com/go-openapi/swag"
+	"github.com/hzbay/chain-bridge/internal/util/db"
 	"github.com/stretchr/testify/assert"
 )
 

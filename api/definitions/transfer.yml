@@ -1,224 +1,239 @@
-# ChainBridge Transfer Related Models
+# ChainBridge Transfer Data Models
+# 转账操作相关的数据模型定义
 
-TransferRequest:
-  type: "object"
-  required:
-    - "from_user_id"
-    - "to_address"
-    - "chain_id"
-    - "asset_type"
-    - "amount"
-  properties:
-    from_user_id:
-      type: "string"
-      format: "uuid"
-      description: "Source user ID"
-      example: "550e8400-e29b-41d4-a716-446655440000"
-    to_address:
-      type: "string"
-      pattern: "^0x[a-fA-F0-9]{40}$"
-      description: "Destination address"
-      example: "0x1234567890123456789012345678901234567890"
-    chain_id:
-      type: "integer"
-      format: "int64"
-      description: "Blockchain network ID"
-      example: 1
-      enum: [1, 56, 137, 42161]
-    asset_type:
-      type: "string"
-      description: "Type of asset to transfer"
-      example: "ERC20"
-      enum: ["ETH", "ERC20", "CPOP", "NFT"]
-    contract_address:
-      type: "string"
-      pattern: "^0x[a-fA-F0-9]{40}$"
-      description: "Contract address (required for ERC20 and NFT)"
-      example: "0xdAC17F958D2ee523a2206206994597C13D831ec7"
-    amount:
-      type: "string"
-      pattern: "^[0-9]+\\.?[0-9]*$"
-      description: "Amount to transfer (in token units)"
-      example: "100.500000"
-    memo:
-      type: "string"
-      maxLength: 256
-      description: "Optional memo for the transfer"
-      example: "Payment for services"
-    gas_mode:
-      type: "string"
-      description: "Gas payment mode"
-      example: "sponsored"
-      enum: ["sponsored", "self"]
-      default: "sponsored"
-    priority:
-      type: "string"
-      description: "Transaction priority"
-      example: "normal"
-      enum: ["low", "normal", "high"]
-      default: "normal"
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths: {}
+definitions:
+  # 交易信息模型
+  TransactionInfo:
+    type: object
+    required: [tx_id, chain_id, token_symbol, tx_type, business_type, amount, status]
+    properties:
+      tx_id:
+        type: string
+        description: "Transaction ID"
+        example: "tx_001"
+      operation_id:
+        type: string
+        description: "Business operation ID"
+        example: "op_transfer_001"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      chain_name:
+        type: string
+        description: "Chain name"
+        example: "BSC"
+      token_symbol:
+        type: string
+        description: "Token symbol"
+        example: "CPOP"
+      tx_type:
+        type: string
+        enum: [mint, burn, transfer]
+        description: "Transaction type"
+      business_type:
+        type: string
+        enum: [transfer, reward, gas_fee, consumption, refund]
+        description: "Business type"
+      transfer_direction:
+        type: string
+        enum: [outgoing, incoming]
+        description: "Transfer direction (only for transfers)"
+      related_user_id:
+        type: string
+        description: "Related user ID (for transfers)"
+        example: "user_456"
+      amount:
+        type: string
+        description: "Transaction amount (positive/negative)"
+        example: "-50.000000000000000000"
+      amount_usd:
+        type: string
+        description: "Amount in USD"
+        example: "-2.50"
+      status:
+        type: string
+        enum: [pending, batching, submitted, confirmed, failed]
+        description: "Transaction status"
+        default: pending
+      tx_hash:
+        type: string
+        description: "Blockchain transaction hash"
+        example: "0xabc123..."
+      block_number:
+        type: integer
+        format: int64
+        description: "Block number"
+      reason_type:
+        type: string
+        description: "Reason type"
+        example: "user_transfer"
+      reason_detail:
+        type: string
+        description: "Detailed reason"
+        example: "朋友转账"
+      is_batch_operation:
+        type: boolean
+        description: "Whether part of batch operation"
+        default: false
+      batch_id:
+        type: string
+        description: "Batch ID if batched"
+        example: "batch_transfer_001"
+      gas_saved_percentage:
+        type: number
+        format: float
+        description: "Gas saved percentage"
+        example: 76.8
+      created_at:
+        type: string
+        format: date-time
+        description: "Creation timestamp"
+      confirmed_at:
+        type: string
+        format: date-time
+        description: "Confirmation timestamp"
 
-TransferResponse:
-  type: "object"
-  required:
-    - "transaction_id"
-    - "status"
-    - "estimated_confirmation"
-  properties:
-    transaction_id:
-      type: "string"
-      format: "uuid"
-      description: "Unique transaction identifier"
-      example: "tx_550e8400-e29b-41d4-a716-446655440000"
-    status:
-      type: "string"
-      description: "Current transaction status"
-      example: "pending"
-      enum: ["pending", "submitted", "confirmed", "failed"]
-    estimated_confirmation:
-      type: "integer"
-      description: "Estimated confirmation time in seconds"
-      example: 45
-    gas_fee_usd:
-      type: "number"
-      format: "float"
-      description: "Estimated gas fee in USD"
-      example: 2.50
-    from_address:
-      type: "string"
-      pattern: "^0x[a-fA-F0-9]{40}$"
-      description: "Source address"
-    to_address:
-      type: "string"
-      pattern: "^0x[a-fA-F0-9]{40}$"
-      description: "Destination address"
-    explorer_url:
-      type: "string"
-      format: "uri"
-      description: "Blockchain explorer URL (available after submission)"
-    batch_info:
-      $ref: "#/definitions/BatchInfo"
+  # 转账请求
+  TransferRequest:
+    type: object
+    required: [from_user_id, to_user_id, chain_id, token_symbol, amount]
+    properties:
+      from_user_id:
+        type: string
+        description: "Sender user ID"
+        example: "user_123"
+      to_user_id:
+        type: string
+        description: "Recipient user ID"
+        example: "user_456"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      token_symbol:
+        type: string
+        description: "Token symbol"
+        example: "CPOP"
+      amount:
+        type: string
+        description: "Transfer amount"
+        example: "50.000000000000000000"
+      memo:
+        type: string
+        description: "Transfer memo"
+        example: "朋友转账"
 
-BatchInfo:
-  type: "object"
-  properties:
-    will_be_batched:
-      type: "boolean"
-      description: "Whether this transaction will be batched"
-      example: true
-    estimated_batch_time:
-      type: "integer"
-      description: "Estimated time until batch processing in seconds"
-      example: 15
-    current_batch_size:
-      type: "integer"
-      description: "Current number of operations in the batch"
-      example: 23
+  # 转账记录
+  TransferRecord:
+    type: object
+    properties:
+      tx_id:
+        type: string
+        description: "Transaction ID"
+        example: "tx_outgoing_001"
+      user_id:
+        type: string
+        description: "User ID"
+        example: "user_123"
+      transfer_direction:
+        type: string
+        enum: [outgoing, incoming]
+        description: "Transfer direction"
+      amount:
+        type: string
+        description: "Amount with sign"
+        example: "-50.000000000000000000"
 
-TransferP2PRequest:
-  type: "object"
-  required:
-    - "from_user_id"
-    - "to_user_id"
-    - "chain_id"
-    - "asset_type"
-    - "amount"
-  properties:
-    from_user_id:
-      type: "string"
-      format: "uuid"
-      description: "Source user ID"
-    to_user_id:
-      type: "string"
-      format: "uuid"
-      description: "Destination user ID"
-    chain_id:
-      type: "integer"
-      format: "int64"
-      description: "Blockchain network ID"
-    asset_type:
-      type: "string"
-      enum: ["ETH", "ERC20", "CPOP", "NFT"]
-    contract_address:
-      type: "string"
-      pattern: "^0x[a-fA-F0-9]{40}$"
-      description: "Contract address (required for ERC20)"
-    amount:
-      type: "string"
-      pattern: "^[0-9]+\\.?[0-9]*$"
-      description: "Amount to transfer"
-    memo:
-      type: "string"
-      maxLength: 256
-      description: "Optional memo"
+  # 转账响应
+  TransferResponse:
+    type: object
+    required: [operation_id, from_user_id, to_user_id, chain_id, token_symbol, amount, status, transfer_records]
+    properties:
+      operation_id:
+        type: string
+        description: "Operation ID"
+        example: "op_transfer_001"
+      from_user_id:
+        type: string
+        description: "Sender user ID"
+        example: "user_123"
+      to_user_id:
+        type: string
+        description: "Recipient user ID"
+        example: "user_456"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      token_symbol:
+        type: string
+        description: "Token symbol"
+        example: "CPOP"
+      amount:
+        type: string
+        description: "Transfer amount"
+        example: "50.000000000000000000"
+      status:
+        type: string
+        description: "Transfer status"
+        example: "recorded"
+      transfer_records:
+        type: array
+        items:
+          $ref: "#/definitions/TransferRecord"
 
-TransferBatchRequest:
-  type: "object"
-  required:
-    - "from_user_id"
-    - "transfers"
-  properties:
-    from_user_id:
-      type: "string"
-      format: "uuid"
-      description: "Source user ID for all transfers"
-    transfers:
-      type: "array"
-      minItems: 1
-      maxItems: 100
-      items:
-        $ref: "#/definitions/BatchTransferItem"
-    gas_mode:
-      type: "string"
-      enum: ["sponsored", "self"]
-      default: "sponsored"
+  # 交易历史响应
+  TransactionHistoryResponse:
+    type: object
+    required: [user_id, total_count, page, limit, transactions]
+    properties:
+      user_id:
+        type: string
+        description: "User ID"
+        example: "user_123"
+      total_count:
+        type: integer
+        description: "Total transaction count"
+        example: 156
+      page:
+        type: integer
+        description: "Current page"
+        example: 1
+      limit:
+        type: integer
+        description: "Page size"
+        example: 20
+      transactions:
+        type: array
+        items:
+          $ref: "#/definitions/TransactionInfo"
 
-BatchTransferItem:
-  type: "object"
-  required:
-    - "chain_id"
-    - "asset_type"
-    - "amount"
-  properties:
-    to_address:
-      type: "string"
-      pattern: "^0x[a-fA-F0-9]{40}$"
-      description: "Destination address (use this OR to_user_id)"
-    to_user_id:
-      type: "string"
-      format: "uuid"
-      description: "Destination user ID (use this OR to_address)"
-    chain_id:
-      type: "integer"
-      format: "int64"
-    asset_type:
-      type: "string"
-      enum: ["ETH", "ERC20", "CPOP", "NFT"]
-    contract_address:
-      type: "string"
-      pattern: "^0x[a-fA-F0-9]{40}$"
-    amount:
-      type: "string"
-      pattern: "^[0-9]+\\.?[0-9]*$"
-    memo:
-      type: "string"
-      maxLength: 256
-
-TransferBatchResponse:
-  type: "object"
-  required:
-    - "batch_id"
-    - "transactions"
-  properties:
-    batch_id:
-      type: "string"
-      format: "uuid"
-      description: "Batch identifier"
-    transactions:
-      type: "array"
-      items:
-        $ref: "#/definitions/TransferResponse"
-    total_gas_fee_usd:
-      type: "number"
-      format: "float"
-      description: "Total estimated gas fee for all transfers"
+  # 交易汇总
+  TransactionSummary:
+    type: object
+    properties:
+      total_incoming:
+        type: string
+        description: "Total incoming amount"
+        example: "2150.000000000000000000"
+      total_outgoing:
+        type: string
+        description: "Total outgoing amount"
+        example: "1850.000000000000000000"
+      net_change:
+        type: string
+        description: "Net change amount"
+        example: "300.000000000000000000"
+      gas_saved_total:
+        type: string
+        description: "Total gas saved"
+        example: "45.80 USD"

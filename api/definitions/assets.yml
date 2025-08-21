@@ -1,155 +1,204 @@
-# ChainBridge Assets Related Models
+# ChainBridge Assets Data Models
+# 资产管理相关的数据模型定义
 
-AssetsResponse:
-  type: "object"
-  required:
-    - "user_id"
-    - "assets"
-  properties:
-    user_id:
-      type: "string"
-      format: "uuid"
-    assets:
-      type: "array"
-      items:
-        $ref: "#/definitions/AssetInfo"
-    total_value_usd:
-      type: "number"
-      format: "float"
-      description: "Total portfolio value in USD"
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths: {}
+definitions:
+  # 资产信息模型
+  AssetInfo:
+    type: object
+    required: [chain_id, symbol, confirmed_balance, pending_balance, locked_balance]
+    properties:
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      chain_name:
+        type: string
+        description: "Chain name"
+        example: "BSC"
+      symbol:
+        type: string
+        description: "Token symbol"
+        example: "CPOP"
+      name:
+        type: string
+        description: "Token name"
+        example: "ChainBridge PoP Token"
+      contract_address:
+        type: string
+        description: "Token contract address"
+        example: "0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3"
+      decimals:
+        type: integer
+        description: "Token decimals"
+        example: 18
+      confirmed_balance:
+        type: string
+        description: "Confirmed balance on-chain"
+        example: "5000.0"
+      pending_balance:
+        type: string
+        description: "Balance including pending changes"
+        example: "5050.0"
+      locked_balance:
+        type: string
+        description: "Locked balance"
+        example: "0.0"
+      balance_usd:
+        type: number
+        format: float
+        description: "Balance in USD"
+        example: 250.0
+      sync_status:
+        type: string
+        enum: [synced, syncing, pending]
+        description: "Synchronization status"
+        default: synced
 
-AssetInfo:
-  type: "object"
-  required:
-    - "chain_id"
-    - "asset_type"
-    - "balance"
-  properties:
-    chain_id:
-      type: "integer"
-      format: "int64"
-    asset_type:
-      type: "string"
-      enum: ["ETH", "ERC20", "CPOP", "NFT"]
-    contract_address:
-      type: "string"
-      pattern: "^0x[a-fA-F0-9]{40}$"
-      description: "Contract address (for ERC20/NFT)"
-    symbol:
-      type: "string"
-      description: "Token symbol"
-      example: "USDT"
-    name:
-      type: "string"
-      description: "Token name"
-      example: "Tether USD"
-    decimals:
-      type: "integer"
-      description: "Token decimals"
-      example: 6
-    balance:
-      type: "string"
-      description: "Token balance"
-      example: "1000.500000"
-    value_usd:
-      type: "number"
-      format: "float"
-      description: "USD value of balance"
-      example: 1000.50
+  # 用户资产概览响应
+  AssetsResponse:
+    type: object
+    required: [user_id, total_value_usd, assets]
+    properties:
+      user_id:
+        type: string
+        description: "User identifier"
+        example: "user_123"
+      total_value_usd:
+        type: number
+        format: float
+        description: "Total portfolio value in USD"
+        example: 1250.50
+      assets:
+        type: array
+        items:
+          $ref: "#/definitions/AssetInfo"
 
-BalanceResponse:
-  type: "object"
-  required:
-    - "user_id"
-    - "chain_id"
-    - "balance"
-  properties:
-    user_id:
-      type: "string"
-      format: "uuid"
-    chain_id:
-      type: "integer"
-      format: "int64"
-    asset_type:
-      type: "string"
-      enum: ["ETH", "ERC20", "CPOP"]
-    balance:
-      type: "string"
-      description: "Token balance"
-      example: "1000.500000"
-    symbol:
-      type: "string"
-      example: "USDT"
-    decimals:
-      type: "integer"
-      example: 6
-    value_usd:
-      type: "number"
-      format: "float"
-      example: 1000.50
+  # 资产调整项
+  AssetAdjustment:
+    type: object
+    required: [user_id, chain_id, token_symbol, amount, business_type, reason_type]
+    properties:
+      user_id:
+        type: string
+        description: "User ID"
+        example: "user_123"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      token_symbol:
+        type: string
+        description: "Token symbol"
+        example: "CPOP"
+      amount:
+        type: string
+        description: "Adjustment amount (+/-)"
+        example: "+100.0"
+      business_type:
+        type: string
+        enum: [reward, gas_fee, consumption, refund]
+        description: "Business type"
+      reason_type:
+        type: string
+        description: "Reason type"
+        example: "daily_checkin"
+      reason_detail:
+        type: string
+        description: "Detailed reason"
+        example: "Daily check-in reward"
 
-TransactionHistoryResponse:
-  type: "object"
-  required:
-    - "user_id"
-    - "transactions"
-    - "total"
-  properties:
-    user_id:
-      type: "string"
-      format: "uuid"
-    transactions:
-      type: "array"
-      items:
-        $ref: "#/definitions/TransactionInfo"
-    total:
-      type: "integer"
-      description: "Total number of transactions"
-    limit:
-      type: "integer"
-    offset:
-      type: "integer"
+  # 批量处理偏好
+  BatchPreference:
+    type: object
+    properties:
+      priority:
+        type: string
+        enum: [low, normal, high]
+        description: "Processing priority"
+        default: normal
+      max_wait_time:
+        type: string
+        description: "Maximum wait time"
+        example: "15m"
 
-TransactionInfo:
-  type: "object"
-  required:
-    - "transaction_id"
-    - "hash"
-    - "status"
-    - "timestamp"
-  properties:
-    transaction_id:
-      type: "string"
-      format: "uuid"
-    hash:
-      type: "string"
-      pattern: "^0x[a-fA-F0-9]{64}$"
-      description: "Transaction hash"
-    chain_id:
-      type: "integer"
-      format: "int64"
-    from_address:
-      type: "string"
-      pattern: "^0x[a-fA-F0-9]{40}$"
-    to_address:
-      type: "string"
-      pattern: "^0x[a-fA-F0-9]{40}$"
-    asset_type:
-      type: "string"
-      enum: ["ETH", "ERC20", "CPOP", "NFT"]
-    amount:
-      type: "string"
-      description: "Transfer amount"
-    status:
-      type: "string"
-      enum: ["pending", "confirmed", "failed"]
-    timestamp:
-      type: "integer"
-      format: "int64"
-      description: "Unix timestamp"
-    gas_fee:
-      type: "string"
-      description: "Gas fee paid"
-    explorer_url:
-      type: "string"
-      format: "uri"
+  # 资产调整请求
+  AssetAdjustRequest:
+    type: object
+    required: [operation_id, adjustments]
+    properties:
+      operation_id:
+        type: string
+        description: "Operation ID"
+        example: "op_daily_rewards_001"
+      adjustments:
+        type: array
+        items:
+          $ref: "#/definitions/AssetAdjustment"
+      batch_preference:
+        $ref: "#/definitions/BatchPreference"
+
+  # 资产调整响应
+  AssetAdjustResponse:
+    type: object
+    required: [operation_id, processed_count, status]
+    properties:
+      operation_id:
+        type: string
+        description: "Operation ID"
+        example: "op_daily_rewards_001"
+      processed_count:
+        type: integer
+        description: "Number of processed adjustments"
+        example: 1
+      status:
+        type: string
+        description: "Processing status"
+        example: "recorded"
+
+  # 批量信息
+  BatchInfo:
+    type: object
+    properties:
+      pending_operations:
+        type: integer
+        description: "Number of pending operations"
+        example: 3
+      next_batch_estimate:
+        type: string
+        description: "Next batch processing estimate"
+        example: "5-10 minutes"
+      will_be_batched:
+        type: boolean
+        description: "Whether will be processed in batch"
+        example: true
+      batch_id:
+        type: string
+        description: "Batch ID"
+        example: "batch_daily_rewards_20241215"
+      current_batch_size:
+        type: integer
+        description: "Current batch size"
+        example: 24
+      optimal_batch_size:
+        type: integer
+        description: "Optimal batch size"
+        example: 25
+      expected_efficiency:
+        type: string
+        description: "Expected efficiency"
+        example: "75-77%"
+      estimated_gas_savings:
+        type: string
+        description: "Estimated gas savings"
+        example: "156.80 USD"
+      batch_type:
+        type: string
+        description: "Batch operation type"
+        example: "batchTransferFrom"

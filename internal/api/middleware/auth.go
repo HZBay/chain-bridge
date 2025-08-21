@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/go-openapi/strfmt"
 	"github.com/hzbay/chain-bridge/internal/api"
 	"github.com/hzbay/chain-bridge/internal/api/httperrors"
 	"github.com/hzbay/chain-bridge/internal/auth"
@@ -14,7 +15,6 @@ import (
 	"github.com/hzbay/chain-bridge/internal/data/mapper"
 	"github.com/hzbay/chain-bridge/internal/models"
 	"github.com/hzbay/chain-bridge/internal/util"
-	"github.com/go-openapi/strfmt"
 	"github.com/labstack/echo/v4"
 	"github.com/labstack/echo/v4/middleware"
 	"github.com/rs/zerolog/log"
