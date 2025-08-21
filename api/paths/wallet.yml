@@ -7,7 +7,7 @@ paths:
   /wallet/{user_id}:
     get:
       tags:
-        - wallet
+        - cpop
       summary: Get user wallet information
       description: "获取用户跨链钱包信息"
       operationId: getUserWallet
@@ -39,7 +39,7 @@ paths:
   /wallet/{user_id}/create:
     post:
       tags:
-        - wallet
+        - cpop
       summary: Create user wallet
       description: "为用户在指定链上创建新的账户抽象钱包"
       operationId: createUserWallet

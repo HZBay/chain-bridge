@@ -7,7 +7,7 @@ paths:
   /batches/{batch_id}:
     get:
       tags:
-        - batch
+        - cpop
       summary: Get batch processing status
       description: "获取特定批量处理操作的详细信息，包含CPOP效率指标"
       operationId: getBatchStatus

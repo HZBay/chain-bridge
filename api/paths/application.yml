@@ -7,7 +7,7 @@ paths:
   /subscribe:
     get:
       tags:
-        - application
+        - cpop
       summary: Establish WebSocket connection
       description: "建立应用级WebSocket连接，用于接收实时通知"
       operationId: subscribeNotifications

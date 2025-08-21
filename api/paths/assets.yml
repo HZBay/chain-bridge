@@ -7,7 +7,7 @@ paths:
   /users/{user_id}/assets:
     get:
       tags:
-        - assets
+        - cpop
       summary: Get user assets overview
       description: "获取用户跨链资产概览，包含批量处理状态信息"
       operationId: getUserAssets
@@ -44,7 +44,7 @@ paths:
   /assets/adjust:
     post:
       tags:
-        - assets
+        - cpop
       summary: Adjust user assets
       description: "批量调整用户资产余额（铸造/销毁操作），支持智能批处理"
       operationId: adjustAssets

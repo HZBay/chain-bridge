@@ -7,7 +7,7 @@ paths:
   /transfer:
     post:
       tags:
-        - transfer
+        - cpop
       summary: User to user transfer
       description: "用户间资产转账，支持智能批处理和CPOP优化"
       operationId: transferAssets
@@ -86,7 +86,7 @@ paths:
   /users/{user_id}/transactions:
     get:
       tags:
-        - transfer
+        - cpop
       summary: Get user transaction history
       description: "获取用户交易历史记录，支持筛选和分页"
       operationId: getUserTransactions
