@@ -35,6 +35,7 @@ services:
     depends_on:
       - postgres
       - integresql
+      - rabbitmq
     environment:
       # required: env for main working database, service
       # default for sql-migrate (target development) and psql cli tool
@@ -129,6 +130,27 @@ services:
     ports:
       - "8025:8025"
 
+  rabbitmq:
+    image: rabbitmq:3.12-management
+    container_name: chain-bridge-rabbitmq
+    environment:
+      RABBITMQ_DEFAULT_USER: chain-bridge
+      RABBITMQ_DEFAULT_PASS: your-secure-password
+      RABBITMQ_DEFAULT_VHOST: /
+    expose:
+      - "5672"
+      - "15672"
+    ports:
+      - "5672:5672"    # AMQP
+      - "15672:15672"  # Management UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: rabbitmq-diagnostics -q ping
+      interval: 30s
+      timeout: 10s
+      retries: 5
+
   swaggerui:
     image: swaggerapi/swagger-ui:v3.46.0
     environment:
@@ -151,6 +173,9 @@ volumes:
   # postgresql: declare a named volume to persist DB data
   pgvolume:
 
+  # rabbitmq: declare a named volume to persist message queue data
+  rabbitmq_data:
+
   # go: go mod cached downloads
   go-pkg:
 
@@ -164,5 +189,5 @@ volumes:
   vscode-extensions:
   vscode-extensions-insiders:
 
-  # https://code.visualstudio.com/remote/advancedcontainers/persist-bash-history
+  # https://code.visualstatus.com/remote/advancedcontainers/persist-bash-history
   bash-history:

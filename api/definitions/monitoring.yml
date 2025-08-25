@@ -1,0 +1,229 @@
+# Monitoring API Data Models
+# Queue monitoring and optimization response models
+
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths: {}
+definitions:
+  # Queue metrics response
+  queueMetricsResponse:
+    type: object
+    required:
+      - data
+    properties:
+      data:
+        $ref: '#/definitions/queueMetrics'
+
+  queueMetrics:
+    type: object
+    required:
+      - queue_depth
+      - total_jobs_processed
+      - connection_status
+      - processor_type
+    properties:
+      queue_depth:
+        type: integer
+        format: int64
+        description: Current number of jobs in the queue
+        example: 142
+      total_jobs_processed:
+        type: integer
+        format: int64
+        description: Total number of jobs processed since startup
+        example: 15847
+      connection_status:
+        type: string
+        description: Current connection status to the queue system
+        enum:
+          - connected
+          - disconnected
+          - reconnecting
+        example: connected
+      processor_type:
+        type: string
+        description: Type of processor being used
+        enum:
+          - rabbitmq
+          - memory
+          - hybrid
+        example: hybrid
+      throughput_per_minute:
+        type: number
+        format: float
+        description: Current processing throughput (jobs per minute)
+        example: 235.8
+      average_processing_time_ms:
+        type: integer
+        description: Average job processing time in milliseconds
+        example: 1250
+      error_rate_percentage:
+        type: number
+        format: float
+        description: Current error rate as percentage
+        example: 0.12
+
+  # Queue statistics response  
+  queueStatsResponse:
+    type: object
+    required:
+      - data
+    properties:
+      data:
+        type: array
+        items:
+          $ref: '#/definitions/queueStats'
+
+  queueStats:
+    type: object
+    required:
+      - queue_name
+      - chain_id
+      - token_id
+      - pending_jobs
+      - processed_jobs
+      - failed_jobs
+    properties:
+      queue_name:
+        type: string
+        description: Name of the queue
+        example: "chain-bridge.transfer.56.1"
+      chain_id:
+        type: integer
+        format: int64
+        description: Chain ID for this queue
+        example: 56
+      token_id:
+        type: integer
+        description: Token ID for this queue
+        example: 1
+      pending_jobs:
+        type: integer
+        description: Number of pending jobs in this queue
+        example: 23
+      processed_jobs:
+        type: integer
+        format: int64
+        description: Total number of jobs processed by this queue
+        example: 1847
+      failed_jobs:
+        type: integer
+        description: Number of failed jobs in this queue
+        example: 3
+      average_batch_size:
+        type: number
+        format: float
+        description: Average batch size for this queue
+        example: 24.5
+      last_processing_time:
+        type: string
+        format: date-time
+        description: Timestamp of last job processing
+      success_rate_percentage:
+        type: number
+        format: float
+        description: Success rate as percentage
+        example: 99.84
+
+  # Queue health response
+  queueHealthResponse:
+    type: object
+    required:
+      - healthy
+      - duration_ms
+      - timestamp
+    properties:
+      healthy:
+        type: boolean
+        description: Whether the queue system is healthy
+        example: true
+      duration_ms:
+        type: integer
+        description: Health check duration in milliseconds
+        example: 45
+      timestamp:
+        type: integer
+        format: int64
+        description: Unix timestamp of the health check
+        example: 1703515200
+      error:
+        type: string
+        description: Error message if health check failed
+        example: "Connection timeout to RabbitMQ server"
+
+  # Optimization recommendation response
+  optimizationRecommendationResponse:
+    type: object
+    required:
+      - data
+    properties:
+      data:
+        $ref: '#/definitions/optimizationRecommendation'
+
+  optimizationRecommendation:
+    type: object
+    required:
+      - chain_id
+      - token_id
+      - current_batch_size
+      - recommended_size
+      - expected_improvement
+      - confidence_level
+    properties:
+      chain_id:
+        type: integer
+        format: int64
+        description: Chain ID for this recommendation
+        example: 56
+      token_id:
+        type: integer
+        description: Token ID for this recommendation
+        example: 1
+      current_batch_size:
+        type: integer
+        description: Current batch size being used
+        example: 25
+      recommended_size:
+        type: integer
+        description: Recommended optimal batch size
+        example: 30
+      expected_improvement:
+        type: number
+        format: float
+        description: Expected improvement percentage
+        example: 12.5
+      confidence_level:
+        type: number
+        format: float
+        description: Confidence level of the recommendation (0-100)
+        example: 87.3
+      reasoning:
+        type: string
+        description: Human-readable explanation of the recommendation
+        example: "Increasing batch size to 30 will improve efficiency by 12.5% based on recent performance data"
+      performance_data:
+        $ref: '#/definitions/performanceMetrics'
+
+  performanceMetrics:
+    type: object
+    properties:
+      average_processing_time_ms:
+        type: integer
+        description: Average processing time in milliseconds
+        example: 2150
+      gas_saved_percentage:
+        type: number
+        format: float
+        description: Gas saved percentage compared to individual transactions
+        example: 78.2
+      efficiency_rating:
+        type: number
+        format: float
+        description: Overall efficiency rating (0-100)
+        example: 82.6
+      sample_size:
+        type: integer
+        description: Number of samples used for this analysis
+        example: 156

@@ -12,7 +12,7 @@ paths:
       description: "获取用户跨链钱包信息"
       operationId: getUserWallet
       security:
-        - Management: []
+        - Bearer: []
       parameters:
         - name: user_id
           in: path
@@ -44,7 +44,7 @@ paths:
       description: "为用户在指定链上创建新的账户抽象钱包"
       operationId: createUserWallet
       security:
-        - Management: []
+        - Bearer: []
       parameters:
         - name: user_id
           in: path
@@ -74,6 +74,54 @@ paths:
             $ref: "../definitions/errors.yml#/definitions/APIError"
         "422":
           description: Chain not supported or disabled
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "500":
+          $ref: "../definitions/errors.yml#/responses/InternalError"
+
+  # 3. 部署用户钱包
+  /wallet/{user_id}/deploy:
+    post:
+      tags:
+        - cpop
+      summary: Deploy user wallet
+      description: "将用户已创建的账户抽象钱包部署到指定链上"
+      operationId: deployUserWallet
+      security:
+        - Bearer: []
+      parameters:
+        - name: user_id
+          in: path
+          description: User identifier
+          required: true
+          type: string
+        - name: request
+          in: body
+          description: Wallet deployment request
+          required: true
+          schema:
+            $ref: "../definitions/wallet.yml#/definitions/DeployWalletRequest"
+      responses:
+        "200":
+          description: Wallet deployment initiated successfully
+          schema:
+            $ref: "../definitions/wallet.yml#/definitions/DeployWalletResponse"
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "401":
+          $ref: "../definitions/errors.yml#/responses/UnauthorizedError"
+        "404":
+          description: User or wallet not found
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "409":
+          description: Wallet already deployed
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "422":
+          description: Chain not supported or wallet not ready for deployment
           schema:
             $ref: "../definitions/errors.yml#/definitions/APIError"
         "500":

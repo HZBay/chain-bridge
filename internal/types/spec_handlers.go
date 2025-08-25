@@ -51,11 +51,20 @@ func (o *SwaggerSpec) initHandlerCache() {
 	o.Handlers["POST"]["/api/v1/auth/register"] = true
 	o.Handlers["PUT"]["/api/v1/push/token"] = true
 	o.Handlers["POST"]["/assets/adjust"] = true
+	o.Handlers["GET"]["/monitoring/queue/health"] = true
 	o.Handlers["POST"]["/wallet/{user_id}/create"] = true
+	o.Handlers["POST"]["/wallet/{user_id}/deploy"] = true
 	o.Handlers["GET"]["/batches/{batch_id}"] = true
+	o.Handlers["GET"]["/chains/{chain_id}"] = true
+	o.Handlers["GET"]["/chains"] = true
+	o.Handlers["GET"]["/monitoring/optimization/{chain_id}/{token_id}"] = true
+	o.Handlers["GET"]["/monitoring/queue/metrics"] = true
+	o.Handlers["GET"]["/monitoring/queue/stats"] = true
 	o.Handlers["GET"]["/users/{user_id}/assets"] = true
 	o.Handlers["GET"]["/users/{user_id}/transactions"] = true
 	o.Handlers["GET"]["/wallet/{user_id}"] = true
+	o.Handlers["POST"]["/chains/refresh-cache"] = true
 	o.Handlers["GET"]["/subscribe"] = true
 	o.Handlers["POST"]["/transfer"] = true
+	o.Handlers["PUT"]["/chains/{chain_id}/batch-config"] = true
 }

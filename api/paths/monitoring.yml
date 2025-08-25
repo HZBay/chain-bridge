@@ -1,0 +1,87 @@
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths:
+  # Queue monitoring endpoints
+  /monitoring/queue/metrics:
+    get:
+      security:
+        - Management: []
+      tags: [monitoring]
+      summary: Get queue metrics
+      description: Retrieves current queue processing metrics including depth, throughput, and connection status
+      operationId: getQueueMetrics
+      responses:
+        200:
+          description: Queue metrics retrieved successfully
+          schema:
+            $ref: '#/definitions/queueMetricsResponse'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+
+  /monitoring/queue/stats:
+    get:
+      security:
+        - Management: []
+      tags: [monitoring]
+      summary: Get detailed queue statistics
+      description: Retrieves detailed statistics for all queues including per-chain and per-token metrics
+      operationId: getQueueStats
+      responses:
+        200:
+          description: Detailed queue statistics retrieved successfully
+          schema:
+            $ref: '#/definitions/queueStatsResponse'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+
+  /monitoring/queue/health:
+    get:
+      security:
+        - Management: []
+      tags: [monitoring]
+      summary: Check queue health
+      description: Performs a health check on the queue system and returns status information
+      operationId: checkQueueHealth
+      responses:
+        200:
+          description: Queue is healthy
+          schema:
+            $ref: '#/definitions/queueHealthResponse'
+        503:
+          description: Queue is unhealthy
+          schema:
+            $ref: '#/definitions/queueHealthResponse'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+
+  /monitoring/optimization/{chain_id}/{token_id}:
+    get:
+      security:
+        - Management: []
+      tags: [monitoring]
+      summary: Get batch optimization recommendations
+      description: Retrieves optimization recommendations for batch processing on specific chain and token
+      operationId: getOptimizationRecommendation
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: integer
+          format: int64
+          description: The blockchain network ID
+        - name: token_id
+          in: path
+          required: true
+          type: integer
+          description: The token ID
+      responses:
+        200:
+          description: Optimization recommendation retrieved successfully
+          schema:
+            $ref: '#/definitions/optimizationRecommendationResponse'
+        400:
+          $ref: '../definitions/errors.yml#/responses/BadRequestError'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'

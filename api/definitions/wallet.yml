@@ -116,3 +116,50 @@ definitions:
         type: array
         items:
           $ref: "#/definitions/WalletInfo"
+
+  # 钱包部署请求
+  DeployWalletRequest:
+    type: object
+    required: [chain_id]
+    properties:
+      chain_id:
+        type: integer
+        format: int64
+        description: "Target chain ID for deployment"
+        example: 56
+
+  # 钱包部署响应
+  DeployWalletResponse:
+    type: object
+    required: [user_id, chain_id, aa_address, deployment_status]
+    properties:
+      user_id:
+        type: string
+        description: "User identifier"
+        example: "user_123"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      aa_address:
+        type: string
+        description: "AA wallet address to be deployed"
+        example: "0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3"
+      deployment_status:
+        type: string
+        enum: [submitted, confirmed, failed]
+        description: "Deployment status"
+        example: "submitted"
+      deployment_tx_hash:
+        type: string
+        description: "Deployment transaction hash"
+        example: "0xabc123def456789..."
+      estimated_gas_cost:
+        type: string
+        description: "Estimated gas cost for deployment"
+        example: "0.001 ETH"
+      estimated_confirmation_time:
+        type: string
+        description: "Estimated confirmation time"
+        example: "2-5 minutes"

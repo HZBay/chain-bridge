@@ -78,6 +78,26 @@ func GetEnvAsUint8(key string, defaultVal uint8) uint8 {
 	return defaultVal
 }
 
+func GetEnvAsUint64(key string, defaultVal uint64) uint64 {
+	strVal := GetEnv(key, "")
+
+	if val, err := strconv.ParseUint(strVal, 10, 64); err == nil {
+		return val
+	}
+
+	return defaultVal
+}
+
+func GetEnvAsFloat(key string, defaultVal float64) float64 {
+	strVal := GetEnv(key, "")
+
+	if val, err := strconv.ParseFloat(strVal, 64); err == nil {
+		return val
+	}
+
+	return defaultVal
+}
+
 func GetEnvAsBool(key string, defaultVal bool) bool {
 	strVal := GetEnv(key, "")
 

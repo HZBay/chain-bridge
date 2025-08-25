@@ -109,6 +109,8 @@ type Server struct {
 	Push       PushService
 	FCMConfig  provider.FCMConfig
 	I18n       I18n
+	Blockchain BlockchainConfig
+	RabbitMQ   RabbitMQConfig
 }
 
 // DefaultServiceConfigFromEnv returns the server config as parsed from environment variables
@@ -244,6 +246,8 @@ func DefaultServiceConfigFromEnv() Server {
 			DefaultLanguage: util.GetEnvAsLanguageTag("SERVER_I18N_DEFAULT_LANGUAGE", language.English),
 			BundleDirAbs:    util.GetEnv("SERVER_I18N_BUNDLE_DIR_ABS", filepath.Join(util.GetProjectRootDir(), "/web/i18n")), // /app/web/i18n
 		},
+		Blockchain: LoadBlockchainConfig(),
+		RabbitMQ:   LoadRabbitMQConfig(),
 	}
 
 }

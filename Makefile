@@ -38,8 +38,11 @@ info-go: ##- (opt) Prints go.mod updates, module-name and current go version.
 lint: check-gen-dirs check-script-dir check-handlers check-embedded-modules-go-not go-lint  ##- Runs golangci-lint and make check-*.
 
 # these recipies may execute in parallel
-build-pre: sql swagger ##- (opt) Runs pre-build related targets (sql, swagger, go-generate).
+build-pre: sql swagger contracts ##- (opt) Runs pre-build related targets (sql, swagger, contracts, go-generate).
 	@$(MAKE) go-generate
+
+contracts: ##- (opt) No-op contracts target (placeholder for future contract generation).
+	@echo "make contracts (no-op)"
 
 go-format: ##- (opt) Runs go format.
 	go fmt ./...

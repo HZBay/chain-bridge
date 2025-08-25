@@ -344,7 +344,7 @@ paths:
       - Management: []
       description: 批量调整用户资产余额（铸造/销毁操作），支持智能批处理
       tags:
-      - assets
+      - cpop
       summary: Adjust user assets
       operationId: adjustAssets
       parameters:
@@ -392,7 +392,7 @@ paths:
       - Management: []
       description: 获取特定批量处理操作的详细信息，包含CPOP效率指标
       tags:
-      - batch
+      - cpop
       summary: Get batch processing status
       operationId: getBatchStatus
       parameters:
@@ -452,13 +452,269 @@ paths:
           examples:
             application/json:
               message: Internal server error
+  /chains:
+    get:
+      description: Retrieves the list of all enabled blockchain networks and their
+        configurations
+      tags:
+      - cpop
+      summary: Get all enabled chains configuration
+      operationId: getChains
+      responses:
+        "200":
+          description: Successfully retrieved chains configuration
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items:
+                  $ref: '#/definitions/Chain'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+  /chains/refresh-cache:
+    post:
+      description: Forces a refresh of the cached chain configuration data from the
+        database
+      tags:
+      - cpop
+      summary: Refresh chains configuration cache
+      operationId: refreshChainsCache
+      responses:
+        "200":
+          description: Cache refreshed successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: Cache refreshed successfully
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+  /chains/{chain_id}:
+    get:
+      description: Retrieves detailed configuration for a specific blockchain network
+      tags:
+      - cpop
+      summary: Get chain configuration by ID
+      operationId: getChainConfig
+      parameters:
+      - type: integer
+        format: int64
+        description: The blockchain network ID
+        name: chain_id
+        in: path
+        required: true
+      responses:
+        "200":
+          description: Successfully retrieved chain configuration
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Chain'
+        "400":
+          description: Bad request error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Bad request
+        "404":
+          description: Not found error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Not found
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+  /chains/{chain_id}/batch-config:
+    put:
+      description: Updates the batch processing configuration parameters for a specific
+        blockchain network
+      tags:
+      - cpop
+      summary: Update batch configuration for a chain
+      operationId: updateChainBatchConfig
+      parameters:
+      - type: integer
+        format: int64
+        description: The blockchain network ID
+        name: chain_id
+        in: path
+        required: true
+      - description: Updated batch configuration parameters
+        name: batch_config
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/BatchConfig'
+      responses:
+        "200":
+          description: Batch configuration updated successfully
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/BatchConfig'
+              message:
+                type: string
+                example: Batch configuration updated successfully
+        "400":
+          description: Bad request error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Bad request
+        "404":
+          description: Not found error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Not found
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+  /monitoring/optimization/{chain_id}/{token_id}:
+    get:
+      security:
+      - Management: []
+      description: Retrieves optimization recommendations for batch processing on
+        specific chain and token
+      tags:
+      - monitoring
+      summary: Get batch optimization recommendations
+      operationId: getOptimizationRecommendation
+      parameters:
+      - type: integer
+        format: int64
+        description: The blockchain network ID
+        name: chain_id
+        in: path
+        required: true
+      - type: integer
+        description: The token ID
+        name: token_id
+        in: path
+        required: true
+      responses:
+        "200":
+          description: Optimization recommendation retrieved successfully
+          schema:
+            $ref: '#/definitions/optimizationRecommendationResponse'
+        "400":
+          description: Bad request error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Bad request
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+  /monitoring/queue/health:
+    get:
+      security:
+      - Management: []
+      description: Performs a health check on the queue system and returns status
+        information
+      tags:
+      - monitoring
+      summary: Check queue health
+      operationId: checkQueueHealth
+      responses:
+        "200":
+          description: Queue is healthy
+          schema:
+            $ref: '#/definitions/queueHealthResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+        "503":
+          description: Queue is unhealthy
+          schema:
+            $ref: '#/definitions/queueHealthResponse'
+  /monitoring/queue/metrics:
+    get:
+      security:
+      - Management: []
+      description: Retrieves current queue processing metrics including depth, throughput,
+        and connection status
+      tags:
+      - monitoring
+      summary: Get queue metrics
+      operationId: getQueueMetrics
+      responses:
+        "200":
+          description: Queue metrics retrieved successfully
+          schema:
+            $ref: '#/definitions/queueMetricsResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+  /monitoring/queue/stats:
+    get:
+      security:
+      - Management: []
+      description: Retrieves detailed statistics for all queues including per-chain
+        and per-token metrics
+      tags:
+      - monitoring
+      summary: Get detailed queue statistics
+      operationId: getQueueStats
+      responses:
+        "200":
+          description: Detailed queue statistics retrieved successfully
+          schema:
+            $ref: '#/definitions/queueStatsResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
   /subscribe:
     get:
       security:
       - Management: []
       description: 建立应用级WebSocket连接，用于接收实时通知
       tags:
-      - application
+      - cpop
       summary: Establish WebSocket connection
       operationId: subscribeNotifications
       parameters:
@@ -570,7 +826,7 @@ paths:
       - Management: []
       description: 用户间资产转账，支持智能批处理和CPOP优化
       tags:
-      - transfer
+      - cpop
       summary: User to user transfer
       operationId: transferAssets
       parameters:
@@ -658,7 +914,7 @@ paths:
       - Management: []
       description: 获取用户跨链资产概览，包含批量处理状态信息
       tags:
-      - assets
+      - cpop
       summary: Get user assets overview
       operationId: getUserAssets
       parameters:
@@ -708,7 +964,7 @@ paths:
       - Management: []
       description: 获取用户交易历史记录，支持筛选和分页
       tags:
-      - transfer
+      - cpop
       summary: Get user transaction history
       operationId: getUserTransactions
       parameters:
@@ -850,10 +1106,10 @@ paths:
   /wallet/{user_id}:
     get:
       security:
-      - Management: []
+      - Bearer: []
       description: 获取用户跨链钱包信息
       tags:
-      - wallet
+      - cpop
       summary: Get user wallet information
       operationId: getUserWallet
       parameters:
@@ -866,7 +1122,68 @@ paths:
         "200":
           description: User wallet information retrieved successfully
           schema:
-            $ref: '#/definitions/walletResponse'
+            type: object
+            required:
+            - user_id
+            - wallets
+            properties:
+              user_id:
+                description: User identifier
+                type: string
+                example: user_123
+              wallets:
+                type: array
+                items:
+                  type: object
+                  required:
+                  - id
+                  - user_id
+                  - chain_id
+                  - aa_address
+                  - owner
+                  - is_deployed
+                  properties:
+                    aa_address:
+                      description: Account Abstraction wallet address
+                      type: string
+                      example: 0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3
+                    chain_id:
+                      description: Chain ID
+                      type: integer
+                      format: int64
+                      example: 56
+                    chain_name:
+                      description: Chain name
+                      type: string
+                      example: BSC
+                    created_at:
+                      description: Creation timestamp
+                      type: string
+                      format: date-time
+                    deployment_tx_hash:
+                      description: Deployment transaction hash
+                      type: string
+                      example: 0xabc123...
+                    id:
+                      description: Wallet ID
+                      type: integer
+                      example: 1
+                    is_deployed:
+                      description: Whether wallet is deployed on-chain
+                      type: boolean
+                      example: true
+                    master_signer:
+                      description: Master signer address
+                      type: string
+                      example: 0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3
+                    owner:
+                      description: Owner EOA address
+                      type: string
+                      example: 0x1234567890123456789012345678901234567890
+                    user_id:
+                      description: User identifier
+                      type: string
+                      example: user_123
         "400":
           description: Bad request error
           schema:
@@ -895,10 +1212,10 @@ paths:
   /wallet/{user_id}/create:
     post:
       security:
-      - Management: []
+      - Bearer: []
       description: 为用户在指定链上创建新的账户抽象钱包
       tags:
-      - wallet
+      - cpop
       summary: Create user wallet
       operationId: createUserWallet
       parameters:
@@ -917,7 +1234,37 @@ paths:
         "200":
           description: Wallet created successfully
           schema:
-            $ref: '#/definitions/createWalletResponse'
+            type: object
+            properties:
+              aa_address:
+                description: Generated AA wallet address
+                type: string
+                example: 0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3
+              binding_status:
+                description: Binding status
+                type: string
+                example: success
+              chain_id:
+                description: Chain ID
+                type: integer
+                format: int64
+                example: 56
+              is_deployed:
+                description: Deployment status
+                type: boolean
+                example: false
+              owner:
+                description: Owner EOA address
+                type: string
+                example: 0x1234567890123456789012345678901234567890
+              user_id:
+                description: User identifier
+                type: string
+                example: user_123
+              wallet_created:
+                description: Whether wallet was created successfully
+                type: boolean
+                example: true
         "400":
           description: Invalid request parameters
           schema:
@@ -944,7 +1291,177 @@ paths:
           examples:
             application/json:
               message: Internal server error
+  /wallet/{user_id}/deploy:
+    post:
+      security:
+      - Bearer: []
+      description: 将用户已创建的账户抽象钱包部署到指定链上
+      tags:
+      - cpop
+      summary: Deploy user wallet
+      operationId: deployUserWallet
+      parameters:
+      - type: string
+        description: User identifier
+        name: user_id
+        in: path
+        required: true
+      - description: Wallet deployment request
+        name: request
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/deployWalletRequest'
+      responses:
+        "200":
+          description: Wallet deployment initiated successfully
+          schema:
+            type: object
+            required:
+            - user_id
+            - chain_id
+            - aa_address
+            - deployment_status
+            properties:
+              aa_address:
+                description: AA wallet address to be deployed
+                type: string
+                example: 0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3
+              chain_id:
+                description: Chain ID
+                type: integer
+                format: int64
+                example: 56
+              deployment_status:
+                description: Deployment status
+                type: string
+                enum:
+                - submitted
+                - confirmed
+                - failed
+                example: submitted
+              deployment_tx_hash:
+                description: Deployment transaction hash
+                type: string
+                example: 0xabc123def456789...
+              estimated_confirmation_time:
+                description: Estimated confirmation time
+                type: string
+                example: 2-5 minutes
+              estimated_gas_cost:
+                description: Estimated gas cost for deployment
+                type: string
+                example: 0.001 ETH
+              user_id:
+                description: User identifier
+                type: string
+                example: user_123
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: '#/definitions/apiError'
+        "401":
+          description: Unauthorized error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Unauthorized
+        "404":
+          description: User or wallet not found
+          schema:
+            $ref: '#/definitions/apiError'
+        "409":
+          description: Wallet already deployed
+          schema:
+            $ref: '#/definitions/apiError'
+        "422":
+          description: Chain not supported or wallet not ready for deployment
+          schema:
+            $ref: '#/definitions/apiError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
 definitions:
+  BatchConfig:
+    type: object
+    required:
+    - min_batch_size
+    - max_batch_size
+    - optimal_batch_size
+    properties:
+      max_batch_size:
+        description: Maximum number of operations to include in a batch
+        type: integer
+        maximum: 100
+        minimum: 1
+        example: 50
+      min_batch_size:
+        description: Minimum number of operations to include in a batch
+        type: integer
+        maximum: 100
+        minimum: 1
+        example: 5
+      optimal_batch_size:
+        description: Optimal number of operations for best performance
+        type: integer
+        maximum: 100
+        minimum: 1
+        example: 20
+  Chain:
+    type: object
+    required:
+    - chain_id
+    - name
+    - rpc_url
+    - is_enabled
+    - batch_config
+    properties:
+      batch_config:
+        $ref: '#/definitions/BatchConfig'
+      chain_id:
+        description: Unique identifier for the blockchain network
+        type: integer
+        format: int64
+        example: 1
+      created_at:
+        description: Timestamp when the chain configuration was created
+        type: string
+        format: date-time
+      explorer_url:
+        description: Block explorer URL for viewing transactions
+        type: string
+        format: uri
+        example: https://etherscan.io
+      is_enabled:
+        description: Whether the blockchain network is currently enabled for operations
+        type: boolean
+        example: true
+      is_testnet:
+        description: Whether this is a testnet or mainnet
+        type: boolean
+        example: false
+      name:
+        description: Human-readable name of the blockchain network
+        type: string
+        example: Ethereum Mainnet
+      rpc_url:
+        description: RPC endpoint URL for connecting to the blockchain network
+        type: string
+        format: uri
+        example: https://mainnet.infura.io/v3/your-project-id
+      symbol:
+        description: Symbol or short code for the blockchain network
+        type: string
+        example: ETH
+      updated_at:
+        description: Timestamp when the chain configuration was last updated
+        type: string
+        format: date-time
   apiError:
     type: object
     required:
@@ -1291,6 +1808,57 @@ definitions:
         maxLength: 500
         minLength: 1
         example: correct horse battery staple
+  deployWalletRequest:
+    type: object
+    required:
+    - chain_id
+    properties:
+      chain_id:
+        description: Target chain ID for deployment
+        type: integer
+        format: int64
+        example: 56
+  deployWalletResponse:
+    type: object
+    required:
+    - user_id
+    - chain_id
+    - aa_address
+    - deployment_status
+    properties:
+      aa_address:
+        description: AA wallet address to be deployed
+        type: string
+        example: 0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3
+      chain_id:
+        description: Chain ID
+        type: integer
+        format: int64
+        example: 56
+      deployment_status:
+        description: Deployment status
+        type: string
+        enum:
+        - submitted
+        - confirmed
+        - failed
+        example: submitted
+      deployment_tx_hash:
+        description: Deployment transaction hash
+        type: string
+        example: 0xabc123def456789...
+      estimated_confirmation_time:
+        description: Estimated confirmation time
+        type: string
+        example: 2-5 minutes
+      estimated_gas_cost:
+        description: Estimated gas cost for deployment
+        type: string
+        example: 0.001 ETH
+      user_id:
+        description: User identifier
+        type: string
+        example: user_123
   gasAnalysis:
     type: object
     properties:
@@ -1537,11 +2105,83 @@ definitions:
         $ref: '#/definitions/nullableString'
       nullableStringSlice:
         $ref: '#/definitions/nullableStringSlice'
+  optimizationRecommendation:
+    type: object
+    required:
+    - chain_id
+    - token_id
+    - current_batch_size
+    - recommended_size
+    - expected_improvement
+    - confidence_level
+    properties:
+      chain_id:
+        description: Chain ID for this recommendation
+        type: integer
+        format: int64
+        example: 56
+      confidence_level:
+        description: Confidence level of the recommendation (0-100)
+        type: number
+        format: float
+        example: 87.3
+      current_batch_size:
+        description: Current batch size being used
+        type: integer
+        example: 25
+      expected_improvement:
+        description: Expected improvement percentage
+        type: number
+        format: float
+        example: 12.5
+      performance_data:
+        $ref: '#/definitions/performanceMetrics'
+      reasoning:
+        description: Human-readable explanation of the recommendation
+        type: string
+        example: Increasing batch size to 30 will improve efficiency by 12.5% based
+          on recent performance data
+      recommended_size:
+        description: Recommended optimal batch size
+        type: integer
+        example: 30
+      token_id:
+        description: Token ID for this recommendation
+        type: integer
+        example: 1
+  optimizationRecommendationResponse:
+    type: object
+    required:
+    - data
+    properties:
+      data:
+        $ref: '#/definitions/optimizationRecommendation'
   orderDir:
     type: string
     enum:
     - asc
     - desc
+  performanceMetrics:
+    type: object
+    properties:
+      average_processing_time_ms:
+        description: Average processing time in milliseconds
+        type: integer
+        example: 2150
+      efficiency_rating:
+        description: Overall efficiency rating (0-100)
+        type: number
+        format: float
+        example: 82.6
+      gas_saved_percentage:
+        description: Gas saved percentage compared to individual transactions
+        type: number
+        format: float
+        example: 78.2
+      sample_size:
+        description: Number of samples used for this analysis
+        type: integer
+        example: 156
   postChangePasswordPayload:
     type: object
     required:
@@ -1735,6 +2375,144 @@ definitions:
         type: string
         maxLength: 500
         example: fcm
+  queueHealthResponse:
+    type: object
+    required:
+    - healthy
+    - duration_ms
+    - timestamp
+    properties:
+      duration_ms:
+        description: Health check duration in milliseconds
+        type: integer
+        example: 45
+      error:
+        description: Error message if health check failed
+        type: string
+        example: Connection timeout to RabbitMQ server
+      healthy:
+        description: Whether the queue system is healthy
+        type: boolean
+        example: true
+      timestamp:
+        description: Unix timestamp of the health check
+        type: integer
+        format: int64
+        example: 1703515200
+  queueMetrics:
+    type: object
+    required:
+    - queue_depth
+    - total_jobs_processed
+    - connection_status
+    - processor_type
+    properties:
+      average_processing_time_ms:
+        description: Average job processing time in milliseconds
+        type: integer
+        example: 1250
+      connection_status:
+        description: Current connection status to the queue system
+        type: string
+        enum:
+        - connected
+        - disconnected
+        - reconnecting
+        example: connected
+      error_rate_percentage:
+        description: Current error rate as percentage
+        type: number
+        format: float
+        example: 0.12
+      processor_type:
+        description: Type of processor being used
+        type: string
+        enum:
+        - rabbitmq
+        - memory
+        - hybrid
+        example: hybrid
+      queue_depth:
+        description: Current number of jobs in the queue
+        type: integer
+        format: int64
+        example: 142
+      throughput_per_minute:
+        description: Current processing throughput (jobs per minute)
+        type: number
+        format: float
+        example: 235.8
+      total_jobs_processed:
+        description: Total number of jobs processed since startup
+        type: integer
+        format: int64
+        example: 15847
+  queueMetricsResponse:
+    type: object
+    required:
+    - data
+    properties:
+      data:
+        $ref: '#/definitions/queueMetrics'
+  queueStats:
+    type: object
+    required:
+    - queue_name
+    - chain_id
+    - token_id
+    - pending_jobs
+    - processed_jobs
+    - failed_jobs
+    properties:
+      average_batch_size:
+        description: Average batch size for this queue
+        type: number
+        format: float
+        example: 24.5
+      chain_id:
+        description: Chain ID for this queue
+        type: integer
+        format: int64
+        example: 56
+      failed_jobs:
+        description: Number of failed jobs in this queue
+        type: integer
+        example: 3
+      last_processing_time:
+        description: Timestamp of last job processing
+        type: string
+        format: date-time
+      pending_jobs:
+        description: Number of pending jobs in this queue
+        type: integer
+        example: 23
+      processed_jobs:
+        description: Total number of jobs processed by this queue
+        type: integer
+        format: int64
+        example: 1847
+      queue_name:
+        description: Name of the queue
+        type: string
+        example: chain-bridge.transfer.56.1
+      success_rate_percentage:
+        description: Success rate as percentage
+        type: number
+        format: float
+        example: 99.84
+      token_id:
+        description: Token ID for this queue
+        type: integer
+        example: 1
+  queueStatsResponse:
+    type: object
+    required:
+    - data
+    properties:
+      data:
+        type: array
+        items:
+          $ref: '#/definitions/queueStats'
   transactionHistoryResponse:
     type: object
     required:

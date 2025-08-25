@@ -108,3 +108,11 @@ responses:
     examples:
       application/json:
         message: "Internal server error"
+
+  NotFoundError:
+    description: "Not found error"
+    schema:
+      $ref: "#/definitions/APIError"
+    examples:
+      application/json:
+        message: "Not found"

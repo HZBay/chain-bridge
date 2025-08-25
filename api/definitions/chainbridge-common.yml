@@ -34,3 +34,81 @@ definitions:
         type: boolean
         description: "Whether this chain is enabled"
         default: true
+
+  # Chain configuration definitions for management API
+  Chain:
+    type: object
+    required:
+      - chain_id
+      - name
+      - rpc_url
+      - is_enabled
+      - batch_config
+    properties:
+      chain_id:
+        type: integer
+        format: int64
+        description: Unique identifier for the blockchain network
+        example: 1
+      name:
+        type: string
+        description: Human-readable name of the blockchain network
+        example: "Ethereum Mainnet"
+      symbol:
+        type: string
+        description: Symbol or short code for the blockchain network
+        example: "ETH"
+      rpc_url:
+        type: string
+        format: uri
+        description: RPC endpoint URL for connecting to the blockchain network
+        example: "https://mainnet.infura.io/v3/your-project-id"
+      explorer_url:
+        type: string
+        format: uri
+        description: Block explorer URL for viewing transactions
+        example: "https://etherscan.io"
+      is_enabled:
+        type: boolean
+        description: Whether the blockchain network is currently enabled for operations
+        example: true
+      is_testnet:
+        type: boolean
+        description: Whether this is a testnet or mainnet
+        example: false
+      batch_config:
+        $ref: '#/definitions/BatchConfig'
+      created_at:
+        type: string
+        format: date-time
+        description: Timestamp when the chain configuration was created
+      updated_at:
+        type: string
+        format: date-time
+        description: Timestamp when the chain configuration was last updated
+
+  BatchConfig:
+    type: object
+    required:
+      - min_batch_size
+      - max_batch_size
+      - optimal_batch_size
+    properties:
+      min_batch_size:
+        type: integer
+        minimum: 1
+        maximum: 100
+        description: Minimum number of operations to include in a batch
+        example: 5
+      max_batch_size:
+        type: integer
+        minimum: 1
+        maximum: 100
+        description: Maximum number of operations to include in a batch
+        example: 50
+      optimal_batch_size:
+        type: integer
+        minimum: 1
+        maximum: 100
+        description: Optimal number of operations for best performance
+        example: 20

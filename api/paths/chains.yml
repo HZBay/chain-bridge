@@ -1,0 +1,107 @@
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths:
+  # Chain configuration endpoints
+  /chains:
+    get:
+      tags: [cpop]
+      summary: Get all enabled chains configuration
+      description: Retrieves the list of all enabled blockchain networks and their configurations
+      operationId: getChains
+      responses:
+        200:
+          description: Successfully retrieved chains configuration
+          schema:
+            type: object
+            properties:
+              data:
+                type: array
+                items:
+                  $ref: '#/definitions/Chain'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+
+  /chains/{chain_id}:
+    get:
+      tags: [cpop]
+      summary: Get chain configuration by ID
+      description: Retrieves detailed configuration for a specific blockchain network
+      operationId: getChainConfig
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: integer
+          format: int64
+          description: The blockchain network ID
+      responses:
+        200:
+          description: Successfully retrieved chain configuration
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: '#/definitions/Chain'
+        400:
+          $ref: '../definitions/errors.yml#/responses/BadRequestError'
+        404:
+          $ref: '../definitions/errors.yml#/responses/NotFoundError'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+
+  /chains/{chain_id}/batch-config:
+    put:
+      tags: [cpop]
+      summary: Update batch configuration for a chain
+      description: Updates the batch processing configuration parameters for a specific blockchain network
+      operationId: updateChainBatchConfig
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: integer
+          format: int64
+          description: The blockchain network ID
+        - name: batch_config
+          in: body
+          required: true
+          description: Updated batch configuration parameters
+          schema:
+            $ref: '#/definitions/BatchConfig'
+      responses:
+        200:
+          description: Batch configuration updated successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Batch configuration updated successfully"
+              data:
+                $ref: '#/definitions/BatchConfig'
+        400:
+          $ref: '../definitions/errors.yml#/responses/BadRequestError'
+        404:
+          $ref: '../definitions/errors.yml#/responses/NotFoundError'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+
+  /chains/refresh-cache:
+    post:
+      tags: [cpop]
+      summary: Refresh chains configuration cache
+      description: Forces a refresh of the cached chain configuration data from the database
+      operationId: refreshChainsCache
+      responses:
+        200:
+          description: Cache refreshed successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Cache refreshed successfully"
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'

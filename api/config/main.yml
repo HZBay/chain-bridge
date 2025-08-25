@@ -38,3 +38,36 @@ definitions:
     enum:
       - asc
       - desc
+  # Chain bridge definitions
+  Chain:
+    $ref: "../definitions/chainbridge-common.yml#/definitions/Chain"
+  BatchConfig:
+    $ref: "../definitions/chainbridge-common.yml#/definitions/BatchConfig"
+  # Monitoring definitions
+  queueMetricsResponse:
+    $ref: "../definitions/monitoring.yml#/definitions/queueMetricsResponse"
+  queueStatsResponse:
+    $ref: "../definitions/monitoring.yml#/definitions/queueStatsResponse"
+  queueHealthResponse:
+    $ref: "../definitions/monitoring.yml#/definitions/queueHealthResponse"
+  optimizationRecommendationResponse:
+    $ref: "../definitions/monitoring.yml#/definitions/optimizationRecommendationResponse"
+  # Assets definitions
+  assetAdjustResponse:
+    $ref: "../definitions/assets.yml#/definitions/AssetAdjustResponse"
+  assetsResponse:
+    $ref: "../definitions/assets.yml#/definitions/AssetsResponse"
+  batchInfo:
+    $ref: "../definitions/assets.yml#/definitions/BatchInfo"
+  # Transfer definitions  
+  transferResponse:
+    $ref: "../definitions/transfer.yml#/definitions/TransferResponse"
+  transactionHistoryResponse:
+    $ref: "../definitions/transfer.yml#/definitions/TransactionHistoryResponse"
+  # Wallet definitions
+  walletResponse:
+    $ref: "../definitions/wallet.yml#/definitions/WalletResponse"
+  createWalletResponse:
+    $ref: "../definitions/wallet.yml#/definitions/CreateWalletResponse"
+  deployWalletResponse:
+    $ref: "../definitions/wallet.yml#/definitions/DeployWalletResponse"

@@ -10,6 +10,7 @@ import (
 
 	"github.com/dropbox/godropbox/time2"
 	"github.com/hzbay/chain-bridge/internal/auth"
+	"github.com/hzbay/chain-bridge/internal/blockchain"
 	"github.com/hzbay/chain-bridge/internal/config"
 	"github.com/hzbay/chain-bridge/internal/data/dto"
 	"github.com/hzbay/chain-bridge/internal/data/local"
@@ -19,6 +20,9 @@ import (
 	"github.com/hzbay/chain-bridge/internal/metrics"
 	"github.com/hzbay/chain-bridge/internal/push"
 	"github.com/hzbay/chain-bridge/internal/push/provider"
+	"github.com/hzbay/chain-bridge/internal/queue"
+	"github.com/hzbay/chain-bridge/internal/services/chains"
+	"github.com/hzbay/chain-bridge/internal/services/wallet"
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog/log"
 
@@ -35,17 +39,22 @@ type Router struct {
 }
 
 type Server struct {
-	Config  config.Server
-	DB      *sql.DB
-	Echo    *echo.Echo
-	Router  *Router
-	Mailer  *mailer.Mailer
-	Push    *push.Service
-	I18n    *i18n.Service
-	Clock   time2.Clock
-	Auth    AuthService
-	Local   *local.Service
-	Metrics *metrics.Service
+	Config         config.Server
+	DB             *sql.DB
+	Echo           *echo.Echo
+	Router         *Router
+	Mailer         *mailer.Mailer
+	Push           *push.Service
+	I18n           *i18n.Service
+	Clock          time2.Clock
+	Auth           AuthService
+	Local          *local.Service
+	Metrics        *metrics.Service
+	WalletService  wallet.Service
+	BatchProcessor queue.BatchProcessor
+	QueueMonitor   *queue.QueueMonitor
+	BatchOptimizer *queue.BatchOptimizer
+	ChainsService  chains.Service
 }
 
 type AuthService interface {
@@ -62,16 +71,18 @@ type AuthService interface {
 
 func NewServer(config config.Server) *Server {
 	s := &Server{
-		Config: config,
-		DB:     nil,
-		Echo:   nil,
-		Router: nil,
-		Mailer: nil,
-		Push:   nil,
-		I18n:   nil,
-		Clock:  nil,
-		Auth:   nil,
-		Local:  nil,
+		Config:         config,
+		DB:             nil,
+		Echo:           nil,
+		Router:         nil,
+		Mailer:         nil,
+		Push:           nil,
+		I18n:           nil,
+		Clock:          nil,
+		Auth:           nil,
+		Local:          nil,
+		WalletService:  nil,
+		BatchProcessor: nil,
 	}
 
 	return s
@@ -86,7 +97,9 @@ func (s *Server) Ready() bool {
 		s.I18n != nil &&
 		s.Clock != nil &&
 		s.Auth != nil &&
-		s.Local != nil
+		s.Local != nil &&
+		s.WalletService != nil &&
+		s.BatchProcessor != nil
 }
 
 func (s *Server) InitCmd() *Server {
@@ -125,6 +138,18 @@ func (s *Server) InitCmd() *Server {
 		log.Fatal().Err(err).Msg("Failed to initialize metrics service")
 	}
 
+	if err := s.InitChainsService(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize chains service")
+	}
+
+	if err := s.InitBatchProcessor(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize batch processor")
+	}
+
+	if err := s.InitWalletService(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize wallet service")
+	}
+
 	return s
 }
 
@@ -146,6 +171,55 @@ func (s *Server) InitMetricsService() error {
 	if err != nil {
 		return err
 	}
+
+	return nil
+}
+
+func (s *Server) InitChainsService() error {
+	s.ChainsService = chains.NewService(s.DB)
+
+	log.Info().Msg("Chains service initialized")
+	return nil
+}
+
+func (s *Server) InitBatchProcessor() error {
+	var err error
+	s.BatchProcessor, err = queue.NewBatchProcessor(s.Config)
+	if err != nil {
+		return fmt.Errorf("failed to create batch processor: %w", err)
+	}
+
+	// Initialize queue monitor
+	s.QueueMonitor = queue.NewQueueMonitor(s.BatchProcessor)
+
+	// Initialize batch optimizer with chains service
+	s.BatchOptimizer = queue.NewBatchOptimizer(s.QueueMonitor, s.ChainsService)
+
+	log.Info().
+		Bool("rabbitmq_enabled", s.Config.RabbitMQ.Enabled).
+		Msg("Batch processor with monitoring and optimization initialized")
+
+	return nil
+}
+
+func (s *Server) InitWalletService() error {
+	// Get validated chains from blockchain config
+	validChains := s.Config.Blockchain.GetValidatedChains()
+
+	// Convert to CPOP configs
+	cpopConfigs := make(map[int64]blockchain.CPOPConfig)
+	for chainID, chainConfig := range validChains {
+		cpopConfigs[chainID] = chainConfig.ToCPOPConfig()
+	}
+
+	// Initialize wallet service with batch processor
+	var err error
+	s.WalletService, err = wallet.NewService(s.DB, cpopConfigs, s.Config.Blockchain)
+	if err != nil {
+		return fmt.Errorf("failed to create wallet service: %w", err)
+	}
+
+	log.Info().Int("chains", len(cpopConfigs)).Msg("Wallet service initialized with blockchain configurations")
 
 	return nil
 }
