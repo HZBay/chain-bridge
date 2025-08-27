@@ -8,12 +8,12 @@ chain-bridge/
 │   ├── swagger.yml               # 主Swagger文件
 │   ├── definitions/              # 数据模型定义
 │   │   ├── common.yml           # 通用模型
-│   │   ├── wallet.yml           # 钱包相关模型
+│   │   ├── account.yml           # 钱包相关模型
 │   │   ├── transfer.yml         # 转账相关模型
 │   │   ├── assets.yml           # 资产相关模型
 │   │   └── errors.yml           # 错误模型
 │   └── paths/                   # API路径定义
-│       ├── wallet.yml           # 钱包管理API
+│       ├── account.yml           # 钱包管理API
 │       ├── transfer.yml         # 转账操作API
 │       ├── assets.yml           # 资产查询API（Alchemy增强）
 │       ├── nft.yml              # NFT操作API
@@ -40,7 +40,7 @@ swagger: "2.0"
 info:
   title: "ChainBridge API"
   version: "2.0.0"
-  description: "Universal Wallet Relayer with Alchemy Integration for Web2 developers"
+  description: "Universal Account Relayer with Alchemy Integration for Web2 developers"
   contact:
     name: "ChainBridge Team"
     email: "tech@chain-bridge.com"
@@ -65,8 +65,8 @@ security:
   - ApiKeyAuth: []
 
 tags:
-  - name: "wallet"
-    description: "Wallet management operations"
+  - name: "account"
+    description: "Account management operations"
   - name: "transfer"
     description: "Transfer operations"
   - name: "assets"
@@ -78,10 +78,10 @@ tags:
 
 paths:
   # 钱包管理
-  /wallet/{user_id}:
-    $ref: "./paths/wallet.yml#/wallet_get"
-  /wallet/{user_id}/deploy:
-    $ref: "./paths/wallet.yml#/wallet_deploy"
+  /account/{user_id}:
+    $ref: "./paths/account.yml#/account_get"
+  /account/{user_id}/deploy:
+    $ref: "./paths/account.yml#/account_deploy"
   
   # 转账操作
   /transfer:
@@ -108,7 +108,7 @@ definitions:
   $ref: "./definitions/common.yml"
   
   # 钱包模型
-  $ref: "./definitions/wallet.yml"
+  $ref: "./definitions/account.yml"
   
   # 转账模型
   $ref: "./definitions/transfer.yml"

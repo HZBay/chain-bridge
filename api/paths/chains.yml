@@ -2,9 +2,11 @@ swagger: "2.0"
 info:
   title: github.com/hzbay/chain-bridge
   version: 0.1.0
+definitions:
+
 paths:
   # Chain configuration endpoints
-  /chains:
+  /-/chains:
     get:
       tags: [cpop]
       summary: Get all enabled chains configuration
@@ -14,16 +16,11 @@ paths:
         200:
           description: Successfully retrieved chains configuration
           schema:
-            type: object
-            properties:
-              data:
-                type: array
-                items:
-                  $ref: '#/definitions/Chain'
+            $ref: '../definitions/chains.yml#/definitions/ChainsResponse'
         500:
           $ref: '../definitions/errors.yml#/responses/InternalError'
 
-  /chains/{chain_id}:
+  /-/chains/{chain_id}:
     get:
       tags: [cpop]
       summary: Get chain configuration by ID
@@ -40,10 +37,7 @@ paths:
         200:
           description: Successfully retrieved chain configuration
           schema:
-            type: object
-            properties:
-              data:
-                $ref: '#/definitions/Chain'
+            $ref: '../definitions/chains.yml#/definitions/ChainResponse'
         400:
           $ref: '../definitions/errors.yml#/responses/BadRequestError'
         404:
@@ -51,7 +45,7 @@ paths:
         500:
           $ref: '../definitions/errors.yml#/responses/InternalError'
 
-  /chains/{chain_id}/batch-config:
+  /-/chains/{chain_id}/batch-config:
     put:
       tags: [cpop]
       summary: Update batch configuration for a chain
@@ -64,23 +58,21 @@ paths:
           type: integer
           format: int64
           description: The blockchain network ID
-        - name: batch_config
-          in: body
+        - name: batch_size
+          in: query
           required: true
-          description: Updated batch configuration parameters
-          schema:
-            $ref: '#/definitions/BatchConfig'
+          type: integer
+          description: New batch size for the chain
+        - name: batch_timeout
+          in: query
+          required: true
+          type: integer
+          description: New batch timeout in seconds
       responses:
         200:
           description: Batch configuration updated successfully
           schema:
-            type: object
-            properties:
-              message:
-                type: string
-                example: "Batch configuration updated successfully"
-              data:
-                $ref: '#/definitions/BatchConfig'
+            $ref: '../definitions/chains.yml#/definitions/BatchConfigUpdateResponse'
         400:
           $ref: '../definitions/errors.yml#/responses/BadRequestError'
         404:
@@ -88,7 +80,7 @@ paths:
         500:
           $ref: '../definitions/errors.yml#/responses/InternalError'
 
-  /chains/refresh-cache:
+  /-/chains/refresh-cache:
     post:
       tags: [cpop]
       summary: Refresh chains configuration cache
@@ -98,10 +90,6 @@ paths:
         200:
           description: Cache refreshed successfully
           schema:
-            type: object
-            properties:
-              message:
-                type: string
-                example: "Cache refreshed successfully"
+            $ref: '../definitions/chains.yml#/definitions/CacheRefreshResponse'
         500:
           $ref: '../definitions/errors.yml#/responses/InternalError'

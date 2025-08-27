@@ -3,19 +3,25 @@ package handlers
 
 import (
 	"github.com/hzbay/chain-bridge/internal/api"
+	"github.com/hzbay/chain-bridge/internal/api/handlers/account"
 	"github.com/hzbay/chain-bridge/internal/api/handlers/assets"
 	"github.com/hzbay/chain-bridge/internal/api/handlers/auth"
+	"github.com/hzbay/chain-bridge/internal/api/handlers/batch"
 	"github.com/hzbay/chain-bridge/internal/api/handlers/chains"
 	"github.com/hzbay/chain-bridge/internal/api/handlers/common"
+	"github.com/hzbay/chain-bridge/internal/api/handlers/monitoring"
 	"github.com/hzbay/chain-bridge/internal/api/handlers/push"
 	"github.com/hzbay/chain-bridge/internal/api/handlers/transfer"
-	"github.com/hzbay/chain-bridge/internal/api/handlers/wallet"
 	"github.com/labstack/echo/v4"
 )
 
 func AttachAllRoutes(s *api.Server) {
 	// attach our routes
 	s.Router.Routes = []*echo.Route{
+		account.GetUserAccountRoute(s),
+		account.PostCreateUserAccountRoute(s),
+		account.PostDeployUserAccountRoute(s),
+		assets.GetUserAssetsRoute(s),
 		assets.PostAdjustAssetsRoute(s),
 		auth.DeleteUserAccountRoute(s),
 		auth.GetUserInfoRoute(s),
@@ -26,6 +32,7 @@ func AttachAllRoutes(s *api.Server) {
 		auth.PostLogoutRoute(s),
 		auth.PostRefreshRoute(s),
 		auth.PostRegisterRoute(s),
+		batch.GetBatchStatusRoute(s),
 		chains.GetChainConfigRoute(s),
 		chains.GetChainsRoute(s),
 		chains.PostChainsRefreshCacheRoute(s),
@@ -34,9 +41,12 @@ func AttachAllRoutes(s *api.Server) {
 		common.GetReadyRoute(s),
 		common.GetSwaggerRoute(s),
 		common.GetVersionRoute(s),
+		monitoring.GetBatchOptimizationRoute(s),
+		monitoring.GetQueueHealthRoute(s),
+		monitoring.GetQueueMetricsRoute(s),
+		monitoring.GetQueueStatsRoute(s),
 		push.PutUpdatePushTokenRoute(s),
 		transfer.GetUserTransactionsRoute(s),
 		transfer.PostTransferAssetsRoute(s),
-		wallet.GetUserWalletRoute(s),
 	}
 }

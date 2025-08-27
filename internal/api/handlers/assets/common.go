@@ -16,10 +16,6 @@ func RegisterRoutes(s *api.Server) []*echo.Route {
 	return routes
 }
 
-// createAssetsService creates a new assets service with all dependencies
-func createAssetsService(s *api.Server) assets.Service {
-	return assets.NewService(s.DB, s.BatchProcessor, s.BatchOptimizer)
-}
 
 // Constants for asset operations
 const (

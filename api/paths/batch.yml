@@ -4,7 +4,7 @@ info:
   version: 0.1.0
 paths:
   # 1. 获取批量处理状态
-  /batches/{batch_id}:
+  /-/batches/{batch_id}:
     get:
       tags:
         - cpop

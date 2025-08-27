@@ -18,7 +18,7 @@ CREATE TABLE chains (
     entry_point_address char(42),          -- Account Abstraction入口点地址
     cpop_token_address char(42),           -- CPOP代币合约地址
     master_aggregator_address char(42),    -- 主聚合器合约地址
-    wallet_manager_address char(42),       -- 钱包管理器合约地址
+    account_manager_address char(42),       -- 钱包管理器合约地址
     
     -- 批量优化配置
     optimal_batch_size int DEFAULT 25,     -- 最优批次大小
@@ -38,7 +38,7 @@ CREATE TABLE chains (
 -- BSC 主网配置
 INSERT INTO chains (
     chain_id, name, short_name, rpc_url, explorer_url,
-    entry_point_address, cpop_token_address, master_aggregator_address, wallet_manager_address,
+    entry_point_address, cpop_token_address, master_aggregator_address, account_manager_address,
     optimal_batch_size, max_batch_size, min_batch_size,
     is_enabled
 ) VALUES (
@@ -48,7 +48,7 @@ INSERT INTO chains (
     '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',  -- EntryPoint v0.6.0
     '0x8AC76a51cc950d9822D68b83fE1Ad97B32Cd580d',  -- CPOP Token
     '0x1234567890123456789012345678901234567890',  -- Master Aggregator
-    '0x2345678901234567890123456789012345678901',  -- Wallet Manager
+    '0x2345678901234567890123456789012345678901',  -- Account Manager
     25, 40, 10,  -- 批处理配置
     true
 );
@@ -56,7 +56,7 @@ INSERT INTO chains (
 -- Ethereum 主网配置
 INSERT INTO chains (
     chain_id, name, short_name, rpc_url, explorer_url,
-    entry_point_address, cpop_token_address, master_aggregator_address, wallet_manager_address,
+    entry_point_address, cpop_token_address, master_aggregator_address, account_manager_address,
     optimal_batch_size, max_batch_size, min_batch_size,
     is_enabled
 ) VALUES (
@@ -66,7 +66,7 @@ INSERT INTO chains (
     '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',  -- EntryPoint v0.6.0
     '0xA0b86a33E6411eFa7c582B42a32Afaf0F4C9dCa1',  -- CPOP Token
     '0x3456789012345678901234567890123456789012',  -- Master Aggregator
-    '0x4567890123456789012345678901234567890123',  -- Wallet Manager
+    '0x4567890123456789012345678901234567890123',  -- Account Manager
     20, 35, 8,   -- Ethereum gas 更贵，批次相对小一些
     true
 );
@@ -74,7 +74,7 @@ INSERT INTO chains (
 -- Polygon 配置
 INSERT INTO chains (
     chain_id, name, short_name, rpc_url, explorer_url,
-    entry_point_address, cpop_token_address, master_aggregator_address, wallet_manager_address,
+    entry_point_address, cpop_token_address, master_aggregator_address, account_manager_address,
     optimal_batch_size, max_batch_size, min_batch_size,
     is_enabled
 ) VALUES (
@@ -84,7 +84,7 @@ INSERT INTO chains (
     '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',  -- EntryPoint v0.6.0
     '0x2791Bca1f2de4661ED88A30C99A7a9449Aa84174',  -- CPOP Token
     '0x5678901234567890123456789012345678901234',  -- Master Aggregator
-    '0x6789012345678901234567890123456789012345',  -- Wallet Manager
+    '0x6789012345678901234567890123456789012345',  -- Account Manager
     30, 50, 15,  -- Polygon gas 便宜，可以更大批次
     true
 );
@@ -92,7 +92,7 @@ INSERT INTO chains (
 -- Arbitrum One 配置
 INSERT INTO chains (
     chain_id, name, short_name, rpc_url, explorer_url,
-    entry_point_address, cpop_token_address, master_aggregator_address, wallet_manager_address,
+    entry_point_address, cpop_token_address, master_aggregator_address, account_manager_address,
     optimal_batch_size, max_batch_size, min_batch_size,
     is_enabled
 ) VALUES (
@@ -102,7 +102,7 @@ INSERT INTO chains (
     '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',  -- EntryPoint v0.6.0
     '0xFF970A61A04b1cA14834A43f5dE4533eBDDB5CC8',  -- CPOP Token (USDC as example)
     '0x7890123456789012345678901234567890123456',  -- Master Aggregator
-    '0x8901234567890123456789012345678901234567',  -- Wallet Manager
+    '0x8901234567890123456789012345678901234567',  -- Account Manager
     35, 60, 20,  -- L2 可以支持更大批次
     true
 );
@@ -114,7 +114,7 @@ INSERT INTO chains (
 -- BSC 测试网
 INSERT INTO chains (
     chain_id, name, short_name, rpc_url, explorer_url,
-    entry_point_address, cpop_token_address, master_aggregator_address, wallet_manager_address,
+    entry_point_address, cpop_token_address, master_aggregator_address, account_manager_address,
     optimal_batch_size, max_batch_size, min_batch_size,
     is_enabled
 ) VALUES (
@@ -132,7 +132,7 @@ INSERT INTO chains (
 -- Goerli 测试网 (如果需要)
 INSERT INTO chains (
     chain_id, name, short_name, rpc_url, explorer_url,
-    entry_point_address, cpop_token_address, master_aggregator_address, wallet_manager_address,
+    entry_point_address, cpop_token_address, master_aggregator_address, account_manager_address,
     optimal_batch_size, max_batch_size, min_batch_size,
     is_enabled
 ) VALUES (

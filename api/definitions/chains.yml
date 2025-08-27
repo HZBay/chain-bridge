@@ -1,0 +1,108 @@
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths: {}
+definitions:
+  UpdateChainBatchConfigBody:
+    type: object
+    properties:
+      batch_size:
+        type: integer
+        example: 25
+        description: New batch size for the chain
+      batch_timeout:
+        type: integer
+        example: 300
+        description: New batch timeout in seconds
+    required:
+      - batch_size
+      - batch_timeout
+
+  BatchConfigUpdateResponse:
+    type: object
+    properties:
+      message:
+        type: string
+        example: "Batch configuration updated successfully"
+    required:
+      - message
+
+  CacheRefreshResponse:
+    type: object
+    properties:
+      message:
+        type: string
+        example: "Chain cache refreshed successfully"
+    required:
+      - message
+
+  ChainResponse:
+    type: object
+    properties:
+      data:
+        type: object
+        properties:
+          chain_id:
+            type: integer
+            format: int64
+            description: "Chain ID"
+            example: 56
+          name:
+            type: string
+            description: "Chain name"
+            example: "BSC"
+          rpc_url:
+            type: string
+            description: "RPC endpoint URL"
+            example: "https://bsc-dataseed.binance.org/"
+          is_enabled:
+            type: boolean
+            description: "Whether chain is enabled"
+            example: true
+          batch_size:
+            type: integer
+            description: "Batch size for processing"
+            example: 25
+          batch_timeout:
+            type: integer
+            description: "Batch timeout in seconds"
+            example: 300
+    required:
+      - data
+
+  ChainsResponse:
+    type: object
+    properties:
+      data:
+        type: array
+        items:
+          type: object
+          properties:
+            chain_id:
+              type: integer
+              format: int64
+              description: "Chain ID"
+              example: 56
+            name:
+              type: string
+              description: "Chain name"
+              example: "BSC"
+            rpc_url:
+              type: string
+              description: "RPC endpoint URL"
+              example: "https://bsc-dataseed.binance.org/"
+            is_enabled:
+              type: boolean
+              description: "Whether chain is enabled"
+              example: true
+            batch_size:
+              type: integer
+              description: "Batch size for processing"
+              example: 25
+            batch_timeout:
+              type: integer
+              description: "Batch timeout in seconds"
+              example: 300
+    required:
+      - data

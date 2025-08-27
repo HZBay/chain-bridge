@@ -203,7 +203,9 @@ func Init(s *api.Server) error {
 		})),
 
 		// Your other endpoints, typically secured by bearer auth, available at /api/v1/**
-		APIV1Push: s.Echo.Group("/api/v1/push", middleware.Auth(s)),
+		APIV1Push:    s.Echo.Group("/api/v1/push", middleware.Auth(s)),
+		APIV1Account: s.Echo.Group("/api/v1/account", middleware.Auth(s)),
+		APIV1Assets:  s.Echo.Group("/api/v1/assets", middleware.Auth(s)),
 	}
 
 	// ---

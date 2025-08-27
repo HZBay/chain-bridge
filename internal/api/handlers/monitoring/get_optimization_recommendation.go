@@ -2,16 +2,16 @@ package monitoring
 
 import (
 	"net/http"
-	"strconv"
 
 	"github.com/hzbay/chain-bridge/internal/api"
 	"github.com/hzbay/chain-bridge/internal/types"
+	"github.com/hzbay/chain-bridge/internal/types/monitoring"
 	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/labstack/echo/v4"
 )
 
 // BatchOptimizationRoute creates the route for getting batch optimization recommendations
-func BatchOptimizationRoute(s *api.Server) *echo.Route {
+func GetBatchOptimizationRoute(s *api.Server) *echo.Route {
 	handler := NewHandler(s.QueueMonitor, s.BatchOptimizer)
 	return s.Router.Management.GET("/monitoring/optimization/:chain_id/:token_id", handler.GetOptimizationRecommendation)
 }
@@ -21,21 +21,15 @@ func (h *Handler) GetOptimizationRecommendation(c echo.Context) error {
 	ctx := c.Request().Context()
 	log := util.LogFromContext(ctx)
 
-	// Parse path parameters
-	chainIDStr := c.Param("chain_id")
-	tokenIDStr := c.Param("token_id")
-
-	chainID, err := strconv.ParseInt(chainIDStr, 10, 64)
-	if err != nil {
-		log.Debug().Str("chain_id", chainIDStr).Msg("Invalid chain_id parameter")
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid chain_id parameter")
+	// Parse and validate parameters using swagger-generated method
+	params := monitoring.NewGetOptimizationRecommendationParams()
+	if err := params.BindRequest(c.Request(), nil); err != nil {
+		log.Debug().Err(err).Msg("Failed to bind request parameters")
+		return err
 	}
 
-	tokenID, err := strconv.Atoi(tokenIDStr)
-	if err != nil {
-		log.Debug().Str("token_id", tokenIDStr).Msg("Invalid token_id parameter")
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid token_id parameter")
-	}
+	chainID := params.ChainID
+	tokenID := int(params.TokenID)
 
 	rawRecommendation := h.optimizer.GetOptimizationRecommendation(chainID, tokenID)
 
@@ -47,6 +41,7 @@ func (h *Handler) GetOptimizationRecommendation(c echo.Context) error {
 		Float64("improvement", rawRecommendation.ExpectedImprovement).
 		Msg("Generated optimization recommendation")
 
+	// TODO: 放到service中处理好一些
 	// Convert to generated type
 	tokenIDInt64 := int64(tokenID)
 	currentBatchSize := int64(rawRecommendation.CurrentBatchSize)

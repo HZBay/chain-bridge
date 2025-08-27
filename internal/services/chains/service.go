@@ -3,6 +3,7 @@ package chains
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -33,7 +34,7 @@ type ChainConfig struct {
 	EntryPointAddress       string      `json:"entry_point_address,omitempty"`
 	CpopTokenAddress        string      `json:"cpop_token_address,omitempty"`
 	MasterAggregatorAddress string      `json:"master_aggregator_address,omitempty"`
-	WalletManagerAddress    string      `json:"wallet_manager_address,omitempty"`
+	AccountManagerAddress   string      `json:"account_manager_address,omitempty"`
 	BatchConfig             BatchConfig `json:"batch_config"`
 	IsEnabled               bool        `json:"is_enabled"`
 	CreatedAt               time.Time   `json:"created_at"`
@@ -83,7 +84,7 @@ func (s *service) GetChainConfig(ctx context.Context, chainID int64) (*ChainConf
 		qm.Where("chain_id = ?", chainID),
 	).One(ctx, s.db)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("chain %d not found", chainID)
 		}
 		return nil, fmt.Errorf("failed to fetch chain config: %w", err)
@@ -131,10 +132,6 @@ func (s *service) GetBatchConfig(ctx context.Context, chainID int64) (*BatchConf
 
 // UpdateBatchConfig updates batch configuration for a specific chain
 func (s *service) UpdateBatchConfig(ctx context.Context, chainID int64, config *BatchConfig) error {
-	// Validate configuration
-	if err := s.validateBatchConfig(config); err != nil {
-		return fmt.Errorf("invalid batch config: %w", err)
-	}
 
 	// Update database
 	chain, err := models.Chains(
@@ -246,8 +243,8 @@ func (s *service) convertToChainConfig(chain *models.Chain) *ChainConfig {
 	if chain.MasterAggregatorAddress.Valid {
 		config.MasterAggregatorAddress = chain.MasterAggregatorAddress.String
 	}
-	if chain.WalletManagerAddress.Valid {
-		config.WalletManagerAddress = chain.WalletManagerAddress.String
+	if chain.AccountManagerAddress.Valid {
+		config.AccountManagerAddress = chain.AccountManagerAddress.String
 	}
 	if chain.CreatedAt.Valid {
 		config.CreatedAt = chain.CreatedAt.Time
@@ -271,20 +268,4 @@ func (s *service) convertToChainConfig(chain *models.Chain) *ChainConfig {
 	}
 
 	return config
-}
-
-func (s *service) validateBatchConfig(config *BatchConfig) error {
-	if config.MinBatchSize <= 0 {
-		return fmt.Errorf("min_batch_size must be greater than 0")
-	}
-	if config.MaxBatchSize <= config.MinBatchSize {
-		return fmt.Errorf("max_batch_size must be greater than min_batch_size")
-	}
-	if config.OptimalBatchSize < config.MinBatchSize || config.OptimalBatchSize > config.MaxBatchSize {
-		return fmt.Errorf("optimal_batch_size must be between min_batch_size and max_batch_size")
-	}
-	if config.MaxBatchSize > 100 {
-		return fmt.Errorf("max_batch_size cannot exceed 100")
-	}
-	return nil
 }

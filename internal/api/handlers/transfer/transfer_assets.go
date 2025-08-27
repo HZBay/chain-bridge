@@ -5,7 +5,7 @@ import (
 
 	"github.com/hzbay/chain-bridge/internal/api"
 	"github.com/hzbay/chain-bridge/internal/services/transfer"
-	"github.com/hzbay/chain-bridge/internal/types/cpop"
+	"github.com/hzbay/chain-bridge/internal/types"
 	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/labstack/echo/v4"
 )
@@ -27,7 +27,7 @@ func PostTransferAssetsRoute(s *api.Server) *echo.Route {
 	handler := NewTransferAssetsHandler(
 		transfer.NewService(s.DB, s.BatchProcessor, s.BatchOptimizer),
 	)
-	return s.Router.Management.POST("/transfer", handler.Handle)
+	return s.Router.APIV1Assets.POST("/transfer", handler.Handle)
 }
 
 // Handle processes asset transfer requests
@@ -35,37 +35,25 @@ func (h *TransferAssetsHandler) Handle(c echo.Context) error {
 	ctx := c.Request().Context()
 	log := util.LogFromContext(ctx)
 
-	// Parse and validate parameters
-	params := cpop.NewTransferAssetsParams()
-	if err := params.BindRequest(c.Request(), nil); err != nil {
-		log.Debug().Err(err).Msg("Failed to bind request parameters")
+	// Parse and validate request body
+	var request types.TransferRequest
+	if err := util.BindAndValidateBody(c, &request); err != nil {
+		log.Debug().Err(err).Msg("Failed to bind and validate request body")
 		return err
-	}
-
-	// Validate request body
-	if params.Request == nil {
-		log.Debug().Msg("Missing request body")
-		return echo.NewHTTPError(http.StatusBadRequest, "Request body is required")
 	}
 
 	// Log transfer request for audit
 	log.Info().
-		Interface("request", params.Request).
+		Interface("request", &request).
 		Msg("Processing transfer assets request")
 
 	// Call transfer service
-	transferResponse, batchInfo, err := h.transferService.TransferAssets(ctx, params.Request)
+	transferResponse, batchInfo, err := h.transferService.TransferAssets(ctx, &request)
 	if err != nil {
 		log.Error().Err(err).
-			Interface("request", params.Request).
+			Interface("request", &request).
 			Msg("Failed to process transfer")
 		return err
-	}
-
-	// Build response matching API specification
-	response := map[string]interface{}{
-		"data":       transferResponse,
-		"batch_info": batchInfo,
 	}
 
 	log.Info().
@@ -74,5 +62,11 @@ func (h *TransferAssetsHandler) Handle(c echo.Context) error {
 		Bool("will_be_batched", batchInfo.WillBeBatched).
 		Msg("Transfer assets request completed successfully")
 
-	return c.JSON(http.StatusOK, response)
+	// Build response matching API specification
+	response := &types.TransferCompleteResponse{
+		Data:      transferResponse,
+		BatchInfo: batchInfo,
+	}
+
+	return util.ValidateAndReturn(c, http.StatusOK, response)
 }

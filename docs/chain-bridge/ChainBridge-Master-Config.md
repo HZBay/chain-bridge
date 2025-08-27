@@ -178,7 +178,7 @@ signing_strategies:
 # 操作权限配置
 capabilities:
   deploy:
-    description: "Deploy new AA wallets"
+    description: "Deploy new AA accounts"
     risk_level: "high"
     requires_confirmation: true
     

@@ -3,7 +3,6 @@ package chains
 import (
 	"net/http"
 
-	"github.com/go-openapi/strfmt"
 	"github.com/hzbay/chain-bridge/internal/api"
 	"github.com/hzbay/chain-bridge/internal/types"
 	"github.com/hzbay/chain-bridge/internal/util"
@@ -32,33 +31,25 @@ func (h *Handler) GetChains(c echo.Context) error {
 		Int("chains_count", len(chainConfigs)).
 		Msg("Retrieved chains configuration")
 
+	// TODO: 把类型的转换放到service中处理好一些
 	// Convert to generated types
-	chains := make([]*types.Chain, len(chainConfigs))
+	chains := make([]*types.ChainsResponseDataItems0, len(chainConfigs))
 	for i, config := range chainConfigs {
-		minBatchSize := int64(config.BatchConfig.MinBatchSize)
-		maxBatchSize := int64(config.BatchConfig.MaxBatchSize)
-		optimalBatchSize := int64(config.BatchConfig.OptimalBatchSize)
-
-		rpcURL := strfmt.URI(config.RPCURL)
-		chain := &types.Chain{
-			ChainID:     &config.ChainID,
-			Name:        &config.Name,
-			Symbol:      config.ShortName,
-			RPCURL:      &rpcURL,
-			ExplorerURL: strfmt.URI(config.ExplorerURL),
-			IsEnabled:   &config.IsEnabled,
-			BatchConfig: &types.BatchConfig{
-				MinBatchSize:     &minBatchSize,
-				MaxBatchSize:     &maxBatchSize,
-				OptimalBatchSize: &optimalBatchSize,
-			},
-			CreatedAt: strfmt.DateTime(config.CreatedAt),
+		chainData := &types.ChainsResponseDataItems0{
+			ChainID:      config.ChainID,
+			Name:         config.Name,
+			RPCURL:       config.RPCURL,
+			IsEnabled:    config.IsEnabled,
+			BatchSize:    int64(config.BatchConfig.OptimalBatchSize),
+			BatchTimeout: 300, // Default 5 minutes
 		}
-		chains[i] = chain
+		chains[i] = chainData
 	}
 
-	// Use proper response wrapper if available, or simple JSON return
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"data": chains,
-	})
+	// Use proper response type
+	response := &types.ChainsResponse{
+		Data: chains,
+	}
+
+	return util.ValidateAndReturn(c, http.StatusOK, response)
 }

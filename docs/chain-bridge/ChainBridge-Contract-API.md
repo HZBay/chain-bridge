@@ -877,12 +877,12 @@ func (cs *CPOPService) BatchMint(ctx context.Context, req *CPOPBatchMintRequest)
     var amounts []string
     
     for _, recipient := range req.Recipients {
-        wallet, err := cs.userService.GetUserWallet(recipient.UserID, req.ChainID)
+        account, err := cs.userService.GetUserAccount(recipient.UserID, req.ChainID)
         if err != nil {
-            return nil, fmt.Errorf("failed to get wallet for user %s: %w", recipient.UserID, err)
+            return nil, fmt.Errorf("failed to get account for user %s: %w", recipient.UserID, err)
         }
         
-        addresses = append(addresses, wallet.AAAddress)
+        addresses = append(addresses, account.AAAddress)
         
         // 转换为wei单位 (CPOP有18位小数)
         amountWei, err := convertToWei(recipient.Amount, 18)

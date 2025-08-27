@@ -32,7 +32,7 @@ CREATE TABLE chains (
     entry_point_address CHAR(42),
     cpop_token_address CHAR(42),
     master_aggregator_address CHAR(42),
-    wallet_manager_address CHAR(42),
+    account_manager_address CHAR(42),
     
     -- 批量优化配置
     optimal_batch_size INT DEFAULT 25,
@@ -73,7 +73,7 @@ CREATE TABLE supported_tokens (
 
 ```sql
 -- 用户多链钱包表
-CREATE TABLE user_wallets (
+CREATE TABLE user_accounts (
     id SERIAL PRIMARY KEY,
     user_id UUID NOT NULL,
     chain_id BIGINT NOT NULL,
@@ -376,7 +376,7 @@ POST /api/v1/transfer
 
 #### 获取用户钱包信息
 ```http
-GET /api/v1/wallet/{user_id}
+GET /api/v1/account/{user_id}
 ```
 
 **响应**:
@@ -386,7 +386,7 @@ GET /api/v1/wallet/{user_id}
   "message": "success",
   "data": {
     "user_id": "user_123",
-    "wallets": [
+    "accounts": [
       {
         "id": 1,
         "chain_id": 56,
@@ -405,7 +405,7 @@ GET /api/v1/wallet/{user_id}
 
 #### 创建钱包
 ```http
-POST /api/v1/wallet/{user_id}/create
+POST /api/v1/account/{user_id}/create
 ```
 
 **请求体**:
@@ -427,7 +427,7 @@ POST /api/v1/wallet/{user_id}/create
     "aa_address": "0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3",
     "owner": "0x1234567890123456789012345678901234567890",
     "is_deployed": false,
-    "wallet_created": true,
+    "account_created": true,
     "binding_status": "success"
   }
 }
@@ -700,10 +700,10 @@ GET /api/v1/batches/{batch_id}
 | `batch_id` | `transactions.batch_id` | 批量ID |
 | `actual_efficiency` | `batches.actual_efficiency` | 实际效率 |
 | `gas_saved_percentage` | `batches.gas_saved_percentage` | Gas节省比例 |
-| `aa_address` | `user_wallets.aa_address` | 账户抽象钱包地址 |
-| `owner` | `user_wallets.owner` | 用户EOA地址 |
-| `is_deployed` | `user_wallets.is_deployed` | 钱包部署状态 |
-| `deployment_tx_hash` | `user_wallets.deployment_tx_hash` | 部署交易哈希 |
+| `aa_address` | `user_accounts.aa_address` | 账户抽象钱包地址 |
+| `owner` | `user_accounts.owner` | 用户EOA地址 |
+| `is_deployed` | `user_accounts.is_deployed` | 钱包部署状态 |
+| `deployment_tx_hash` | `user_accounts.deployment_tx_hash` | 部署交易哈希 |
 | `related_user_id` | `transactions.related_user_id` | 转账关联用户ID |
 | `transfer_direction` | `transactions.transfer_direction` | 转账方向 |
 | `operation_id` | `transactions.operation_id` | 业务操作ID |

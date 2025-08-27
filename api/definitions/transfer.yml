@@ -237,3 +237,13 @@ definitions:
         type: string
         description: "Total gas saved"
         example: "45.80 USD"
+
+  # 转账完整响应 (包含data和batch_info)
+  TransferCompleteResponse:
+    type: object
+    required: [data, batch_info]
+    properties:
+      data:
+        $ref: "#/definitions/TransferResponse"
+      batch_info:
+        $ref: "./assets.yml#/definitions/BatchInfo"

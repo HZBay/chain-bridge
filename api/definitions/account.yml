@@ -1,0 +1,165 @@
+# ChainBridge Account Data Models
+# 钱包管理相关的数据模型定义
+
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths: {}
+definitions:
+  # 钱包信息模型
+  AccountInfo:
+    type: object
+    required: [id, user_id, chain_id, aa_address, owner, is_deployed]
+    properties:
+      id:
+        type: integer
+        description: "Account ID"
+        example: 1
+      user_id:
+        type: string
+        description: "User identifier"
+        example: "user_123"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      chain_name:
+        type: string
+        description: "Chain name"
+        example: "BSC"
+      aa_address:
+        type: string
+        description: "Account Abstraction account address"
+        example: "0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3"
+      owner:
+        type: string
+        description: "Owner EOA address"
+        example: "0x1234567890123456789012345678901234567890"
+      is_deployed:
+        type: boolean
+        description: "Whether account is deployed on-chain"
+        example: true
+      deployment_tx_hash:
+        type: string
+        description: "Deployment transaction hash"
+        example: "0xabc123..."
+      master_signer:
+        type: string
+        description: "Master signer address"
+        example: "0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3"
+      created_at:
+        type: string
+        format: date-time
+        description: "Creation timestamp"
+
+  # 创建钱包请求
+  CreateAccountRequest:
+    type: object
+    required: [owner_address, chain_id]
+    properties:
+      owner_address:
+        type: string
+        description: "Owner EOA address"
+        example: "0x1234567890123456789012345678901234567890"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Target chain ID"
+        example: 56
+
+  # 创建钱包响应
+  CreateAccountResponse:
+    type: object
+    properties:
+      user_id:
+        type: string
+        description: "User identifier"
+        example: "user_123"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      aa_address:
+        type: string
+        description: "Generated AA account address"
+        example: "0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3"
+      owner:
+        type: string
+        description: "Owner EOA address"
+        example: "0x1234567890123456789012345678901234567890"
+      is_deployed:
+        type: boolean
+        description: "Deployment status"
+        example: false
+      account_created:
+        type: boolean
+        description: "Whether account was created successfully"
+        example: true
+      binding_status:
+        type: string
+        description: "Binding status"
+        example: "success"
+
+  # 钱包响应
+  AccountResponse:
+    type: object
+    required: [user_id, accounts]
+    properties:
+      user_id:
+        type: string
+        description: "User identifier"
+        example: "user_123"
+      accounts:
+        type: array
+        items:
+          $ref: "#/definitions/AccountInfo"
+
+  # 钱包部署请求
+  DeployAccountRequest:
+    type: object
+    required: [chain_id]
+    properties:
+      chain_id:
+        type: integer
+        format: int64
+        description: "Target chain ID for deployment"
+        example: 56
+
+  # 钱包部署响应
+  DeployAccountResponse:
+    type: object
+    required: [user_id, chain_id, aa_address, deployment_status]
+    properties:
+      user_id:
+        type: string
+        description: "User identifier"
+        example: "user_123"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      aa_address:
+        type: string
+        description: "AA account address to be deployed"
+        example: "0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3"
+      deployment_status:
+        type: string
+        enum: [submitted, confirmed, failed]
+        description: "Deployment status"
+        example: "submitted"
+      deployment_tx_hash:
+        type: string
+        description: "Deployment transaction hash"
+        example: "0xabc123def456789..."
+      estimated_gas_cost:
+        type: string
+        description: "Estimated gas cost for deployment"
+        example: "0.001 ETH"
+      estimated_confirmation_time:
+        type: string
+        description: "Estimated confirmation time"
+        example: "2-5 minutes"

@@ -11,7 +11,7 @@ import (
 )
 
 // QueueStatsRoute creates the route for getting detailed queue statistics
-func QueueStatsRoute(s *api.Server) *echo.Route {
+func GetQueueStatsRoute(s *api.Server) *echo.Route {
 	handler := NewHandler(s.QueueMonitor, s.BatchOptimizer)
 	return s.Router.Management.GET("/monitoring/queue/stats", handler.GetQueueStats)
 }

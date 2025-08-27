@@ -130,14 +130,12 @@ func AllProviderType() []string {
 const (
 	TokenTypeNative string = "native"
 	TokenTypeErc20  string = "erc20"
-	TokenTypeCpop   string = "cpop"
 )
 
 func AllTokenType() []string {
 	return []string{
 		TokenTypeNative,
 		TokenTypeErc20,
-		TokenTypeCpop,
 	}
 }
 

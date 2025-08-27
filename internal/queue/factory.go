@@ -11,7 +11,8 @@ import (
 func NewBatchProcessor(cfg config.Server) (BatchProcessor, error) {
 	// If RabbitMQ is disabled, use memory processor only
 	if !cfg.RabbitMQ.Enabled {
-		log.Info().Msg("RabbitMQ disabled, using memory processor")
+		log.Info().Msg("RabbitMQ disabled, using memory processor (simulation mode)")
+		// Note: Dependencies will be set when StartBatchConsumer is called if needed
 		return NewMemoryProcessor(), nil
 	}
 
@@ -22,7 +23,8 @@ func NewBatchProcessor(cfg config.Server) (BatchProcessor, error) {
 
 		// Fallback to memory processor if allowed
 		if cfg.RabbitMQ.BatchStrategy.FallbackToMemory {
-			log.Warn().Msg("Falling back to memory processor")
+			log.Warn().Msg("Falling back to memory processor (simulation mode)")
+			// Note: Dependencies won't be available, will run in simulation mode
 			return NewMemoryProcessor(), nil
 		}
 

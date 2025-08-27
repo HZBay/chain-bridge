@@ -6,7 +6,6 @@ package cpop
 // Editing this file might prove futile when you re-run the swagger generate command
 
 import (
-	"io"
 	"net/http"
 
 	"github.com/go-openapi/errors"
@@ -14,8 +13,7 @@ import (
 	"github.com/go-openapi/runtime/middleware"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
-
-	"github.com/hzbay/chain-bridge/internal/types"
+	"github.com/go-openapi/validate"
 )
 
 // NewUpdateChainBatchConfigParams creates a new UpdateChainBatchConfigParams object
@@ -34,11 +32,16 @@ type UpdateChainBatchConfigParams struct {
 	// HTTP Request Object
 	HTTPRequest *http.Request `json:"-"`
 
-	/*Updated batch configuration parameters
+	/*New batch size for the chain
 	  Required: true
-	  In: body
+	  In: query
 	*/
-	BatchConfig *types.BatchConfig
+	BatchSize int64 `query:"batch_size"`
+	/*New batch timeout in seconds
+	  Required: true
+	  In: query
+	*/
+	BatchTimeout int64 `query:"batch_timeout"`
 	/*The blockchain network ID
 	  Required: true
 	  In: path
@@ -55,28 +58,18 @@ func (o *UpdateChainBatchConfigParams) BindRequest(r *http.Request, route *middl
 
 	o.HTTPRequest = r
 
-	if runtime.HasBody(r) {
-		defer r.Body.Close()
-		var body types.BatchConfig
-		if err := route.Consumer.Consume(r.Body, &body); err != nil {
-			if err == io.EOF {
-				res = append(res, errors.Required("batchConfig", "body", ""))
-			} else {
-				res = append(res, errors.NewParseError("batchConfig", "body", "", err))
-			}
-		} else {
-			// validate body object
-			if err := body.Validate(route.Formats); err != nil {
-				res = append(res, err)
-			}
+	qs := runtime.Values(r.URL.Query())
 
-			if len(res) == 0 {
-				o.BatchConfig = &body
-			}
-		}
-	} else {
-		res = append(res, errors.Required("batchConfig", "body", ""))
+	qBatchSize, qhkBatchSize, _ := qs.GetOK("batch_size")
+	if err := o.bindBatchSize(qBatchSize, qhkBatchSize, route.Formats); err != nil {
+		res = append(res, err)
 	}
+
+	qBatchTimeout, qhkBatchTimeout, _ := qs.GetOK("batch_timeout")
+	if err := o.bindBatchTimeout(qBatchTimeout, qhkBatchTimeout, route.Formats); err != nil {
+		res = append(res, err)
+	}
+
 	rChainID, rhkChainID, _ := route.Params.GetOK("chain_id")
 	if err := o.bindChainID(rChainID, rhkChainID, route.Formats); err != nil {
 		res = append(res, err)
@@ -91,13 +84,19 @@ func (o *UpdateChainBatchConfigParams) BindRequest(r *http.Request, route *middl
 func (o *UpdateChainBatchConfigParams) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	// batch_config
+	// batch_size
 	// Required: true
+	// AllowEmptyValue: false
+	if err := validate.Required("batch_size", "query", o.BatchSize); err != nil {
+		res = append(res, err)
+	}
 
-	// body is validated in endpoint
-	//if err := o.BatchConfig.Validate(formats); err != nil {
-	//  res = append(res, err)
-	//}
+	// batch_timeout
+	// Required: true
+	// AllowEmptyValue: false
+	if err := validate.Required("batch_timeout", "query", o.BatchTimeout); err != nil {
+		res = append(res, err)
+	}
 
 	// chain_id
 	// Required: true
@@ -106,6 +105,56 @@ func (o *UpdateChainBatchConfigParams) Validate(formats strfmt.Registry) error {
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
+	return nil
+}
+
+// bindBatchSize binds and validates parameter BatchSize from query.
+func (o *UpdateChainBatchConfigParams) bindBatchSize(rawData []string, hasKey bool, formats strfmt.Registry) error {
+	if !hasKey {
+		return errors.Required("batch_size", "query", rawData)
+	}
+	var raw string
+	if len(rawData) > 0 {
+		raw = rawData[len(rawData)-1]
+	}
+
+	// Required: true
+	// AllowEmptyValue: false
+	if err := validate.RequiredString("batch_size", "query", raw); err != nil {
+		return err
+	}
+
+	value, err := swag.ConvertInt64(raw)
+	if err != nil {
+		return errors.InvalidType("batch_size", "query", "int64", raw)
+	}
+	o.BatchSize = value
+
+	return nil
+}
+
+// bindBatchTimeout binds and validates parameter BatchTimeout from query.
+func (o *UpdateChainBatchConfigParams) bindBatchTimeout(rawData []string, hasKey bool, formats strfmt.Registry) error {
+	if !hasKey {
+		return errors.Required("batch_timeout", "query", rawData)
+	}
+	var raw string
+	if len(rawData) > 0 {
+		raw = rawData[len(rawData)-1]
+	}
+
+	// Required: true
+	// AllowEmptyValue: false
+	if err := validate.RequiredString("batch_timeout", "query", raw); err != nil {
+		return err
+	}
+
+	value, err := swag.ConvertInt64(raw)
+	if err != nil {
+		return errors.InvalidType("batch_timeout", "query", "int64", raw)
+	}
+	o.BatchTimeout = value
+
 	return nil
 }
 

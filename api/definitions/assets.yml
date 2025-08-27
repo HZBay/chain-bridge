@@ -202,3 +202,23 @@ definitions:
         type: string
         description: "Batch operation type"
         example: "batchTransferFrom"
+
+  # 资产调整完整响应 (包含data和batch_info)
+  AssetAdjustCompleteResponse:
+    type: object
+    required: [data, batch_info]
+    properties:
+      data:
+        $ref: "#/definitions/AssetAdjustResponse"
+      batch_info:
+        $ref: "#/definitions/BatchInfo"
+
+  # 用户资产完整响应 (包含data和batch_info)
+  UserAssetsCompleteResponse:
+    type: object
+    required: [data, batch_info]
+    properties:
+      data:
+        $ref: "#/definitions/AssetsResponse"
+      batch_info:
+        $ref: "#/definitions/BatchInfo"

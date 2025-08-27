@@ -28,7 +28,7 @@ func GetUserTransactionsRoute(s *api.Server) *echo.Route {
 	handler := NewGetUserTransactionsHandler(
 		transfer.NewService(s.DB, s.BatchProcessor, s.BatchOptimizer),
 	)
-	return s.Router.Management.GET("/users/:user_id/transactions", handler.Handle)
+	return s.Router.APIV1Assets.GET("/:user_id/transactions", handler.Handle)
 }
 
 // Handle retrieves user transaction history with filtering and pagination

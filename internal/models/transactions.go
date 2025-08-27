@@ -48,6 +48,8 @@ type Transaction struct {
 	Metadata           null.JSON         `boil:"metadata" json:"metadata,omitempty" toml:"metadata" yaml:"metadata,omitempty"`
 	CreatedAt          null.Time         `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
 	ConfirmedAt        null.Time         `boil:"confirmed_at" json:"confirmed_at,omitempty" toml:"confirmed_at" yaml:"confirmed_at,omitempty"`
+	// Reference ID to the original record in customer database
+	SourceRecordID null.String `boil:"source_record_id" json:"source_record_id,omitempty" toml:"source_record_id" yaml:"source_record_id,omitempty"`
 
 	R *transactionR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L transactionL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -77,6 +79,7 @@ var TransactionColumns = struct {
 	Metadata           string
 	CreatedAt          string
 	ConfirmedAt        string
+	SourceRecordID     string
 }{
 	ID:                 "id",
 	TXID:               "tx_id",
@@ -101,6 +104,7 @@ var TransactionColumns = struct {
 	Metadata:           "metadata",
 	CreatedAt:          "created_at",
 	ConfirmedAt:        "confirmed_at",
+	SourceRecordID:     "source_record_id",
 }
 
 var TransactionTableColumns = struct {
@@ -127,6 +131,7 @@ var TransactionTableColumns = struct {
 	Metadata           string
 	CreatedAt          string
 	ConfirmedAt        string
+	SourceRecordID     string
 }{
 	ID:                 "transactions.id",
 	TXID:               "transactions.tx_id",
@@ -151,6 +156,7 @@ var TransactionTableColumns = struct {
 	Metadata:           "transactions.metadata",
 	CreatedAt:          "transactions.created_at",
 	ConfirmedAt:        "transactions.confirmed_at",
+	SourceRecordID:     "transactions.source_record_id",
 }
 
 // Generated where
@@ -200,6 +206,7 @@ var TransactionWhere = struct {
 	Metadata           whereHelpernull_JSON
 	CreatedAt          whereHelpernull_Time
 	ConfirmedAt        whereHelpernull_Time
+	SourceRecordID     whereHelpernull_String
 }{
 	ID:                 whereHelperint{field: "\"transactions\".\"id\""},
 	TXID:               whereHelperstring{field: "\"transactions\".\"tx_id\""},
@@ -224,6 +231,7 @@ var TransactionWhere = struct {
 	Metadata:           whereHelpernull_JSON{field: "\"transactions\".\"metadata\""},
 	CreatedAt:          whereHelpernull_Time{field: "\"transactions\".\"created_at\""},
 	ConfirmedAt:        whereHelpernull_Time{field: "\"transactions\".\"confirmed_at\""},
+	SourceRecordID:     whereHelpernull_String{field: "\"transactions\".\"source_record_id\""},
 }
 
 // TransactionRels is where relationship names are stored.
@@ -264,9 +272,9 @@ func (r *transactionR) GetToken() *SupportedToken {
 type transactionL struct{}
 
 var (
-	transactionAllColumns            = []string{"id", "tx_id", "operation_id", "user_id", "chain_id", "tx_type", "business_type", "related_user_id", "transfer_direction", "token_id", "amount", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_type", "reason_detail", "metadata", "created_at", "confirmed_at"}
+	transactionAllColumns            = []string{"id", "tx_id", "operation_id", "user_id", "chain_id", "tx_type", "business_type", "related_user_id", "transfer_direction", "token_id", "amount", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_type", "reason_detail", "metadata", "created_at", "confirmed_at", "source_record_id"}
 	transactionColumnsWithoutDefault = []string{"tx_id", "user_id", "chain_id", "tx_type", "business_type", "token_id", "amount", "reason_type"}
-	transactionColumnsWithDefault    = []string{"id", "operation_id", "related_user_id", "transfer_direction", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_detail", "metadata", "created_at", "confirmed_at"}
+	transactionColumnsWithDefault    = []string{"id", "operation_id", "related_user_id", "transfer_direction", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_detail", "metadata", "created_at", "confirmed_at", "source_record_id"}
 	transactionPrimaryKeyColumns     = []string{"id"}
 	transactionGeneratedColumns      = []string{}
 )

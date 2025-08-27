@@ -24,9 +24,9 @@ func TestUpsert(t *testing.T) {
 
 	t.Run("Transactions", testTransactionsUpsert)
 
-	t.Run("UserBalances", testUserBalancesUpsert)
+	t.Run("UserAccounts", testUserAccountsUpsert)
 
-	t.Run("UserWallets", testUserWalletsUpsert)
+	t.Run("UserBalances", testUserBalancesUpsert)
 
 	t.Run("Users", testUsersUpsert)
 }

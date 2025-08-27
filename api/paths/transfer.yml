@@ -4,7 +4,7 @@ info:
   version: 0.1.0
 paths:
   # 1. 用户转账接口
-  /transfer:
+  /api/v1/assets/transfer:
     post:
       tags:
         - cpop
@@ -12,7 +12,7 @@ paths:
       description: "用户间资产转账，支持智能批处理和CPOP优化"
       operationId: transferAssets
       security:
-        - Management: [ ]
+        - Bearer: [ ]
       parameters:
         - name: request
           in: body
@@ -83,7 +83,7 @@ paths:
           $ref: "../definitions/errors.yml#/responses/InternalError"
 
   # 2. 查询用户交易记录
-  /users/{user_id}/transactions:
+  /api/v1/assets/{user_id}/transactions:
     get:
       tags:
         - cpop
@@ -91,7 +91,7 @@ paths:
       description: "获取用户交易历史记录，支持筛选和分页"
       operationId: getUserTransactions
       security:
-        - Management: [ ]
+        - Bearer: [ ]
       parameters:
         - name: user_id
           in: path

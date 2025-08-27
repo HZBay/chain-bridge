@@ -203,13 +203,13 @@ type AlchemyTransfer struct {
 }
 ```
 
-#### 3. 钱包管理模块 (WalletManager)
+#### 3. 钱包管理模块 (AccountManager)
 
 ```go
-type WalletManager struct {
+type AccountManager struct {
     deploymentQueue  *DeploymentQueue
     multiChainConfig map[int64]*ChainConfig
-    aaFactory        *AAWalletFactory
+    aaFactory        *AAAccountFactory
 }
 
 // 支持的链配置
@@ -462,14 +462,14 @@ POST /api/v1/application/ucard-batch-charge
 
 #### 获取用户钱包信息
 ```http
-GET /api/v1/wallet/{user_id}
+GET /api/v1/account/{user_id}
 ```
 
 **响应示例**:
 ```json
 {
   "user_id": "user_123",
-  "wallets": [
+  "accounts": [
     {
       "chain_id": 1,
       "chain_name": "Ethereum",
@@ -491,7 +491,7 @@ GET /api/v1/wallet/{user_id}
 
 #### 部署钱包到指定链
 ```http
-POST /api/v1/wallet/{user_id}/deploy
+POST /api/v1/account/{user_id}/deploy
 ```
 
 **请求体**:
@@ -877,7 +877,7 @@ GET /api/v1/health
 
 ```sql
 -- 用户多链钱包表
-CREATE TABLE user_wallets (
+CREATE TABLE user_accounts (
     id SERIAL PRIMARY KEY,
     user_id UUID NOT NULL,
     chain_id BIGINT NOT NULL,
@@ -1502,7 +1502,7 @@ custodial_bridge_operations_total{chain_id="1",status="confirmed",type="transfer
 custodial_bridge_gas_saved_percentage{chain_id="1"}
 custodial_bridge_batch_size_avg{chain_id="1"}
 custodial_bridge_api_latency_seconds{endpoint="/api/v1/transfer",method="POST"}
-custodial_bridge_wallet_deployment_success_rate{chain_id="1"}
+custodial_bridge_account_deployment_success_rate{chain_id="1"}
 custodial_bridge_balance_sync_lag_seconds{chain_id="1"}
 custodial_bridge_rpc_errors_total{chain_id="1",error_type="timeout"}
 custodial_bridge_database_connections{state="active"}
@@ -1735,7 +1735,7 @@ custodial-bridge/
 │   ├── auth/                # 认证模块
 │   ├── blockchain/          # 区块链交互
 │   ├── batch/               # 批量处理
-│   ├── wallet/              # 钱包管理
+│   ├── account/              # 钱包管理
 │   ├── asset/               # 资产管理
 │   ├── monitor/             # 监控模块
 │   └── config/              # 配置管理

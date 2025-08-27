@@ -9,7 +9,7 @@ CREATE TABLE chains (
     entry_point_address char(42),
     cpop_token_address char(42),
     master_aggregator_address char(42),
-    wallet_manager_address char(42),
+    account_manager_address char(42),
     -- 批量优化配置
     optimal_batch_size int DEFAULT 25,
     max_batch_size int DEFAULT 40,

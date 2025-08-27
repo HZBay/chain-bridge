@@ -2,9 +2,12 @@ package queue
 
 import (
 	"context"
+	"database/sql"
 	"math/rand"
+	"sync"
 	"time"
 
+	"github.com/hzbay/chain-bridge/internal/blockchain"
 	"github.com/hzbay/chain-bridge/internal/config"
 	"github.com/rs/zerolog/log"
 )
@@ -22,7 +25,23 @@ type HybridBatchProcessor struct {
 
 // RabbitMQProcessor wraps RabbitMQ client for batch processing
 type RabbitMQProcessor struct {
-	client *RabbitMQClient
+	client          *RabbitMQClient
+	db              *sql.DB
+	batchOptimizer  *BatchOptimizer
+	cpopCallers     map[int64]*blockchain.CPOPBatchCaller // chainID -> caller
+	stopChan        chan struct{}
+	processingJobs  map[string][]BatchJob // queueName -> jobs
+	processingMutex sync.RWMutex
+
+	// New batch consumer
+	batchConsumer *RabbitMQBatchConsumer
+}
+
+// BatchGroup represents a group of jobs for batch processing
+type BatchGroup struct {
+	ChainID int64
+	TokenID int
+	JobType JobType
 }
 
 // ProcessorMetrics tracks performance metrics for comparison
@@ -150,27 +169,23 @@ func (h *HybridBatchProcessor) selectProcessor() (BatchProcessor, string) {
 	return h.memoryProcessor, "memory"
 }
 
-// updateMetrics updates processor metrics for monitoring
+// updateMetrics updates processor performance metrics
 func (h *HybridBatchProcessor) updateMetrics(processorType string, success bool, latency time.Duration) {
 	var metrics *ProcessorMetrics
 
-	switch processorType {
-	case "rabbitmq", "rabbitmq_unhealthy":
+	if processorType == "rabbitmq" || processorType == "rabbitmq_unhealthy" {
 		metrics = h.rabbitmqStats
-	case "memory", "memory_fallback":
+	} else {
 		metrics = h.memoryStats
-	default:
-		return
 	}
 
 	metrics.TotalJobs++
-	metrics.LastUsed = time.Now()
-
 	if success {
 		metrics.SuccessJobs++
 	} else {
 		metrics.FailedJobs++
 	}
+	metrics.LastUsed = time.Now()
 
 	// Update average latency (simple moving average)
 	if metrics.AverageLatency == 0 {
@@ -194,6 +209,16 @@ func (h *HybridBatchProcessor) StartBatchConsumer(ctx context.Context) error {
 		}
 	}
 
+	// Set dependencies for memory processor using RabbitMQ processor's dependencies
+	if h.rabbitmqProcessor != nil {
+		h.memoryProcessor.SetDependencies(
+			h.rabbitmqProcessor.db,
+			h.rabbitmqProcessor.batchOptimizer,
+			h.rabbitmqProcessor.cpopCallers,
+		)
+		log.Debug().Msg("Memory processor dependencies set from RabbitMQ processor")
+	}
+
 	// Always start memory processor consumer (as fallback)
 	if err := h.memoryProcessor.StartBatchConsumer(ctx); err != nil {
 		log.Error().Err(err).Msg("Failed to start memory batch consumer")
@@ -215,40 +240,36 @@ func (h *HybridBatchProcessor) StopBatchConsumer(ctx context.Context) error {
 	}
 
 	// Stop memory processor consumer
-	if err := h.memoryProcessor.StopBatchConsumer(ctx); err != nil {
-		log.Error().Err(err).Msg("Failed to stop memory batch consumer")
+	if h.memoryProcessor != nil {
+		if err := h.memoryProcessor.StopBatchConsumer(ctx); err != nil {
+			log.Error().Err(err).Msg("Failed to stop memory batch consumer")
+		}
 	}
 
 	return nil
 }
 
-// GetQueueStats returns combined statistics from both processors
+// GetQueueStats returns queue statistics from both processors
 func (h *HybridBatchProcessor) GetQueueStats() map[string]QueueStats {
 	result := make(map[string]QueueStats)
 
 	// Get RabbitMQ stats
-	if h.rabbitmqProcessor != nil && h.rabbitmqProcessor.IsHealthy() {
-		rabbitmqStats := h.rabbitmqProcessor.GetQueueStats()
-		for name, stats := range rabbitmqStats {
+	if h.rabbitmqProcessor != nil {
+		rabbitStats := h.rabbitmqProcessor.GetQueueStats()
+		for name, stats := range rabbitStats {
 			result["rabbitmq."+name] = stats
 		}
 	}
 
 	// Get memory processor stats
-	memoryStats := h.memoryProcessor.GetQueueStats()
-	for name, stats := range memoryStats {
-		result["memory."+name] = stats
+	if h.memoryProcessor != nil {
+		memoryStats := h.memoryProcessor.GetQueueStats()
+		for name, stats := range memoryStats {
+			result["memory."+name] = stats
+		}
 	}
 
 	return result
-}
-
-// GetProcessorMetrics returns performance comparison metrics
-func (h *HybridBatchProcessor) GetProcessorMetrics() map[string]ProcessorMetrics {
-	return map[string]ProcessorMetrics{
-		"rabbitmq": *h.rabbitmqStats,
-		"memory":   *h.memoryStats,
-	}
 }
 
 // IsHealthy checks if at least one processor is healthy
@@ -274,11 +295,8 @@ func (h *HybridBatchProcessor) IsHealthy() bool {
 
 // Close closes both processors
 func (h *HybridBatchProcessor) Close() error {
-	log.Info().Msg("Closing hybrid batch processor")
-
 	var lastErr error
 
-	// Close RabbitMQ processor
 	if h.rabbitmqProcessor != nil {
 		if err := h.rabbitmqProcessor.Close(); err != nil {
 			log.Error().Err(err).Msg("Failed to close RabbitMQ processor")
@@ -286,10 +304,11 @@ func (h *HybridBatchProcessor) Close() error {
 		}
 	}
 
-	// Close memory processor
-	if err := h.memoryProcessor.Close(); err != nil {
-		log.Error().Err(err).Msg("Failed to close memory processor")
-		lastErr = err
+	if h.memoryProcessor != nil {
+		if err := h.memoryProcessor.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close memory processor")
+			lastErr = err
+		}
 	}
 
 	return lastErr
@@ -312,18 +331,38 @@ func (r *RabbitMQProcessor) PublishNotification(ctx context.Context, job Notific
 }
 
 func (r *RabbitMQProcessor) StartBatchConsumer(ctx context.Context) error {
-	log.Info().Msg("RabbitMQ batch consumer started (implementation pending)")
-	// TODO: Implement RabbitMQ consumer in Phase 3
-	return nil
+	log.Info().Msg("Starting RabbitMQ batch consumer with CPOP integration")
+
+	// Initialize the new batch consumer if not already created
+	if r.batchConsumer == nil {
+		r.batchConsumer = NewRabbitMQBatchConsumer(
+			r.client,
+			r.db,
+			r.batchOptimizer,
+			r.cpopCallers,
+		)
+	}
+
+	// Start the new batch consumer
+	return r.batchConsumer.Start(ctx)
 }
 
 func (r *RabbitMQProcessor) StopBatchConsumer(ctx context.Context) error {
-	log.Info().Msg("RabbitMQ batch consumer stopped")
+	log.Info().Msg("Graceful shutdown initiated for RabbitMQ batch consumer")
+
+	// Stop the new batch consumer
+	if r.batchConsumer != nil {
+		return r.batchConsumer.Stop(ctx)
+	}
+
 	return nil
 }
 
 func (r *RabbitMQProcessor) GetQueueStats() map[string]QueueStats {
-	// TODO: Implement RabbitMQ queue stats
+	// Delegated to the new batch consumer
+	if r.batchConsumer != nil {
+		return r.batchConsumer.GetQueueStats()
+	}
 	return make(map[string]QueueStats)
 }
 
@@ -336,4 +375,11 @@ func (r *RabbitMQProcessor) Close() error {
 		return r.client.Close()
 	}
 	return nil
+}
+
+// setBatchDependencies sets the batch processing dependencies
+func (r *RabbitMQProcessor) setBatchDependencies(db *sql.DB, optimizer *BatchOptimizer, cpopCallers map[int64]*blockchain.CPOPBatchCaller) {
+	r.db = db
+	r.batchOptimizer = optimizer
+	r.cpopCallers = cpopCallers
 }

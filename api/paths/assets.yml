@@ -4,7 +4,7 @@ info:
   version: 0.1.0
 paths:
   # 1. 获取用户资产总览
-  /users/{user_id}/assets:
+  /api/v1/assets/{user_id}:
     get:
       tags:
         - cpop
@@ -41,7 +41,7 @@ paths:
           $ref: "../definitions/errors.yml#/responses/InternalError"
 
   # 2. 资产调整接口
-  /assets/adjust:
+  /api/v1/assets/adjust:
     post:
       tags:
         - cpop

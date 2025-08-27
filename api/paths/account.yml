@@ -1,0 +1,128 @@
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths:
+  # 1. 获取用户钱包信息
+  /api/v1/account/{user_id}:
+    get:
+      tags:
+        - cpop
+      summary: Get user account information
+      description: "获取用户跨链钱包信息"
+      operationId: getUserAccount
+      security:
+        - Bearer: []
+      parameters:
+        - name: user_id
+          in: path
+          description: User identifier
+          required: true
+          type: string
+      responses:
+        "200":
+          description: User account information retrieved successfully
+          schema:
+            $ref: "../definitions/account.yml#/definitions/AccountResponse"
+        "400":
+          $ref: "../definitions/errors.yml#/responses/BadRequestError"
+        "401":
+          $ref: "../definitions/errors.yml#/responses/UnauthorizedError"
+        "404":
+          description: User or account not found
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "500":
+          $ref: "../definitions/errors.yml#/responses/InternalError"
+
+  # 2. 创建用户钱包
+  /api/v1/account/{user_id}/create:
+    post:
+      tags:
+        - cpop
+      summary: Create user account
+      description: "为用户在指定链上创建新的账户抽象钱包"
+      operationId: createUserAccount
+      security:
+        - Bearer: []
+      parameters:
+        - name: user_id
+          in: path
+          description: User identifier
+          required: true
+          type: string
+        - name: request
+          in: body
+          description: Account creation request
+          required: true
+          schema:
+            $ref: "../definitions/account.yml#/definitions/CreateAccountRequest"
+      responses:
+        "200":
+          description: Account created successfully
+          schema:
+            $ref: "../definitions/account.yml#/definitions/CreateAccountResponse"
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "401":
+          $ref: "../definitions/errors.yml#/responses/UnauthorizedError"
+        "409":
+          description: Account already exists
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "422":
+          description: Chain not supported or disabled
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "500":
+          $ref: "../definitions/errors.yml#/responses/InternalError"
+
+  # 3. 部署用户钱包
+  /api/v1/account/{user_id}/deploy:
+    post:
+      tags:
+        - cpop
+      summary: Deploy user account
+      description: "将用户已创建的账户抽象钱包部署到指定链上"
+      operationId: deployUserAccount
+      security:
+        - Bearer: []
+      parameters:
+        - name: user_id
+          in: path
+          description: User identifier
+          required: true
+          type: string
+        - name: request
+          in: body
+          description: Account deployment request
+          required: true
+          schema:
+            $ref: "../definitions/account.yml#/definitions/DeployAccountRequest"
+      responses:
+        "200":
+          description: Account deployment initiated successfully
+          schema:
+            $ref: "../definitions/account.yml#/definitions/DeployAccountResponse"
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "401":
+          $ref: "../definitions/errors.yml#/responses/UnauthorizedError"
+        "404":
+          description: User or account not found
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "409":
+          description: Account already deployed
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "422":
+          description: Chain not supported or account not ready for deployment
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "500":
+          $ref: "../definitions/errors.yml#/responses/InternalError"

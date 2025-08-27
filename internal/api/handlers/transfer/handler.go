@@ -43,12 +43,12 @@ func (h *Handler) GetUserTransactions(c echo.Context) error {
 // Deprecated: Use RegisterRoutes() instead
 func LegacyTransferAssetsRoute(s *api.Server) *echo.Route {
 	handler := NewHandler(createTransferService(s))
-	return s.Router.Management.POST("/transfer", handler.TransferAssets)
+	return s.Router.APIV1Assets.POST("/transfer", handler.TransferAssets)
 }
 
 // LegacyGetUserTransactionsRoute creates the route for getting user transactions
 // Deprecated: Use RegisterRoutes() instead
 func LegacyGetUserTransactionsRoute(s *api.Server) *echo.Route {
 	handler := NewHandler(createTransferService(s))
-	return s.Router.Management.GET("/users/:user_id/transactions", handler.GetUserTransactions)
+	return s.Router.APIV1Assets.GET("/:user_id/transactions", handler.GetUserTransactions)
 }

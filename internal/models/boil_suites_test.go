@@ -21,8 +21,8 @@ func TestParent(t *testing.T) {
 	t.Run("RefreshTokens", testRefreshTokens)
 	t.Run("SupportedTokens", testSupportedTokens)
 	t.Run("Transactions", testTransactions)
+	t.Run("UserAccounts", testUserAccounts)
 	t.Run("UserBalances", testUserBalances)
-	t.Run("UserWallets", testUserWallets)
 	t.Run("Users", testUsers)
 }
 
@@ -36,8 +36,8 @@ func TestDelete(t *testing.T) {
 	t.Run("RefreshTokens", testRefreshTokensDelete)
 	t.Run("SupportedTokens", testSupportedTokensDelete)
 	t.Run("Transactions", testTransactionsDelete)
+	t.Run("UserAccounts", testUserAccountsDelete)
 	t.Run("UserBalances", testUserBalancesDelete)
-	t.Run("UserWallets", testUserWalletsDelete)
 	t.Run("Users", testUsersDelete)
 }
 
@@ -51,8 +51,8 @@ func TestQueryDeleteAll(t *testing.T) {
 	t.Run("RefreshTokens", testRefreshTokensQueryDeleteAll)
 	t.Run("SupportedTokens", testSupportedTokensQueryDeleteAll)
 	t.Run("Transactions", testTransactionsQueryDeleteAll)
+	t.Run("UserAccounts", testUserAccountsQueryDeleteAll)
 	t.Run("UserBalances", testUserBalancesQueryDeleteAll)
-	t.Run("UserWallets", testUserWalletsQueryDeleteAll)
 	t.Run("Users", testUsersQueryDeleteAll)
 }
 
@@ -66,8 +66,8 @@ func TestSliceDeleteAll(t *testing.T) {
 	t.Run("RefreshTokens", testRefreshTokensSliceDeleteAll)
 	t.Run("SupportedTokens", testSupportedTokensSliceDeleteAll)
 	t.Run("Transactions", testTransactionsSliceDeleteAll)
+	t.Run("UserAccounts", testUserAccountsSliceDeleteAll)
 	t.Run("UserBalances", testUserBalancesSliceDeleteAll)
-	t.Run("UserWallets", testUserWalletsSliceDeleteAll)
 	t.Run("Users", testUsersSliceDeleteAll)
 }
 
@@ -81,8 +81,8 @@ func TestExists(t *testing.T) {
 	t.Run("RefreshTokens", testRefreshTokensExists)
 	t.Run("SupportedTokens", testSupportedTokensExists)
 	t.Run("Transactions", testTransactionsExists)
+	t.Run("UserAccounts", testUserAccountsExists)
 	t.Run("UserBalances", testUserBalancesExists)
-	t.Run("UserWallets", testUserWalletsExists)
 	t.Run("Users", testUsersExists)
 }
 
@@ -96,8 +96,8 @@ func TestFind(t *testing.T) {
 	t.Run("RefreshTokens", testRefreshTokensFind)
 	t.Run("SupportedTokens", testSupportedTokensFind)
 	t.Run("Transactions", testTransactionsFind)
+	t.Run("UserAccounts", testUserAccountsFind)
 	t.Run("UserBalances", testUserBalancesFind)
-	t.Run("UserWallets", testUserWalletsFind)
 	t.Run("Users", testUsersFind)
 }
 
@@ -111,8 +111,8 @@ func TestBind(t *testing.T) {
 	t.Run("RefreshTokens", testRefreshTokensBind)
 	t.Run("SupportedTokens", testSupportedTokensBind)
 	t.Run("Transactions", testTransactionsBind)
+	t.Run("UserAccounts", testUserAccountsBind)
 	t.Run("UserBalances", testUserBalancesBind)
-	t.Run("UserWallets", testUserWalletsBind)
 	t.Run("Users", testUsersBind)
 }
 
@@ -126,8 +126,8 @@ func TestOne(t *testing.T) {
 	t.Run("RefreshTokens", testRefreshTokensOne)
 	t.Run("SupportedTokens", testSupportedTokensOne)
 	t.Run("Transactions", testTransactionsOne)
+	t.Run("UserAccounts", testUserAccountsOne)
 	t.Run("UserBalances", testUserBalancesOne)
-	t.Run("UserWallets", testUserWalletsOne)
 	t.Run("Users", testUsersOne)
 }
 
@@ -141,8 +141,8 @@ func TestAll(t *testing.T) {
 	t.Run("RefreshTokens", testRefreshTokensAll)
 	t.Run("SupportedTokens", testSupportedTokensAll)
 	t.Run("Transactions", testTransactionsAll)
+	t.Run("UserAccounts", testUserAccountsAll)
 	t.Run("UserBalances", testUserBalancesAll)
-	t.Run("UserWallets", testUserWalletsAll)
 	t.Run("Users", testUsersAll)
 }
 
@@ -156,8 +156,8 @@ func TestCount(t *testing.T) {
 	t.Run("RefreshTokens", testRefreshTokensCount)
 	t.Run("SupportedTokens", testSupportedTokensCount)
 	t.Run("Transactions", testTransactionsCount)
+	t.Run("UserAccounts", testUserAccountsCount)
 	t.Run("UserBalances", testUserBalancesCount)
-	t.Run("UserWallets", testUserWalletsCount)
 	t.Run("Users", testUsersCount)
 }
 
@@ -180,10 +180,10 @@ func TestInsert(t *testing.T) {
 	t.Run("SupportedTokens", testSupportedTokensInsertWhitelist)
 	t.Run("Transactions", testTransactionsInsert)
 	t.Run("Transactions", testTransactionsInsertWhitelist)
+	t.Run("UserAccounts", testUserAccountsInsert)
+	t.Run("UserAccounts", testUserAccountsInsertWhitelist)
 	t.Run("UserBalances", testUserBalancesInsert)
 	t.Run("UserBalances", testUserBalancesInsertWhitelist)
-	t.Run("UserWallets", testUserWalletsInsert)
-	t.Run("UserWallets", testUserWalletsInsertWhitelist)
 	t.Run("Users", testUsersInsert)
 	t.Run("Users", testUsersInsertWhitelist)
 }
@@ -198,8 +198,8 @@ func TestReload(t *testing.T) {
 	t.Run("RefreshTokens", testRefreshTokensReload)
 	t.Run("SupportedTokens", testSupportedTokensReload)
 	t.Run("Transactions", testTransactionsReload)
+	t.Run("UserAccounts", testUserAccountsReload)
 	t.Run("UserBalances", testUserBalancesReload)
-	t.Run("UserWallets", testUserWalletsReload)
 	t.Run("Users", testUsersReload)
 }
 
@@ -213,8 +213,8 @@ func TestReloadAll(t *testing.T) {
 	t.Run("RefreshTokens", testRefreshTokensReloadAll)
 	t.Run("SupportedTokens", testSupportedTokensReloadAll)
 	t.Run("Transactions", testTransactionsReloadAll)
+	t.Run("UserAccounts", testUserAccountsReloadAll)
 	t.Run("UserBalances", testUserBalancesReloadAll)
-	t.Run("UserWallets", testUserWalletsReloadAll)
 	t.Run("Users", testUsersReloadAll)
 }
 
@@ -228,8 +228,8 @@ func TestSelect(t *testing.T) {
 	t.Run("RefreshTokens", testRefreshTokensSelect)
 	t.Run("SupportedTokens", testSupportedTokensSelect)
 	t.Run("Transactions", testTransactionsSelect)
+	t.Run("UserAccounts", testUserAccountsSelect)
 	t.Run("UserBalances", testUserBalancesSelect)
-	t.Run("UserWallets", testUserWalletsSelect)
 	t.Run("Users", testUsersSelect)
 }
 
@@ -243,8 +243,8 @@ func TestUpdate(t *testing.T) {
 	t.Run("RefreshTokens", testRefreshTokensUpdate)
 	t.Run("SupportedTokens", testSupportedTokensUpdate)
 	t.Run("Transactions", testTransactionsUpdate)
+	t.Run("UserAccounts", testUserAccountsUpdate)
 	t.Run("UserBalances", testUserBalancesUpdate)
-	t.Run("UserWallets", testUserWalletsUpdate)
 	t.Run("Users", testUsersUpdate)
 }
 
@@ -258,7 +258,7 @@ func TestSliceUpdateAll(t *testing.T) {
 	t.Run("RefreshTokens", testRefreshTokensSliceUpdateAll)
 	t.Run("SupportedTokens", testSupportedTokensSliceUpdateAll)
 	t.Run("Transactions", testTransactionsSliceUpdateAll)
+	t.Run("UserAccounts", testUserAccountsSliceUpdateAll)
 	t.Run("UserBalances", testUserBalancesSliceUpdateAll)
-	t.Run("UserWallets", testUserWalletsSliceUpdateAll)
 	t.Run("Users", testUsersSliceUpdateAll)
 }

@@ -4,6 +4,7 @@ import (
 	"net/http"
 
 	"github.com/hzbay/chain-bridge/internal/api"
+	"github.com/hzbay/chain-bridge/internal/types"
 	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/labstack/echo/v4"
 )
@@ -27,7 +28,11 @@ func (h *Handler) RefreshCache(c echo.Context) error {
 
 	log.Info().Msg("Chains cache refreshed successfully")
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"message": "Cache refreshed successfully",
-	})
+	// Use proper response type
+	message := "Cache refreshed successfully"
+	response := &types.CacheRefreshResponse{
+		Message: &message,
+	}
+
+	return util.ValidateAndReturn(c, http.StatusOK, response)
 }

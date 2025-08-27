@@ -21,8 +21,8 @@ import (
 	"github.com/hzbay/chain-bridge/internal/push"
 	"github.com/hzbay/chain-bridge/internal/push/provider"
 	"github.com/hzbay/chain-bridge/internal/queue"
+	"github.com/hzbay/chain-bridge/internal/services/account"
 	"github.com/hzbay/chain-bridge/internal/services/chains"
-	"github.com/hzbay/chain-bridge/internal/services/wallet"
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog/log"
 
@@ -31,11 +31,13 @@ import (
 )
 
 type Router struct {
-	Routes     []*echo.Route
-	Root       *echo.Group
-	Management *echo.Group
-	APIV1Auth  *echo.Group
-	APIV1Push  *echo.Group
+	Routes       []*echo.Route
+	Root         *echo.Group
+	Management   *echo.Group
+	APIV1Auth    *echo.Group
+	APIV1Push    *echo.Group
+	APIV1Account *echo.Group
+	APIV1Assets  *echo.Group
 }
 
 type Server struct {
@@ -50,7 +52,7 @@ type Server struct {
 	Auth           AuthService
 	Local          *local.Service
 	Metrics        *metrics.Service
-	WalletService  wallet.Service
+	AccountService account.Service
 	BatchProcessor queue.BatchProcessor
 	QueueMonitor   *queue.QueueMonitor
 	BatchOptimizer *queue.BatchOptimizer
@@ -81,7 +83,7 @@ func NewServer(config config.Server) *Server {
 		Clock:          nil,
 		Auth:           nil,
 		Local:          nil,
-		WalletService:  nil,
+		AccountService: nil,
 		BatchProcessor: nil,
 	}
 
@@ -98,7 +100,7 @@ func (s *Server) Ready() bool {
 		s.Clock != nil &&
 		s.Auth != nil &&
 		s.Local != nil &&
-		s.WalletService != nil &&
+		s.AccountService != nil &&
 		s.BatchProcessor != nil
 }
 
@@ -146,8 +148,8 @@ func (s *Server) InitCmd() *Server {
 		log.Fatal().Err(err).Msg("Failed to initialize batch processor")
 	}
 
-	if err := s.InitWalletService(); err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize wallet service")
+	if err := s.InitAccountService(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize account service")
 	}
 
 	return s
@@ -202,7 +204,7 @@ func (s *Server) InitBatchProcessor() error {
 	return nil
 }
 
-func (s *Server) InitWalletService() error {
+func (s *Server) InitAccountService() error {
 	// Get validated chains from blockchain config
 	validChains := s.Config.Blockchain.GetValidatedChains()
 
@@ -212,14 +214,14 @@ func (s *Server) InitWalletService() error {
 		cpopConfigs[chainID] = chainConfig.ToCPOPConfig()
 	}
 
-	// Initialize wallet service with batch processor
+	// Initialize account service with batch processor
 	var err error
-	s.WalletService, err = wallet.NewService(s.DB, cpopConfigs, s.Config.Blockchain)
+	s.AccountService, err = account.NewService(s.DB, cpopConfigs, s.Config.Blockchain)
 	if err != nil {
-		return fmt.Errorf("failed to create wallet service: %w", err)
+		return fmt.Errorf("failed to create account service: %w", err)
 	}
 
-	log.Info().Int("chains", len(cpopConfigs)).Msg("Wallet service initialized with blockchain configurations")
+	log.Info().Int("chains", len(cpopConfigs)).Msg("Account service initialized with blockchain configurations")
 
 	return nil
 }

@@ -112,3 +112,41 @@ definitions:
         maximum: 100
         description: Optimal number of operations for best performance
         example: 20
+
+  # 单个链配置响应
+  ChainResponse:
+    type: object
+    required: [data]
+    properties:
+      data:
+        $ref: '#/definitions/Chain'
+
+  # 多个链配置响应
+  ChainsResponse:
+    type: object
+    required: [data]
+    properties:
+      data:
+        type: array
+        items:
+          $ref: '#/definitions/Chain'
+
+  # 批处理配置更新响应
+  BatchConfigUpdateResponse:
+    type: object
+    required: [message, data]
+    properties:
+      message:
+        type: string
+        example: "Batch configuration updated successfully"
+      data:
+        $ref: '#/definitions/BatchConfig'
+
+  # 缓存刷新响应
+  CacheRefreshResponse:
+    type: object
+    required: [message]
+    properties:
+      message:
+        type: string
+        example: "Cache refreshed successfully"

@@ -32,7 +32,7 @@ type Chain struct {
 	EntryPointAddress       null.String `boil:"entry_point_address" json:"entry_point_address,omitempty" toml:"entry_point_address" yaml:"entry_point_address,omitempty"`
 	CpopTokenAddress        null.String `boil:"cpop_token_address" json:"cpop_token_address,omitempty" toml:"cpop_token_address" yaml:"cpop_token_address,omitempty"`
 	MasterAggregatorAddress null.String `boil:"master_aggregator_address" json:"master_aggregator_address,omitempty" toml:"master_aggregator_address" yaml:"master_aggregator_address,omitempty"`
-	WalletManagerAddress    null.String `boil:"wallet_manager_address" json:"wallet_manager_address,omitempty" toml:"wallet_manager_address" yaml:"wallet_manager_address,omitempty"`
+	AccountManagerAddress   null.String `boil:"account_manager_address" json:"account_manager_address,omitempty" toml:"account_manager_address" yaml:"account_manager_address,omitempty"`
 	OptimalBatchSize        null.Int    `boil:"optimal_batch_size" json:"optimal_batch_size,omitempty" toml:"optimal_batch_size" yaml:"optimal_batch_size,omitempty"`
 	MaxBatchSize            null.Int    `boil:"max_batch_size" json:"max_batch_size,omitempty" toml:"max_batch_size" yaml:"max_batch_size,omitempty"`
 	MinBatchSize            null.Int    `boil:"min_batch_size" json:"min_batch_size,omitempty" toml:"min_batch_size" yaml:"min_batch_size,omitempty"`
@@ -52,7 +52,7 @@ var ChainColumns = struct {
 	EntryPointAddress       string
 	CpopTokenAddress        string
 	MasterAggregatorAddress string
-	WalletManagerAddress    string
+	AccountManagerAddress   string
 	OptimalBatchSize        string
 	MaxBatchSize            string
 	MinBatchSize            string
@@ -67,7 +67,7 @@ var ChainColumns = struct {
 	EntryPointAddress:       "entry_point_address",
 	CpopTokenAddress:        "cpop_token_address",
 	MasterAggregatorAddress: "master_aggregator_address",
-	WalletManagerAddress:    "wallet_manager_address",
+	AccountManagerAddress:   "account_manager_address",
 	OptimalBatchSize:        "optimal_batch_size",
 	MaxBatchSize:            "max_batch_size",
 	MinBatchSize:            "min_batch_size",
@@ -84,7 +84,7 @@ var ChainTableColumns = struct {
 	EntryPointAddress       string
 	CpopTokenAddress        string
 	MasterAggregatorAddress string
-	WalletManagerAddress    string
+	AccountManagerAddress   string
 	OptimalBatchSize        string
 	MaxBatchSize            string
 	MinBatchSize            string
@@ -99,7 +99,7 @@ var ChainTableColumns = struct {
 	EntryPointAddress:       "chains.entry_point_address",
 	CpopTokenAddress:        "chains.cpop_token_address",
 	MasterAggregatorAddress: "chains.master_aggregator_address",
-	WalletManagerAddress:    "chains.wallet_manager_address",
+	AccountManagerAddress:   "chains.account_manager_address",
 	OptimalBatchSize:        "chains.optimal_batch_size",
 	MaxBatchSize:            "chains.max_batch_size",
 	MinBatchSize:            "chains.min_batch_size",
@@ -156,7 +156,7 @@ var ChainWhere = struct {
 	EntryPointAddress       whereHelpernull_String
 	CpopTokenAddress        whereHelpernull_String
 	MasterAggregatorAddress whereHelpernull_String
-	WalletManagerAddress    whereHelpernull_String
+	AccountManagerAddress   whereHelpernull_String
 	OptimalBatchSize        whereHelpernull_Int
 	MaxBatchSize            whereHelpernull_Int
 	MinBatchSize            whereHelpernull_Int
@@ -171,7 +171,7 @@ var ChainWhere = struct {
 	EntryPointAddress:       whereHelpernull_String{field: "\"chains\".\"entry_point_address\""},
 	CpopTokenAddress:        whereHelpernull_String{field: "\"chains\".\"cpop_token_address\""},
 	MasterAggregatorAddress: whereHelpernull_String{field: "\"chains\".\"master_aggregator_address\""},
-	WalletManagerAddress:    whereHelpernull_String{field: "\"chains\".\"wallet_manager_address\""},
+	AccountManagerAddress:   whereHelpernull_String{field: "\"chains\".\"account_manager_address\""},
 	OptimalBatchSize:        whereHelpernull_Int{field: "\"chains\".\"optimal_batch_size\""},
 	MaxBatchSize:            whereHelpernull_Int{field: "\"chains\".\"max_batch_size\""},
 	MinBatchSize:            whereHelpernull_Int{field: "\"chains\".\"min_batch_size\""},
@@ -184,14 +184,14 @@ var ChainRels = struct {
 	Batches         string
 	SupportedTokens string
 	Transactions    string
+	UserAccounts    string
 	UserBalances    string
-	UserWallets     string
 }{
 	Batches:         "Batches",
 	SupportedTokens: "SupportedTokens",
 	Transactions:    "Transactions",
+	UserAccounts:    "UserAccounts",
 	UserBalances:    "UserBalances",
-	UserWallets:     "UserWallets",
 }
 
 // chainR is where relationships are stored.
@@ -199,8 +199,8 @@ type chainR struct {
 	Batches         BatchSlice          `boil:"Batches" json:"Batches" toml:"Batches" yaml:"Batches"`
 	SupportedTokens SupportedTokenSlice `boil:"SupportedTokens" json:"SupportedTokens" toml:"SupportedTokens" yaml:"SupportedTokens"`
 	Transactions    TransactionSlice    `boil:"Transactions" json:"Transactions" toml:"Transactions" yaml:"Transactions"`
+	UserAccounts    UserAccountSlice    `boil:"UserAccounts" json:"UserAccounts" toml:"UserAccounts" yaml:"UserAccounts"`
 	UserBalances    UserBalanceSlice    `boil:"UserBalances" json:"UserBalances" toml:"UserBalances" yaml:"UserBalances"`
-	UserWallets     UserWalletSlice     `boil:"UserWallets" json:"UserWallets" toml:"UserWallets" yaml:"UserWallets"`
 }
 
 // NewStruct creates a new relationship struct
@@ -229,6 +229,13 @@ func (r *chainR) GetTransactions() TransactionSlice {
 	return r.Transactions
 }
 
+func (r *chainR) GetUserAccounts() UserAccountSlice {
+	if r == nil {
+		return nil
+	}
+	return r.UserAccounts
+}
+
 func (r *chainR) GetUserBalances() UserBalanceSlice {
 	if r == nil {
 		return nil
@@ -236,20 +243,13 @@ func (r *chainR) GetUserBalances() UserBalanceSlice {
 	return r.UserBalances
 }
 
-func (r *chainR) GetUserWallets() UserWalletSlice {
-	if r == nil {
-		return nil
-	}
-	return r.UserWallets
-}
-
 // chainL is where Load methods for each relationship are stored.
 type chainL struct{}
 
 var (
-	chainAllColumns            = []string{"chain_id", "name", "short_name", "rpc_url", "explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "wallet_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at"}
+	chainAllColumns            = []string{"chain_id", "name", "short_name", "rpc_url", "explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "account_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at"}
 	chainColumnsWithoutDefault = []string{"chain_id", "name", "short_name", "rpc_url"}
-	chainColumnsWithDefault    = []string{"explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "wallet_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at"}
+	chainColumnsWithDefault    = []string{"explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "account_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at"}
 	chainPrimaryKeyColumns     = []string{"chain_id"}
 	chainGeneratedColumns      = []string{}
 )
@@ -387,6 +387,20 @@ func (o *Chain) Transactions(mods ...qm.QueryMod) transactionQuery {
 	return Transactions(queryMods...)
 }
 
+// UserAccounts retrieves all the user_account's UserAccounts with an executor.
+func (o *Chain) UserAccounts(mods ...qm.QueryMod) userAccountQuery {
+	var queryMods []qm.QueryMod
+	if len(mods) != 0 {
+		queryMods = append(queryMods, mods...)
+	}
+
+	queryMods = append(queryMods,
+		qm.Where("\"user_accounts\".\"chain_id\"=?", o.ChainID),
+	)
+
+	return UserAccounts(queryMods...)
+}
+
 // UserBalances retrieves all the user_balance's UserBalances with an executor.
 func (o *Chain) UserBalances(mods ...qm.QueryMod) userBalanceQuery {
 	var queryMods []qm.QueryMod
@@ -399,20 +413,6 @@ func (o *Chain) UserBalances(mods ...qm.QueryMod) userBalanceQuery {
 	)
 
 	return UserBalances(queryMods...)
-}
-
-// UserWallets retrieves all the user_wallet's UserWallets with an executor.
-func (o *Chain) UserWallets(mods ...qm.QueryMod) userWalletQuery {
-	var queryMods []qm.QueryMod
-	if len(mods) != 0 {
-		queryMods = append(queryMods, mods...)
-	}
-
-	queryMods = append(queryMods,
-		qm.Where("\"user_wallets\".\"chain_id\"=?", o.ChainID),
-	)
-
-	return UserWallets(queryMods...)
 }
 
 // LoadBatches allows an eager lookup of values, cached into the
@@ -733,6 +733,112 @@ func (chainL) LoadTransactions(ctx context.Context, e boil.ContextExecutor, sing
 	return nil
 }
 
+// LoadUserAccounts allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-M or N-M relationship.
+func (chainL) LoadUserAccounts(ctx context.Context, e boil.ContextExecutor, singular bool, maybeChain interface{}, mods queries.Applicator) error {
+	var slice []*Chain
+	var object *Chain
+
+	if singular {
+		var ok bool
+		object, ok = maybeChain.(*Chain)
+		if !ok {
+			object = new(Chain)
+			ok = queries.SetFromEmbeddedStruct(&object, &maybeChain)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeChain))
+			}
+		}
+	} else {
+		s, ok := maybeChain.(*[]*Chain)
+		if ok {
+			slice = *s
+		} else {
+			ok = queries.SetFromEmbeddedStruct(&slice, maybeChain)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeChain))
+			}
+		}
+	}
+
+	args := make(map[interface{}]struct{})
+	if singular {
+		if object.R == nil {
+			object.R = &chainR{}
+		}
+		args[object.ChainID] = struct{}{}
+	} else {
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &chainR{}
+			}
+			args[obj.ChainID] = struct{}{}
+		}
+	}
+
+	if len(args) == 0 {
+		return nil
+	}
+
+	argsSlice := make([]interface{}, len(args))
+	i := 0
+	for arg := range args {
+		argsSlice[i] = arg
+		i++
+	}
+
+	query := NewQuery(
+		qm.From(`user_accounts`),
+		qm.WhereIn(`user_accounts.chain_id in ?`, argsSlice...),
+	)
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load user_accounts")
+	}
+
+	var resultSlice []*UserAccount
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice user_accounts")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results in eager load on user_accounts")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for user_accounts")
+	}
+
+	if singular {
+		object.R.UserAccounts = resultSlice
+		for _, foreign := range resultSlice {
+			if foreign.R == nil {
+				foreign.R = &userAccountR{}
+			}
+			foreign.R.Chain = object
+		}
+		return nil
+	}
+
+	for _, foreign := range resultSlice {
+		for _, local := range slice {
+			if local.ChainID == foreign.ChainID {
+				local.R.UserAccounts = append(local.R.UserAccounts, foreign)
+				if foreign.R == nil {
+					foreign.R = &userAccountR{}
+				}
+				foreign.R.Chain = local
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
 // LoadUserBalances allows an eager lookup of values, cached into the
 // loaded structs of the objects. This is for a 1-M or N-M relationship.
 func (chainL) LoadUserBalances(ctx context.Context, e boil.ContextExecutor, singular bool, maybeChain interface{}, mods queries.Applicator) error {
@@ -829,112 +935,6 @@ func (chainL) LoadUserBalances(ctx context.Context, e boil.ContextExecutor, sing
 				local.R.UserBalances = append(local.R.UserBalances, foreign)
 				if foreign.R == nil {
 					foreign.R = &userBalanceR{}
-				}
-				foreign.R.Chain = local
-				break
-			}
-		}
-	}
-
-	return nil
-}
-
-// LoadUserWallets allows an eager lookup of values, cached into the
-// loaded structs of the objects. This is for a 1-M or N-M relationship.
-func (chainL) LoadUserWallets(ctx context.Context, e boil.ContextExecutor, singular bool, maybeChain interface{}, mods queries.Applicator) error {
-	var slice []*Chain
-	var object *Chain
-
-	if singular {
-		var ok bool
-		object, ok = maybeChain.(*Chain)
-		if !ok {
-			object = new(Chain)
-			ok = queries.SetFromEmbeddedStruct(&object, &maybeChain)
-			if !ok {
-				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeChain))
-			}
-		}
-	} else {
-		s, ok := maybeChain.(*[]*Chain)
-		if ok {
-			slice = *s
-		} else {
-			ok = queries.SetFromEmbeddedStruct(&slice, maybeChain)
-			if !ok {
-				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeChain))
-			}
-		}
-	}
-
-	args := make(map[interface{}]struct{})
-	if singular {
-		if object.R == nil {
-			object.R = &chainR{}
-		}
-		args[object.ChainID] = struct{}{}
-	} else {
-		for _, obj := range slice {
-			if obj.R == nil {
-				obj.R = &chainR{}
-			}
-			args[obj.ChainID] = struct{}{}
-		}
-	}
-
-	if len(args) == 0 {
-		return nil
-	}
-
-	argsSlice := make([]interface{}, len(args))
-	i := 0
-	for arg := range args {
-		argsSlice[i] = arg
-		i++
-	}
-
-	query := NewQuery(
-		qm.From(`user_wallets`),
-		qm.WhereIn(`user_wallets.chain_id in ?`, argsSlice...),
-	)
-	if mods != nil {
-		mods.Apply(query)
-	}
-
-	results, err := query.QueryContext(ctx, e)
-	if err != nil {
-		return errors.Wrap(err, "failed to eager load user_wallets")
-	}
-
-	var resultSlice []*UserWallet
-	if err = queries.Bind(results, &resultSlice); err != nil {
-		return errors.Wrap(err, "failed to bind eager loaded slice user_wallets")
-	}
-
-	if err = results.Close(); err != nil {
-		return errors.Wrap(err, "failed to close results in eager load on user_wallets")
-	}
-	if err = results.Err(); err != nil {
-		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for user_wallets")
-	}
-
-	if singular {
-		object.R.UserWallets = resultSlice
-		for _, foreign := range resultSlice {
-			if foreign.R == nil {
-				foreign.R = &userWalletR{}
-			}
-			foreign.R.Chain = object
-		}
-		return nil
-	}
-
-	for _, foreign := range resultSlice {
-		for _, local := range slice {
-			if local.ChainID == foreign.ChainID {
-				local.R.UserWallets = append(local.R.UserWallets, foreign)
-				if foreign.R == nil {
-					foreign.R = &userWalletR{}
 				}
 				foreign.R.Chain = local
 				break
@@ -1104,6 +1104,59 @@ func (o *Chain) AddTransactions(ctx context.Context, exec boil.ContextExecutor, 
 	return nil
 }
 
+// AddUserAccounts adds the given related objects to the existing relationships
+// of the chain, optionally inserting them as new records.
+// Appends related to o.R.UserAccounts.
+// Sets related.R.Chain appropriately.
+func (o *Chain) AddUserAccounts(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*UserAccount) error {
+	var err error
+	for _, rel := range related {
+		if insert {
+			rel.ChainID = o.ChainID
+			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
+				return errors.Wrap(err, "failed to insert into foreign table")
+			}
+		} else {
+			updateQuery := fmt.Sprintf(
+				"UPDATE \"user_accounts\" SET %s WHERE %s",
+				strmangle.SetParamNames("\"", "\"", 1, []string{"chain_id"}),
+				strmangle.WhereClause("\"", "\"", 2, userAccountPrimaryKeyColumns),
+			)
+			values := []interface{}{o.ChainID, rel.ID}
+
+			if boil.IsDebug(ctx) {
+				writer := boil.DebugWriterFrom(ctx)
+				fmt.Fprintln(writer, updateQuery)
+				fmt.Fprintln(writer, values)
+			}
+			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+				return errors.Wrap(err, "failed to update foreign table")
+			}
+
+			rel.ChainID = o.ChainID
+		}
+	}
+
+	if o.R == nil {
+		o.R = &chainR{
+			UserAccounts: related,
+		}
+	} else {
+		o.R.UserAccounts = append(o.R.UserAccounts, related...)
+	}
+
+	for _, rel := range related {
+		if rel.R == nil {
+			rel.R = &userAccountR{
+				Chain: o,
+			}
+		} else {
+			rel.R.Chain = o
+		}
+	}
+	return nil
+}
+
 // AddUserBalances adds the given related objects to the existing relationships
 // of the chain, optionally inserting them as new records.
 // Appends related to o.R.UserBalances.
@@ -1148,59 +1201,6 @@ func (o *Chain) AddUserBalances(ctx context.Context, exec boil.ContextExecutor, 
 	for _, rel := range related {
 		if rel.R == nil {
 			rel.R = &userBalanceR{
-				Chain: o,
-			}
-		} else {
-			rel.R.Chain = o
-		}
-	}
-	return nil
-}
-
-// AddUserWallets adds the given related objects to the existing relationships
-// of the chain, optionally inserting them as new records.
-// Appends related to o.R.UserWallets.
-// Sets related.R.Chain appropriately.
-func (o *Chain) AddUserWallets(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*UserWallet) error {
-	var err error
-	for _, rel := range related {
-		if insert {
-			rel.ChainID = o.ChainID
-			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
-				return errors.Wrap(err, "failed to insert into foreign table")
-			}
-		} else {
-			updateQuery := fmt.Sprintf(
-				"UPDATE \"user_wallets\" SET %s WHERE %s",
-				strmangle.SetParamNames("\"", "\"", 1, []string{"chain_id"}),
-				strmangle.WhereClause("\"", "\"", 2, userWalletPrimaryKeyColumns),
-			)
-			values := []interface{}{o.ChainID, rel.ID}
-
-			if boil.IsDebug(ctx) {
-				writer := boil.DebugWriterFrom(ctx)
-				fmt.Fprintln(writer, updateQuery)
-				fmt.Fprintln(writer, values)
-			}
-			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
-				return errors.Wrap(err, "failed to update foreign table")
-			}
-
-			rel.ChainID = o.ChainID
-		}
-	}
-
-	if o.R == nil {
-		o.R = &chainR{
-			UserWallets: related,
-		}
-	} else {
-		o.R.UserWallets = append(o.R.UserWallets, related...)
-	}
-
-	for _, rel := range related {
-		if rel.R == nil {
-			rel.R = &userWalletR{
 				Chain: o,
 			}
 		} else {

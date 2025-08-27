@@ -13,8 +13,8 @@ var TableNames = struct {
 	RefreshTokens       string
 	SupportedTokens     string
 	Transactions        string
+	UserAccounts        string
 	UserBalances        string
-	UserWallets         string
 	Users               string
 }{
 	AccessTokens:        "access_tokens",
@@ -26,7 +26,7 @@ var TableNames = struct {
 	RefreshTokens:       "refresh_tokens",
 	SupportedTokens:     "supported_tokens",
 	Transactions:        "transactions",
+	UserAccounts:        "user_accounts",
 	UserBalances:        "user_balances",
-	UserWallets:         "user_wallets",
 	Users:               "users",
 }

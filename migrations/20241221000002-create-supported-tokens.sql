@@ -1,8 +1,7 @@
 -- +migrate Up
 CREATE TYPE token_type AS ENUM (
     'native',
-    'erc20',
-    'cpop'
+    'erc20'
 );
 
 CREATE TABLE supported_tokens (

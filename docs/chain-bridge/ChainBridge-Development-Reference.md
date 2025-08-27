@@ -39,10 +39,10 @@ interface ICPOPToken {
 }
 ```
 
-#### AAWallet合约关键功能
+#### AAAccount合约关键功能
 ```solidity
-// contracts/cpop/AAWallet.sol
-contract AAWallet {
+// contracts/cpop/AAAccount.sol
+contract AAAccount {
     // 钱包部署和初始化
     function initialize(address _owner) external;
     function initializeWithMasterSigner(address _owner, address _masterSigner) external;
@@ -93,13 +93,13 @@ chain-bridge/                    # 新项目根目录
 │   ├── swagger.yml                 # 主Swagger文件
 │   ├── definitions/                # 数据模型定义
 │   │   ├── common.yml             # 通用响应模型
-│   │   ├── wallet.yml             # 钱包相关模型
+│   │   ├── account.yml             # 钱包相关模型
 │   │   ├── transfer.yml           # 转账相关模型
 │   │   ├── assets.yml             # 资产相关模型
 │   │   ├── nft.yml                # NFT相关模型
 │   │   └── errors.yml             # 错误模型
 │   └── paths/                      # API路径定义
-│       ├── wallet.yml             # 钱包管理API
+│       ├── account.yml             # 钱包管理API
 │       ├── transfer.yml           # 转账操作API
 │       ├── assets.yml             # 资产查询API
 │       ├── nft.yml                # NFT操作API
@@ -120,14 +120,14 @@ chain-bridge/                    # 新项目根目录
 │   │   ├── models/                # 从Swagger生成的数据模型
 │   │   └── restapi/               # REST API配置
 │   ├── service/                   # 业务逻辑层
-│   │   ├── wallet/                # 钱包管理服务
+│   │   ├── account/                # 钱包管理服务
 │   │   ├── transfer/              # 转账服务
 │   │   ├── asset/                 # 资产管理服务（Alchemy集成）
 │   │   ├── batch/                 # 批量处理服务
 │   │   ├── application/           # 应用层服务（新增）
 │   │   └── alchemy/               # Alchemy API集成服务（新增）
 │   ├── repository/                # 数据访问层
-│   │   ├── user_wallet.go
+│   │   ├── user_account.go
 │   │   ├── user_balance.go
 │   │   ├── transaction.go
 │   │   └── batch.go
@@ -146,7 +146,7 @@ chain-bridge/                    # 新项目根目录
 │   └── utils/                     # 通用工具
 ├── migrations/                    # 数据库迁移文件
 │   ├── 001_create_chains.sql
-│   ├── 002_create_user_wallets.sql
+│   ├── 002_create_user_accounts.sql
 │   ├── 003_create_supported_tokens.sql
 │   ├── 004_create_user_balances.sql
 │   ├── 005_create_transactions.sql
@@ -199,7 +199,7 @@ abigen --abi contracts/cpop/interfaces/ICPOPToken.sol --pkg contracts --out inte
 # - 配置多链连接
 
 # 3. 实现核心服务
-# - WalletService: AA钱包管理
+# - AccountService: AA钱包管理
 # - BalanceService: CPOP余额管理（集成Alchemy）  
 # - BatchService: 批量处理引擎
 

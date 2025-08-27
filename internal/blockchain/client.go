@@ -23,19 +23,19 @@ type CPOPClient struct {
 
 // CPOPConfig contains configuration for CPOP blockchain client
 type CPOPConfig struct {
-	RPCEndpoint          string
-	WalletManagerAddress common.Address
-	EntryPointAddress    common.Address
-	GasPriceFactor       float64
-	DefaultGasLimit      uint64
+	RPCEndpoint           string
+	AccountManagerAddress common.Address
+	EntryPointAddress     common.Address
+	GasPriceFactor        float64
+	DefaultGasLimit       uint64
 }
 
-// DeploymentResult contains result of wallet deployment
+// DeploymentResult contains result of account deployment
 type DeploymentResult struct {
-	TxHash        string
-	WalletAddress string
-	GasUsed       uint64
-	GasPrice      *big.Int
+	TxHash         string
+	AccountAddress string
+	GasUsed        uint64
+	GasPrice       *big.Int
 }
 
 // CostEstimate contains gas cost estimation
@@ -65,29 +65,29 @@ func NewCPOPClient(config CPOPConfig) (*CPOPClient, error) {
 	}, nil
 }
 
-// CreateWalletAddress generates a deterministic wallet address using CREATE2
-func (c *CPOPClient) CreateWalletAddress(ctx context.Context, ownerAddress string, salt *big.Int) (string, error) {
+// CreateAccountAddress generates a deterministic account address using CREATE2
+func (c *CPOPClient) CreateAccountAddress(ctx context.Context, ownerAddress string, salt *big.Int) (string, error) {
 	// For now, we'll generate a deterministic address based on owner and salt
-	// In production, this should use the actual WalletManager contract's getAddress function
+	// In production, this should use the actual AccountManager contract's getAddress function
 	owner := common.HexToAddress(ownerAddress)
 
 	// Simple deterministic address generation (placeholder implementation)
 	data := append(owner.Bytes(), salt.Bytes()...)
 	hash := crypto.Keccak256Hash(data)
-	walletAddress := common.BytesToAddress(hash.Bytes()[:20])
+	accountAddress := common.BytesToAddress(hash.Bytes()[:20])
 
-	return walletAddress.Hex(), nil
+	return accountAddress.Hex(), nil
 }
 
-// DeployWallet deploys an AA wallet to the blockchain
-func (c *CPOPClient) DeployWallet(ctx context.Context, privateKey *ecdsa.PrivateKey, ownerAddress string, salt *big.Int) (*DeploymentResult, error) {
-	// For now, simulate wallet deployment
-	// In production, this should call the actual WalletManager contract's createAccount function
+// DeployAccount deploys an AA account to the blockchain
+func (c *CPOPClient) DeployAccount(ctx context.Context, privateKey *ecdsa.PrivateKey, ownerAddress string, salt *big.Int) (*DeploymentResult, error) {
+	// For now, simulate account deployment
+	// In production, this should call the actual AccountManager contract's createAccount function
 
-	// Calculate wallet address
-	walletAddress, err := c.CreateWalletAddress(ctx, ownerAddress, salt)
+	// Calculate account address
+	accountAddress, err := c.CreateAccountAddress(ctx, ownerAddress, salt)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get wallet address: %w", err)
+		return nil, fmt.Errorf("failed to get account address: %w", err)
 	}
 
 	// Generate a mock transaction hash
@@ -105,15 +105,15 @@ func (c *CPOPClient) DeployWallet(ctx context.Context, privateKey *ecdsa.Private
 	adjustedGasPrice = adjustedGasPrice.Div(adjustedGasPrice, big.NewInt(100))
 
 	return &DeploymentResult{
-		TxHash:        txHash.Hex(),
-		WalletAddress: walletAddress,
-		GasUsed:       c.config.DefaultGasLimit,
-		GasPrice:      adjustedGasPrice,
+		TxHash:         txHash.Hex(),
+		AccountAddress: accountAddress,
+		GasUsed:        c.config.DefaultGasLimit,
+		GasPrice:       adjustedGasPrice,
 	}, nil
 }
 
-// EstimateWalletDeploymentCost estimates the cost of deploying a wallet
-func (c *CPOPClient) EstimateWalletDeploymentCost(ctx context.Context, ownerAddress string) (*CostEstimate, error) {
+// EstimateAccountDeploymentCost estimates the cost of deploying a account
+func (c *CPOPClient) EstimateAccountDeploymentCost(ctx context.Context, ownerAddress string) (*CostEstimate, error) {
 	// Get current gas price
 	gasPrice, err := c.client.SuggestGasPrice(ctx)
 	if err != nil {
@@ -157,9 +157,9 @@ func GetDeploymentPrivateKeyFromString(keyString string) (*ecdsa.PrivateKey, err
 	return crypto.HexToECDSA(keyString)
 }
 
-// GenerateWalletSalt creates a deterministic salt for wallet address generation
-func GenerateWalletSalt(userID string, chainID int64) *big.Int {
-	// Create deterministic salt to ensure same user gets same wallet address on same chain
+// GenerateAccountSalt creates a deterministic salt for account address generation
+func GenerateAccountSalt(userID string, chainID int64) *big.Int {
+	// Create deterministic salt to ensure same user gets same account address on same chain
 	data := fmt.Sprintf("%s-%d", userID, chainID)
 	hash := crypto.Keccak256Hash([]byte(data))
 	return new(big.Int).SetBytes(hash[:])

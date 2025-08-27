@@ -996,7 +996,7 @@ func testSupportedTokensSelect(t *testing.T) {
 }
 
 var (
-	supportedTokenDBTypes = map[string]string{`ID`: `integer`, `ChainID`: `bigint`, `ContractAddress`: `character`, `Symbol`: `character varying`, `Name`: `character varying`, `Decimals`: `integer`, `TokenType`: `enum.token_type('native','erc20','cpop')`, `SupportsBatchOperations`: `boolean`, `BatchOperations`: `jsonb`, `IsEnabled`: `boolean`, `CreatedAt`: `timestamp with time zone`}
+	supportedTokenDBTypes = map[string]string{`ID`: `integer`, `ChainID`: `bigint`, `ContractAddress`: `character`, `Symbol`: `character varying`, `Name`: `character varying`, `Decimals`: `integer`, `TokenType`: `enum.token_type('native','erc20')`, `SupportsBatchOperations`: `boolean`, `BatchOperations`: `jsonb`, `IsEnabled`: `boolean`, `CreatedAt`: `timestamp with time zone`}
 	_                     = bytes.MinRead
 )
 

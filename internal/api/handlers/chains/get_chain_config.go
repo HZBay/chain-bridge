@@ -2,11 +2,10 @@ package chains
 
 import (
 	"net/http"
-	"strconv"
 
-	"github.com/go-openapi/strfmt"
 	"github.com/hzbay/chain-bridge/internal/api"
 	"github.com/hzbay/chain-bridge/internal/types"
+	"github.com/hzbay/chain-bridge/internal/types/cpop"
 	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/labstack/echo/v4"
 )
@@ -22,13 +21,14 @@ func (h *Handler) GetChainConfig(c echo.Context) error {
 	ctx := c.Request().Context()
 	log := util.LogFromContext(ctx)
 
-	// Parse chain ID parameter
-	chainIDStr := c.Param("chain_id")
-	chainID, err := strconv.ParseInt(chainIDStr, 10, 64)
-	if err != nil {
-		log.Debug().Str("chain_id", chainIDStr).Msg("Invalid chain_id parameter")
-		return echo.NewHTTPError(http.StatusBadRequest, "Invalid chain_id parameter")
+	// Parse and validate path parameters using swagger-generated method
+	params := cpop.NewGetChainConfigParams()
+	if err := params.BindRequest(c.Request(), nil); err != nil {
+		log.Debug().Err(err).Msg("Invalid path parameters")
+		return err
 	}
+
+	chainID := params.ChainID
 
 	// Get chain configuration
 	chainConfig, err := h.chainsService.GetChainConfig(ctx, chainID)
@@ -43,28 +43,21 @@ func (h *Handler) GetChainConfig(c echo.Context) error {
 		Bool("is_enabled", chainConfig.IsEnabled).
 		Msg("Retrieved chain configuration")
 
+	// TODO: 把类型的转换放到service中处理好一些
 	// Convert to generated type
-	minBatchSize := int64(chainConfig.BatchConfig.MinBatchSize)
-	maxBatchSize := int64(chainConfig.BatchConfig.MaxBatchSize)
-	optimalBatchSize := int64(chainConfig.BatchConfig.OptimalBatchSize)
-
-	rpcURL := strfmt.URI(chainConfig.RPCURL)
-	chain := &types.Chain{
-		ChainID:     &chainConfig.ChainID,
-		Name:        &chainConfig.Name,
-		Symbol:      chainConfig.ShortName,
-		RPCURL:      &rpcURL,
-		ExplorerURL: strfmt.URI(chainConfig.ExplorerURL),
-		IsEnabled:   &chainConfig.IsEnabled,
-		BatchConfig: &types.BatchConfig{
-			MinBatchSize:     &minBatchSize,
-			MaxBatchSize:     &maxBatchSize,
-			OptimalBatchSize: &optimalBatchSize,
-		},
-		CreatedAt: strfmt.DateTime(chainConfig.CreatedAt),
+	chainData := &types.ChainResponseData{
+		ChainID:      chainConfig.ChainID,
+		Name:         chainConfig.Name,
+		RPCURL:       chainConfig.RPCURL,
+		IsEnabled:    chainConfig.IsEnabled,
+		BatchSize:    int64(chainConfig.BatchConfig.OptimalBatchSize),
+		BatchTimeout: 300, // Default 5 minutes
 	}
 
-	return c.JSON(http.StatusOK, map[string]interface{}{
-		"data": chain,
-	})
+	// Use proper response type
+	response := &types.ChainResponse{
+		Data: chainData,
+	}
+
+	return util.ValidateAndReturn(c, http.StatusOK, response)
 }

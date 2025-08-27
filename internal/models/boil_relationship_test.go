@@ -18,9 +18,9 @@ func TestToOne(t *testing.T) {
 	t.Run("SupportedTokenToChainUsingChain", testSupportedTokenToOneChainUsingChain)
 	t.Run("TransactionToChainUsingChain", testTransactionToOneChainUsingChain)
 	t.Run("TransactionToSupportedTokenUsingToken", testTransactionToOneSupportedTokenUsingToken)
+	t.Run("UserAccountToChainUsingChain", testUserAccountToOneChainUsingChain)
 	t.Run("UserBalanceToChainUsingChain", testUserBalanceToOneChainUsingChain)
 	t.Run("UserBalanceToSupportedTokenUsingToken", testUserBalanceToOneSupportedTokenUsingToken)
-	t.Run("UserWalletToChainUsingChain", testUserWalletToOneChainUsingChain)
 }
 
 // TestOneToOne tests cannot be run in parallel
@@ -35,8 +35,8 @@ func TestToMany(t *testing.T) {
 	t.Run("ChainToBatches", testChainToManyBatches)
 	t.Run("ChainToSupportedTokens", testChainToManySupportedTokens)
 	t.Run("ChainToTransactions", testChainToManyTransactions)
+	t.Run("ChainToUserAccounts", testChainToManyUserAccounts)
 	t.Run("ChainToUserBalances", testChainToManyUserBalances)
-	t.Run("ChainToUserWallets", testChainToManyUserWallets)
 	t.Run("SupportedTokenToTokenBatches", testSupportedTokenToManyTokenBatches)
 	t.Run("SupportedTokenToTokenTransactions", testSupportedTokenToManyTokenTransactions)
 	t.Run("SupportedTokenToTokenUserBalances", testSupportedTokenToManyTokenUserBalances)
@@ -59,9 +59,9 @@ func TestToOneSet(t *testing.T) {
 	t.Run("SupportedTokenToChainUsingSupportedTokens", testSupportedTokenToOneSetOpChainUsingChain)
 	t.Run("TransactionToChainUsingTransactions", testTransactionToOneSetOpChainUsingChain)
 	t.Run("TransactionToSupportedTokenUsingTokenTransactions", testTransactionToOneSetOpSupportedTokenUsingToken)
+	t.Run("UserAccountToChainUsingUserAccounts", testUserAccountToOneSetOpChainUsingChain)
 	t.Run("UserBalanceToChainUsingUserBalances", testUserBalanceToOneSetOpChainUsingChain)
 	t.Run("UserBalanceToSupportedTokenUsingTokenUserBalances", testUserBalanceToOneSetOpSupportedTokenUsingToken)
-	t.Run("UserWalletToChainUsingUserWallets", testUserWalletToOneSetOpChainUsingChain)
 }
 
 // TestToOneRemove tests cannot be run in parallel
@@ -84,8 +84,8 @@ func TestToManyAdd(t *testing.T) {
 	t.Run("ChainToBatches", testChainToManyAddOpBatches)
 	t.Run("ChainToSupportedTokens", testChainToManyAddOpSupportedTokens)
 	t.Run("ChainToTransactions", testChainToManyAddOpTransactions)
+	t.Run("ChainToUserAccounts", testChainToManyAddOpUserAccounts)
 	t.Run("ChainToUserBalances", testChainToManyAddOpUserBalances)
-	t.Run("ChainToUserWallets", testChainToManyAddOpUserWallets)
 	t.Run("SupportedTokenToTokenBatches", testSupportedTokenToManyAddOpTokenBatches)
 	t.Run("SupportedTokenToTokenTransactions", testSupportedTokenToManyAddOpTokenTransactions)
 	t.Run("SupportedTokenToTokenUserBalances", testSupportedTokenToManyAddOpTokenUserBalances)

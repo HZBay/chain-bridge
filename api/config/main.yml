@@ -43,6 +43,17 @@ definitions:
     $ref: "../definitions/chainbridge-common.yml#/definitions/Chain"
   BatchConfig:
     $ref: "../definitions/chainbridge-common.yml#/definitions/BatchConfig"
+  # Chains definitions
+  UpdateChainBatchConfigBody:
+    $ref: "../definitions/chains.yml#/definitions/UpdateChainBatchConfigBody"
+  BatchConfigUpdateResponse:
+    $ref: "../definitions/chains.yml#/definitions/BatchConfigUpdateResponse"
+  CacheRefreshResponse:
+    $ref: "../definitions/chains.yml#/definitions/CacheRefreshResponse"
+  ChainResponse:
+    $ref: "../definitions/chains.yml#/definitions/ChainResponse"
+  ChainsResponse:
+    $ref: "../definitions/chains.yml#/definitions/ChainsResponse"
   # Monitoring definitions
   queueMetricsResponse:
     $ref: "../definitions/monitoring.yml#/definitions/queueMetricsResponse"
@@ -55,19 +66,28 @@ definitions:
   # Assets definitions
   assetAdjustResponse:
     $ref: "../definitions/assets.yml#/definitions/AssetAdjustResponse"
+  assetAdjustCompleteResponse:
+    $ref: "../definitions/assets.yml#/definitions/AssetAdjustCompleteResponse"
   assetsResponse:
     $ref: "../definitions/assets.yml#/definitions/AssetsResponse"
   batchInfo:
     $ref: "../definitions/assets.yml#/definitions/BatchInfo"
+  userAssetsCompleteResponse:
+    $ref: "../definitions/assets.yml#/definitions/UserAssetsCompleteResponse"
+  # Batch definitions
+  batchStatusResponse:
+    $ref: "../definitions/batch.yml#/definitions/BatchStatusResponse"
   # Transfer definitions  
   transferResponse:
     $ref: "../definitions/transfer.yml#/definitions/TransferResponse"
+  transferCompleteResponse:
+    $ref: "../definitions/transfer.yml#/definitions/TransferCompleteResponse"
   transactionHistoryResponse:
     $ref: "../definitions/transfer.yml#/definitions/TransactionHistoryResponse"
-  # Wallet definitions
-  walletResponse:
-    $ref: "../definitions/wallet.yml#/definitions/WalletResponse"
-  createWalletResponse:
-    $ref: "../definitions/wallet.yml#/definitions/CreateWalletResponse"
-  deployWalletResponse:
-    $ref: "../definitions/wallet.yml#/definitions/DeployWalletResponse"
+  # Account definitions
+  accountResponse:
+    $ref: "../definitions/account.yml#/definitions/AccountResponse"
+  createAccountResponse:
+    $ref: "../definitions/account.yml#/definitions/CreateAccountResponse"
+  deployAccountResponse:
+    $ref: "../definitions/account.yml#/definitions/DeployAccountResponse"
