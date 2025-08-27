@@ -2,7 +2,6 @@ package assets
 
 import (
 	"github.com/hzbay/chain-bridge/internal/api"
-	"github.com/hzbay/chain-bridge/internal/services/assets"
 	"github.com/labstack/echo/v4"
 )
 
@@ -15,7 +14,6 @@ func RegisterRoutes(s *api.Server) []*echo.Route {
 
 	return routes
 }
-
 
 // Constants for asset operations
 const (

@@ -10,6 +10,7 @@ import (
 	"github.com/hzbay/chain-bridge/internal/blockchain"
 	"github.com/hzbay/chain-bridge/internal/config"
 	"github.com/hzbay/chain-bridge/internal/models"
+	"github.com/hzbay/chain-bridge/internal/services/chains"
 	"github.com/hzbay/chain-bridge/internal/types"
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
@@ -28,14 +29,20 @@ type service struct {
 	db               *sql.DB
 	cpopClients      map[int64]*blockchain.CPOPClient // indexed by chainID
 	blockchainConfig config.BlockchainConfig
+	chainsService    chains.Service // 用于获取链配置
 }
 
 // NewService creates a new account service
-func NewService(db *sql.DB, chainConfigs map[int64]blockchain.CPOPConfig, blockchainConfig config.BlockchainConfig) (Service, error) {
-	cpopClients := make(map[int64]*blockchain.CPOPClient)
+func NewService(db *sql.DB, blockchainConfig config.BlockchainConfig, chainsService chains.Service) (Service, error) {
+	// 通过 chainsService 获取 CPOP 配置
+	cpopConfigs, err := chainsService.GetCPOPConfigs(context.Background())
+	if err != nil {
+		return nil, fmt.Errorf("failed to load CPOP configs: %w", err)
+	}
 
-	for chainID, config := range chainConfigs {
-		client, err := blockchain.NewCPOPClient(config)
+	cpopClients := make(map[int64]*blockchain.CPOPClient)
+	for chainID, cpopConfig := range cpopConfigs {
+		client, err := blockchain.NewCPOPClient(cpopConfig)
 		if err != nil {
 			return nil, fmt.Errorf("failed to create CPOP client for chain %d: %w", chainID, err)
 		}
@@ -46,6 +53,7 @@ func NewService(db *sql.DB, chainConfigs map[int64]blockchain.CPOPConfig, blockc
 		db:               db,
 		cpopClients:      cpopClients,
 		blockchainConfig: blockchainConfig,
+		chainsService:    chainsService, // 保持引用用于运行时更新
 	}, nil
 }
 
@@ -197,10 +205,10 @@ func (s *service) DeployAccount(ctx context.Context, userID string, req *types.D
 		return nil, fmt.Errorf("failed to estimate deployment cost: %w", err)
 	}
 
-	// Get deployment private key from config
-	keyString, err := s.blockchainConfig.GetDeploymentPrivateKey(chainID)
+	// Get unified deployment private key from config
+	keyString, err := s.blockchainConfig.GetUnifiedDeploymentPrivateKey()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get deployment key: %w", err)
+		return nil, fmt.Errorf("failed to get unified deployment key: %w", err)
 	}
 
 	privateKey, err := blockchain.GetDeploymentPrivateKeyFromString(keyString)

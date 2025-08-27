@@ -8,6 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/hzbay/chain-bridge/internal/blockchain"
+	"github.com/hzbay/chain-bridge/internal/config"
 	"github.com/hzbay/chain-bridge/internal/models"
 	"github.com/rs/zerolog/log"
 	"github.com/volatiletech/sqlboiler/v4/boil"
@@ -22,6 +25,11 @@ type Service interface {
 	UpdateBatchConfig(ctx context.Context, chainID int64, config *BatchConfig) error
 	IsChainEnabled(ctx context.Context, chainID int64) (bool, error)
 	RefreshCache(ctx context.Context) error
+
+	// 为其他服务提供 CPOP 配置
+	GetCPOPConfigs(ctx context.Context) (map[int64]blockchain.CPOPConfig, error)
+	GetCPOPConfig(ctx context.Context, chainID int64) (*blockchain.CPOPConfig, error)
+	GetValidatedChains(ctx context.Context) (map[int64]*ChainConfig, error)
 }
 
 // ChainConfig represents chain configuration with typed fields
@@ -56,19 +64,21 @@ var DefaultBatchConfig = BatchConfig{
 
 // service implements the chains service
 type service struct {
-	db              *sql.DB
-	cache           map[int64]*ChainConfig
-	mutex           sync.RWMutex
-	lastCacheUpdate time.Time
-	cacheTimeout    time.Duration
+	db               *sql.DB
+	cache            map[int64]*ChainConfig
+	mutex            sync.RWMutex
+	lastCacheUpdate  time.Time
+	cacheTimeout     time.Duration
+	blockchainConfig config.BlockchainConfig
 }
 
 // NewService creates a new chains service
-func NewService(db *sql.DB) Service {
+func NewService(db *sql.DB, blockchainConfig config.BlockchainConfig) Service {
 	return &service{
-		db:           db,
-		cache:        make(map[int64]*ChainConfig),
-		cacheTimeout: 5 * time.Minute, // Cache for 5 minutes
+		db:               db,
+		cache:            make(map[int64]*ChainConfig),
+		cacheTimeout:     5 * time.Minute, // Cache for 5 minutes
+		blockchainConfig: blockchainConfig,
 	}
 }
 
@@ -268,4 +278,92 @@ func (s *service) convertToChainConfig(chain *models.Chain) *ChainConfig {
 	}
 
 	return config
+}
+
+// GetCPOPConfigs 获取所有启用链的 CPOP 配置
+func (s *service) GetCPOPConfigs(ctx context.Context) (map[int64]blockchain.CPOPConfig, error) {
+	chains, err := s.GetAllEnabledChains(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get enabled chains: %w", err)
+	}
+
+	configs := make(map[int64]blockchain.CPOPConfig)
+	for _, chain := range chains {
+		if err := s.validateChainForCPOP(chain); err != nil {
+			log.Warn().
+				Int64("chain_id", chain.ChainID).
+				Str("chain_name", chain.Name).
+				Err(err).
+				Msg("Skipping chain due to incomplete configuration")
+			continue
+		}
+
+		config := blockchain.CPOPConfig{
+			RPCEndpoint:           chain.RPCURL,
+			AccountManagerAddress: common.HexToAddress(chain.AccountManagerAddress),
+			EntryPointAddress:     common.HexToAddress(chain.EntryPointAddress),
+			GasPriceFactor:        s.blockchainConfig.DefaultGasPriceFactor,
+			DefaultGasLimit:       s.blockchainConfig.DefaultGasLimit,
+		}
+		configs[chain.ChainID] = config
+	}
+
+	return configs, nil
+}
+
+// GetCPOPConfig 获取单个链的 CPOP 配置
+func (s *service) GetCPOPConfig(ctx context.Context, chainID int64) (*blockchain.CPOPConfig, error) {
+	chain, err := s.GetChainConfig(ctx, chainID)
+	if err != nil {
+		return nil, err
+	}
+
+	if !chain.IsEnabled {
+		return nil, fmt.Errorf("chain %d is disabled", chainID)
+	}
+
+	if err := s.validateChainForCPOP(chain); err != nil {
+		return nil, fmt.Errorf("chain %d configuration invalid: %w", chainID, err)
+	}
+
+	config := &blockchain.CPOPConfig{
+		RPCEndpoint:           chain.RPCURL,
+		AccountManagerAddress: common.HexToAddress(chain.AccountManagerAddress),
+		EntryPointAddress:     common.HexToAddress(chain.EntryPointAddress),
+		GasPriceFactor:        s.blockchainConfig.DefaultGasPriceFactor,
+		DefaultGasLimit:       s.blockchainConfig.DefaultGasLimit,
+	}
+
+	return config, nil
+}
+
+// GetValidatedChains 获取所有验证过的链配置
+func (s *service) GetValidatedChains(ctx context.Context) (map[int64]*ChainConfig, error) {
+	allChains, err := s.GetAllEnabledChains(ctx)
+	if err != nil {
+		return nil, err
+	}
+
+	validChains := make(map[int64]*ChainConfig)
+	for _, chain := range allChains {
+		if err := s.validateChainForCPOP(chain); err == nil {
+			validChains[chain.ChainID] = chain
+		}
+	}
+
+	return validChains, nil
+}
+
+// validateChainForCPOP 验证链配置是否满足 CPOP 要求
+func (s *service) validateChainForCPOP(chain *ChainConfig) error {
+	if chain.RPCURL == "" {
+		return fmt.Errorf("RPC URL is required")
+	}
+	if chain.AccountManagerAddress == "" {
+		return fmt.Errorf("Account Manager Address is required")
+	}
+	if chain.EntryPointAddress == "" {
+		return fmt.Errorf("Entry Point Address is required")
+	}
+	return nil
 }

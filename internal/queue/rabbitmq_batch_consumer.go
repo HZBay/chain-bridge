@@ -364,17 +364,17 @@ func (c *RabbitMQBatchConsumer) processRemainingMessages(ctx context.Context) {
 	log.Info().Msg("Finished processing remaining messages")
 }
 
-// GetQueueStats returns current queue statistics  
+// GetQueueStats returns current queue statistics
 func (c *RabbitMQBatchConsumer) GetQueueStats() map[string]QueueStats {
 	c.messagesMutex.RLock()
 	defer c.messagesMutex.RUnlock()
-	
+
 	result := make(map[string]QueueStats)
-	
+
 	// Create stats for each active queue group
 	for group, messages := range c.pendingMessages {
 		queueName := fmt.Sprintf("rabbitmq.%s.%d.%d", string(group.JobType), group.ChainID, group.TokenID)
-		
+
 		result[queueName] = QueueStats{
 			QueueName:       queueName,
 			PendingCount:    len(messages),
@@ -385,7 +385,7 @@ func (c *RabbitMQBatchConsumer) GetQueueStats() map[string]QueueStats {
 			LastProcessedAt: time.Now(),
 		}
 	}
-	
+
 	return result
 }
 

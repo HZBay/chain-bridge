@@ -10,7 +10,6 @@ import (
 
 	"github.com/dropbox/godropbox/time2"
 	"github.com/hzbay/chain-bridge/internal/auth"
-	"github.com/hzbay/chain-bridge/internal/blockchain"
 	"github.com/hzbay/chain-bridge/internal/config"
 	"github.com/hzbay/chain-bridge/internal/data/dto"
 	"github.com/hzbay/chain-bridge/internal/data/local"
@@ -178,9 +177,9 @@ func (s *Server) InitMetricsService() error {
 }
 
 func (s *Server) InitChainsService() error {
-	s.ChainsService = chains.NewService(s.DB)
+	s.ChainsService = chains.NewService(s.DB, s.Config.Blockchain)
 
-	log.Info().Msg("Chains service initialized")
+	log.Info().Msg("Chains service initialized with blockchain configuration")
 	return nil
 }
 
@@ -205,23 +204,21 @@ func (s *Server) InitBatchProcessor() error {
 }
 
 func (s *Server) InitAccountService() error {
-	// Get validated chains from blockchain config
-	validChains := s.Config.Blockchain.GetValidatedChains()
-
-	// Convert to CPOP configs
-	cpopConfigs := make(map[int64]blockchain.CPOPConfig)
-	for chainID, chainConfig := range validChains {
-		cpopConfigs[chainID] = chainConfig.ToCPOPConfig()
-	}
-
-	// Initialize account service with batch processor
+	// Initialize account service with chains service dependency
 	var err error
-	s.AccountService, err = account.NewService(s.DB, cpopConfigs, s.Config.Blockchain)
+	s.AccountService, err = account.NewService(s.DB, s.Config.Blockchain, s.ChainsService)
 	if err != nil {
 		return fmt.Errorf("failed to create account service: %w", err)
 	}
 
-	log.Info().Int("chains", len(cpopConfigs)).Msg("Account service initialized with blockchain configurations")
+	// Load validated chains for logging
+	validChains, err := s.ChainsService.GetValidatedChains(context.Background())
+	if err != nil {
+		log.Warn().Err(err).Msg("Failed to load chains for logging")
+		validChains = make(map[int64]*chains.ChainConfig) // empty map for logging
+	}
+
+	log.Info().Int("chains", len(validChains)).Msg("Account service initialized with chains service integration")
 
 	return nil
 }
