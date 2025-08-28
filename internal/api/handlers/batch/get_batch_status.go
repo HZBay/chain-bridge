@@ -5,7 +5,7 @@ import (
 
 	"github.com/hzbay/chain-bridge/internal/api"
 	"github.com/hzbay/chain-bridge/internal/services/batch"
-	"github.com/hzbay/chain-bridge/internal/types/cpop"
+	"github.com/hzbay/chain-bridge/internal/types/cpop_mgmt"
 	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/labstack/echo/v4"
 )
@@ -36,7 +36,7 @@ func (h *GetBatchStatusHandler) Handle(c echo.Context) error {
 	log := util.LogFromContext(ctx)
 
 	// Parse and validate parameters using swagger-generated method
-	params := cpop.NewGetBatchStatusParams()
+	params := cpop_mgmt.NewGetBatchStatusParams()
 	if err := params.BindRequest(c.Request(), nil); err != nil {
 		log.Debug().Err(err).Msg("Failed to bind request parameters")
 		return err
