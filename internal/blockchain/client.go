@@ -7,15 +7,19 @@ import (
 	"fmt"
 	"math/big"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/ethclient"
+
+	cpop "github.com/HzBay/account-abstraction/cpop-abis"
 )
 
 // CPOPClient handles interaction with CPOP account abstraction contracts
 type CPOPClient struct {
-	client  *ethclient.Client
-	chainID *big.Int
+	client         *ethclient.Client
+	chainID        *big.Int
+	accountManager *cpop.AccountManager
 
 	// Configuration
 	config CPOPConfig
@@ -58,25 +62,68 @@ func NewCPOPClient(config CPOPConfig) (*CPOPClient, error) {
 		return nil, fmt.Errorf("failed to get chain ID: %w", err)
 	}
 
+	// Initialize AccountManager contract
+	accountManager, err := cpop.NewAccountManager(config.AccountManagerAddress, client)
+	if err != nil {
+		return nil, fmt.Errorf("failed to initialize AccountManager contract: %w", err)
+	}
+
 	return &CPOPClient{
-		client:  client,
-		chainID: chainID,
-		config:  config,
+		client:         client,
+		chainID:        chainID,
+		accountManager: accountManager,
+		config:         config,
 	}, nil
 }
 
-// CreateAccountAddress generates a deterministic account address using CREATE2
+// CreateAccountAddress generates a deterministic account address using AccountManager contract
 func (c *CPOPClient) CreateAccountAddress(ctx context.Context, ownerAddress string, salt *big.Int) (string, error) {
-	// For now, we'll generate a deterministic address based on owner and salt
-	// In production, this should use the actual AccountManager contract's getAddress function
+	// Convert string address to common.Address
 	owner := common.HexToAddress(ownerAddress)
 
-	// Simple deterministic address generation (placeholder implementation)
-	data := append(owner.Bytes(), salt.Bytes()...)
-	hash := crypto.Keccak256Hash(data)
-	accountAddress := common.BytesToAddress(hash.Bytes()[:20])
+	// Get default master signer from the AccountManager contract
+	masterSigner, err := c.accountManager.GetDefaultMasterSigner(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return "", fmt.Errorf("failed to get default master signer: %w", err)
+	}
+
+	// Call the AccountManager contract's getAccountAddress function
+	accountAddress, err := c.accountManager.GetAccountAddress(&bind.CallOpts{Context: ctx}, owner, masterSigner)
+	if err != nil {
+		return "", fmt.Errorf("failed to get account address from AccountManager: %w", err)
+	}
 
 	return accountAddress.Hex(), nil
+}
+
+// CreateAccountAddressWithMasterSigner generates a deterministic account address with custom master signer
+func (c *CPOPClient) CreateAccountAddressWithMasterSigner(ctx context.Context, ownerAddress string, masterSignerAddress string) (string, error) {
+	// Convert string addresses to common.Address
+	owner := common.HexToAddress(ownerAddress)
+	masterSigner := common.HexToAddress(masterSignerAddress)
+
+	// Call the AccountManager contract's getAccountAddress function
+	accountAddress, err := c.accountManager.GetAccountAddress(&bind.CallOpts{Context: ctx}, owner, masterSigner)
+	if err != nil {
+		return "", fmt.Errorf("failed to get account address from AccountManager: %w", err)
+	}
+
+	return accountAddress.Hex(), nil
+}
+
+// IsAccountDeployed checks if an account is already deployed on the blockchain
+func (c *CPOPClient) IsAccountDeployed(ctx context.Context, ownerAddress string, masterSignerAddress string) (bool, error) {
+	// Convert string addresses to common.Address
+	owner := common.HexToAddress(ownerAddress)
+	masterSigner := common.HexToAddress(masterSignerAddress)
+
+	// Call the AccountManager contract's isAccountDeployed function
+	isDeployed, err := c.accountManager.IsAccountDeployed(&bind.CallOpts{Context: ctx}, owner, masterSigner)
+	if err != nil {
+		return false, fmt.Errorf("failed to check account deployment status: %w", err)
+	}
+
+	return isDeployed, nil
 }
 
 // DeployAccount deploys an AA account to the blockchain
@@ -163,4 +210,18 @@ func GenerateAccountSalt(userID string, chainID int64) *big.Int {
 	data := fmt.Sprintf("%s-%d", userID, chainID)
 	hash := crypto.Keccak256Hash([]byte(data))
 	return new(big.Int).SetBytes(hash[:])
+}
+
+// GenerateOwnerAddress generates a deterministic owner address using off-chain algorithm
+func GenerateOwnerAddress(userID string, chainID int64) string {
+	// Create deterministic data based on userID and chainID
+	data := fmt.Sprintf("owner-%s-%d", userID, chainID)
+
+	// Generate hash and use first 20 bytes as address
+	hash := crypto.Keccak256Hash([]byte(data))
+
+	// Take the last 20 bytes of the hash to form an Ethereum address
+	address := common.BytesToAddress(hash.Bytes()[12:32])
+
+	return address.Hex()
 }

@@ -57,11 +57,11 @@ definitions:
   # 创建钱包请求
   CreateAccountRequest:
     type: object
-    required: [owner_address, chain_id]
+    required: [chain_id]
     properties:
       owner_address:
         type: string
-        description: "Owner EOA address"
+        description: "Owner EOA address (if not provided, will be generated automatically)"
         example: "0x1234567890123456789012345678901234567890"
       chain_id:
         type: integer

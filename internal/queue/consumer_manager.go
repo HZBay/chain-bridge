@@ -16,10 +16,12 @@ import (
 
 // ConsumerManager manages per-chain RabbitMQ batch consumers
 type ConsumerManager struct {
-	client         *RabbitMQClient
-	db             *sql.DB
-	batchOptimizer *BatchOptimizer
-	cpopCallers    map[int64]*blockchain.CPOPBatchCaller
+	client              *RabbitMQClient
+	db                  *sql.DB
+	batchOptimizer      *BatchOptimizer
+	cpopCallers         map[int64]*blockchain.CPOPBatchCaller
+	confirmationWatcher *TxConfirmationWatcher
+	batchProcessor      BatchProcessor
 
 	// Per-chain consumers management
 	consumers      map[int64]*ChainBatchConsumer // chainID -> consumer
@@ -52,16 +54,20 @@ func NewConsumerManager(
 	db *sql.DB,
 	optimizer *BatchOptimizer,
 	cpopCallers map[int64]*blockchain.CPOPBatchCaller,
+	confirmationWatcher *TxConfirmationWatcher,
+	batchProcessor BatchProcessor,
 ) *ConsumerManager {
 	return &ConsumerManager{
-		client:          client,
-		db:              db,
-		batchOptimizer:  optimizer,
-		cpopCallers:     cpopCallers,
-		consumers:       make(map[int64]*ChainBatchConsumer),
-		stopChan:        make(chan struct{}),
-		refreshInterval: 5 * time.Minute, // Check for new chains every 5 minutes
-		workersPerChain: 3,               // Default 3 workers per chain
+		client:              client,
+		db:                  db,
+		batchOptimizer:      optimizer,
+		cpopCallers:         cpopCallers,
+		confirmationWatcher: confirmationWatcher,
+		batchProcessor:      batchProcessor,
+		consumers:           make(map[int64]*ChainBatchConsumer),
+		stopChan:            make(chan struct{}),
+		refreshInterval:     5 * time.Minute, // Check for new chains every 5 minutes
+		workersPerChain:     3,               // Default 3 workers per chain
 	}
 }
 
@@ -184,6 +190,8 @@ func (cm *ConsumerManager) createChainConsumer(ctx context.Context, chain *model
 		cm.db,
 		cm.batchOptimizer,
 		cm.cpopCallers,
+		cm.confirmationWatcher,
+		cm.batchProcessor,
 		chain.ChainID,
 		queueNames,
 		cm.workersPerChain,

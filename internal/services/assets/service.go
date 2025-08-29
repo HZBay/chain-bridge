@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/rs/zerolog/log"
 	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
+	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	sqltypes "github.com/volatiletech/sqlboiler/v4/types"
 )
 
@@ -349,71 +351,90 @@ func (s *service) determinePriority(businessType string) queue.Priority {
 func (s *service) GetUserAssets(ctx context.Context, userID string) (*types.AssetsResponse, *types.BatchInfo, error) {
 	log.Info().Str("user_id", userID).Msg("Getting user assets")
 
-	// TODO: Implement actual database queries
-	// This would typically:
-	// 1. Query user's accounts from the database
-	// 2. Query balances for each chain from blockchain nodes
-	// 3. Calculate USD values using price feeds
-	// 4. Get synchronization status for each asset
-	// TODO: 要集成AlchemyAPI
-	// Mock response for now - this should be replaced with real implementation
-	totalValueUsd := 1250.50
-	assets := []types.AssetInfo{
-		{
-			ChainID:          int64Ptr(56),
-			ChainName:        "BSC",
-			Symbol:           strPtr("CPOP"),
-			Name:             "ChainBridge PoP Token",
-			ContractAddress:  "0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3",
-			Decimals:         18,
-			ConfirmedBalance: strPtr("5000.0"),
-			PendingBalance:   strPtr("5050.0"),
-			LockedBalance:    strPtr("0.0"),
-			BalanceUsd:       250.0,
-			SyncStatus:       strPtr(types.AssetInfoSyncStatusSynced),
-		},
-		{
-			ChainID:          int64Ptr(1),
-			ChainName:        "Ethereum",
-			Symbol:           strPtr("CPOP"),
-			Name:             "ChainBridge PoP Token",
-			ContractAddress:  "0x832d35Cc6634C0532925a3b8D238b45D2F78e9A1",
-			Decimals:         18,
-			ConfirmedBalance: strPtr("3000.0"),
-			PendingBalance:   strPtr("3000.0"),
-			LockedBalance:    strPtr("100.0"),
-			BalanceUsd:       1000.5,
-			SyncStatus:       strPtr(types.AssetInfoSyncStatusSynced),
-		},
+	// Query user balances with chain and token information
+	userBalances, err := models.UserBalances(
+		models.UserBalanceWhere.UserID.EQ(userID),
+		models.UserBalanceWhere.ConfirmedBalance.GT(sqltypes.NewNullDecimal(decimal.New(0, 0))),
+		qm.Load(models.UserBalanceRels.Chain),
+		qm.Load(models.UserBalanceRels.Token),
+		qm.OrderBy(models.UserBalanceColumns.ChainID+" ASC, "+models.UserBalanceColumns.TokenID+" ASC"),
+	).All(ctx, s.db)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// User has no assets, return empty response
+			log.Debug().Str("user_id", userID).Msg("No assets found for user")
+
+			response := &types.AssetsResponse{
+				UserID:        strPtr(userID),
+				TotalValueUsd: float32Ptr(0.0),
+				Assets:        []*types.AssetInfo{},
+			}
+
+			batchInfo := s.getBatchInfoForUser(ctx, userID)
+			return response, batchInfo, nil
+		}
+		return nil, nil, fmt.Errorf("failed to query user balances: %w", err)
 	}
 
-	// Convert assets slice to pointer slice
-	assetPointers := make([]*types.AssetInfo, len(assets))
-	for i := range assets {
-		assetPointers[i] = &assets[i]
+	// Convert database records to API response format
+	var assets []*types.AssetInfo
+	var totalValueUsd float64
+
+	for _, balance := range userBalances {
+		// Ensure relationships are loaded
+		if balance.R == nil || balance.R.Chain == nil || balance.R.Token == nil {
+			log.Warn().
+				Str("user_id", userID).
+				Int64("chain_id", balance.ChainID).
+				Int("token_id", balance.TokenID).
+				Msg("Missing relationship data for user balance, skipping")
+			continue
+		}
+
+		chain := balance.R.Chain
+		token := balance.R.Token
+
+		// Convert balance values
+		confirmedBalance := s.formatDecimal(balance.ConfirmedBalance)
+		pendingBalance := s.formatDecimal(balance.PendingBalance)
+		lockedBalance := s.formatDecimal(balance.LockedBalance)
+
+		// Calculate USD value (placeholder - in production would use price feeds)
+		balanceUsd := s.calculateBalanceUSD(balance.ConfirmedBalance, token.Symbol)
+		totalValueUsd += balanceUsd
+
+		// Determine sync status based on last sync time
+		syncStatus := s.determineSyncStatus(balance.LastSyncTime)
+
+		// Build asset info
+		assetInfo := &types.AssetInfo{
+			ChainID:          &balance.ChainID,
+			ChainName:        chain.ShortName,
+			Symbol:           &token.Symbol,
+			Name:             token.Name,
+			ContractAddress:  token.ContractAddress.String,
+			Decimals:         int64(token.Decimals),
+			ConfirmedBalance: &confirmedBalance,
+			PendingBalance:   &pendingBalance,
+			LockedBalance:    &lockedBalance,
+			BalanceUsd:       float32(balanceUsd),
+			SyncStatus:       &syncStatus,
+		}
+
+		assets = append(assets, assetInfo)
 	}
 
-	// Convert totalValueUsd to float32 pointer
+	// Build response
 	totalValueUsdFloat32 := float32(totalValueUsd)
-
 	response := &types.AssetsResponse{
 		UserID:        strPtr(userID),
 		TotalValueUsd: &totalValueUsdFloat32,
-		Assets:        assetPointers,
+		Assets:        assets,
 	}
 
-	// Mock batch info - get pending operations info for this user
-	batchInfo := &types.BatchInfo{
-		PendingOperations:   3,
-		NextBatchEstimate:   "5-10 minutes",
-		WillBeBatched:       true,
-		BatchID:             "batch_daily_rewards_20241215",
-		CurrentBatchSize:    24,
-		OptimalBatchSize:    25,
-		ExpectedEfficiency:  "75-77%",
-		EstimatedGasSavings: "156.80 USD",
-		BatchType:           "batchTransferFrom",
-	}
+	// Get batch info for this user
+	batchInfo := s.getBatchInfoForUser(ctx, userID)
 
 	log.Info().
 		Str("user_id", userID).
@@ -424,6 +445,126 @@ func (s *service) GetUserAssets(ctx context.Context, userID string) (*types.Asse
 	return response, batchInfo, nil
 }
 
+// Helper methods for GetUserAssets
+
+// formatDecimal converts a NullDecimal to a formatted string
+func (s *service) formatDecimal(d sqltypes.NullDecimal) string {
+	if d.Big == nil {
+		return "0.0"
+	}
+	return d.Big.String()
+}
+
+// calculateBalanceUSD calculates USD value for a balance (placeholder implementation)
+func (s *service) calculateBalanceUSD(balance sqltypes.NullDecimal, tokenSymbol string) float64 {
+	if balance.Big == nil {
+		return 0.0
+	}
+
+	// Placeholder price calculation - in production, this would:
+	// 1. Query price feeds (CoinGecko, CoinMarketCap, etc.)
+	// 2. Use cached prices with fallback to external APIs
+	// 3. Handle different tokens with different prices
+
+	// Mock prices for common tokens
+	var priceUSD float64
+	switch tokenSymbol {
+	case "CPOP":
+		priceUSD = 0.05 // $0.05 per CPOP
+	case "ETH":
+		priceUSD = 2300.0 // $2300 per ETH
+	case "BNB":
+		priceUSD = 550.0 // $550 per BNB
+	case "USDT", "USDC":
+		priceUSD = 1.0 // $1 for stablecoins
+	default:
+		priceUSD = 0.01 // Default price for unknown tokens
+	}
+
+	balanceFloat, _ := strconv.ParseFloat(balance.Big.String(), 64)
+	return balanceFloat * priceUSD
+}
+
+// determineSyncStatus determines sync status based on last sync time
+func (s *service) determineSyncStatus(lastSync null.Time) string {
+	if !lastSync.Valid {
+		return "pending" // Never synced
+	}
+
+	timeSinceSync := time.Since(lastSync.Time)
+
+	// Consider assets synced if last sync was within 10 minutes
+	if timeSinceSync <= 10*time.Minute {
+		return "synced"
+	}
+
+	// Consider assets syncing if last sync was within 1 hour
+	if timeSinceSync <= 1*time.Hour {
+		return "syncing"
+	}
+
+	// Otherwise, consider pending
+	return "pending"
+}
+
+// getBatchInfoForUser gets batch information for a specific user
+func (s *service) getBatchInfoForUser(ctx context.Context, userID string) *types.BatchInfo {
+	// Query pending transactions for this user
+	pendingCount, err := models.Transactions(
+		models.TransactionWhere.UserID.EQ(userID),
+		models.TransactionWhere.Status.EQ(null.StringFrom("pending")),
+	).Count(ctx, s.db)
+
+	if err != nil {
+		log.Warn().Err(err).Str("user_id", userID).Msg("Failed to count pending transactions")
+		pendingCount = 0
+	}
+
+	// Get optimal batch size from the first enabled chain (fallback)
+	optimalSize := int64(25)
+	currentSize := int64(0)
+
+	if s.batchOptimizer != nil {
+		// Try to get batch info from the first available chain
+		chain, err := models.Chains(
+			models.ChainWhere.IsEnabled.EQ(null.BoolFrom(true)),
+			qm.Limit(1),
+		).One(ctx, s.db)
+
+		if err == nil {
+			optimalSize = int64(s.batchOptimizer.GetOptimalBatchSize(chain.ChainID, 1)) // Use token ID 1 as fallback
+			currentSize = int64(s.getCurrentBatchSize(chain.ChainID, 1))
+		}
+	}
+
+	return &types.BatchInfo{
+		PendingOperations:   pendingCount,
+		NextBatchEstimate:   s.estimateNextBatch(pendingCount),
+		WillBeBatched:       pendingCount > 0,
+		BatchID:             fmt.Sprintf("batch_user_%s_%d", userID, time.Now().Unix()),
+		CurrentBatchSize:    currentSize,
+		OptimalBatchSize:    optimalSize,
+		ExpectedEfficiency:  "74-78%",
+		EstimatedGasSavings: fmt.Sprintf("%.2f USD", float64(pendingCount)*0.15),
+		BatchType:           "mixed",
+	}
+}
+
+// estimateNextBatch estimates when the next batch will be processed
+func (s *service) estimateNextBatch(pendingCount int64) string {
+	if pendingCount == 0 {
+		return "no pending operations"
+	}
+
+	if pendingCount < 5 {
+		return "15-30 minutes"
+	} else if pendingCount < 15 {
+		return "5-15 minutes"
+	} else {
+		return "2-5 minutes"
+	}
+}
+
 // Helper functions for creating pointers
 func strPtr(s string) *string {
 	return &s
@@ -431,4 +572,8 @@ func strPtr(s string) *string {
 
 func int64Ptr(i int64) *int64 {
 	return &i
+}
+
+func float32Ptr(f float32) *float32 {
+	return &f
 }

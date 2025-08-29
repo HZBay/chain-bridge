@@ -127,7 +127,7 @@ func (c *CPOPBatchCaller) BatchBurn(ctx context.Context, accounts []common.Addre
 	}, nil
 }
 
-// BatchTransfer performs batch transfer operation
+// BatchTransfer performs batch transfer operation using batchTransfer (from msg.sender)
 func (c *CPOPBatchCaller) BatchTransfer(ctx context.Context, recipients []common.Address, amounts []*big.Int) (*BatchResult, error) {
 	if len(recipients) != len(amounts) {
 		return nil, fmt.Errorf("recipients and amounts length mismatch")
@@ -152,6 +152,42 @@ func (c *CPOPBatchCaller) BatchTransfer(ctx context.Context, recipients []common
 
 	efficiency := c.calculateEfficiency(len(recipients), receipt.GasUsed)
 	gasSaved := c.calculateGasSaved(len(recipients), receipt.GasUsed)
+
+	return &BatchResult{
+		TxHash:      tx.Hash().Hex(),
+		BlockNumber: receipt.BlockNumber,
+		GasUsed:     receipt.GasUsed,
+		GasSaved:    gasSaved,
+		Efficiency:  efficiency,
+		Status:      "confirmed",
+	}, nil
+}
+
+// BatchTransferFrom performs batch transfer operation using batchTransferFrom (from specified addresses)
+func (c *CPOPBatchCaller) BatchTransferFrom(ctx context.Context, fromAddresses []common.Address, toAddresses []common.Address, amounts []*big.Int) (*BatchResult, error) {
+	if len(fromAddresses) != len(toAddresses) || len(fromAddresses) != len(amounts) {
+		return nil, fmt.Errorf("fromAddresses, toAddresses and amounts length mismatch")
+	}
+
+	log.Info().
+		Int("transfer_count", len(fromAddresses)).
+		Msg("Executing batch transfer from operation")
+
+	tx, err := c.token.BatchTransferFrom(c.auth, fromAddresses, toAddresses, amounts)
+	if err != nil {
+		return nil, fmt.Errorf("batch transfer from transaction failed: %w", err)
+	}
+
+	receipt, err := c.waitForConfirmation(ctx, tx.Hash())
+	if err != nil {
+		return &BatchResult{
+			TxHash: tx.Hash().Hex(),
+			Status: "submitted",
+		}, nil
+	}
+
+	efficiency := c.calculateEfficiency(len(fromAddresses), receipt.GasUsed)
+	gasSaved := c.calculateGasSaved(len(fromAddresses), receipt.GasUsed)
 
 	return &BatchResult{
 		TxHash:      tx.Hash().Hex(),
@@ -217,6 +253,11 @@ func (c *CPOPBatchCaller) calculateGasSaved(operationCount int, actualGasUsed ui
 		return 0
 	}
 	return estimatedSingleOpGas - actualGasUsed
+}
+
+// GetEthClient returns the underlying ethereum client
+func (c *CPOPBatchCaller) GetEthClient() *ethclient.Client {
+	return c.client
 }
 
 // Close closes the ethereum client connection

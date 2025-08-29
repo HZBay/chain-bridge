@@ -117,7 +117,15 @@ func (s *service) CreateAccount(ctx context.Context, userID string, req *types.C
 	// Request validation is handled at handler layer
 
 	chainID := *req.ChainID
-	ownerAddress := *req.OwnerAddress
+
+	// Generate owner address if not provided
+	var ownerAddress string
+	if req.OwnerAddress == "" {
+		// Use off-chain algorithm to generate deterministic owner address
+		ownerAddress = blockchain.GenerateOwnerAddress(userID, chainID)
+	} else {
+		ownerAddress = req.OwnerAddress
+	}
 
 	// Validate chain is supported
 	cpopClient, exists := s.cpopClients[chainID]

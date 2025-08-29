@@ -40,8 +40,11 @@ func (r *RabbitMQProcessor) SetDependencies(
 	r.batchOptimizer = optimizer
 	r.cpopCallers = cpopCallers
 
-	// Initialize consumer manager with dependencies
-	r.consumerManager = NewConsumerManager(r.client, db, optimizer, cpopCallers)
+	// Create confirmation watcher for transaction monitoring
+	confirmationWatcher := NewTxConfirmationWatcher(db, cpopCallers)
+
+	// Initialize consumer manager with all dependencies including self as batch processor for notifications
+	r.consumerManager = NewConsumerManager(r.client, db, optimizer, cpopCallers, confirmationWatcher, r)
 }
 
 // PublishTransfer publishes a transfer job to the appropriate chain-specific queue

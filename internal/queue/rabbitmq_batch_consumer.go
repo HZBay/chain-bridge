@@ -27,15 +27,19 @@ func NewRabbitMQBatchConsumerForChain(
 	db *sql.DB,
 	optimizer *BatchOptimizer,
 	cpopCallers map[int64]*blockchain.CPOPBatchCaller,
+	confirmationWatcher *TxConfirmationWatcher,
+	batchProcessor BatchProcessor,
 	chainID int64,
 	queueNames []string,
 	workerCount int,
 ) *RabbitMQBatchConsumer {
 	return &RabbitMQBatchConsumer{
-		client:         client,
-		db:             db,
-		batchOptimizer: optimizer,
-		cpopCallers:    cpopCallers,
+		client:              client,
+		db:                  db,
+		batchOptimizer:      optimizer,
+		cpopCallers:         cpopCallers,
+		confirmationWatcher: confirmationWatcher,
+		batchProcessor:      batchProcessor,
 
 		// Chain-specific configuration
 		chainID:    chainID,
@@ -53,10 +57,12 @@ func NewRabbitMQBatchConsumerForChain(
 
 // RabbitMQBatchConsumer now supports chain-specific processing
 type RabbitMQBatchConsumer struct {
-	client         *RabbitMQClient
-	db             *sql.DB
-	batchOptimizer *BatchOptimizer
-	cpopCallers    map[int64]*blockchain.CPOPBatchCaller
+	client              *RabbitMQClient
+	db                  *sql.DB
+	batchOptimizer      *BatchOptimizer
+	cpopCallers         map[int64]*blockchain.CPOPBatchCaller
+	confirmationWatcher *TxConfirmationWatcher
+	batchProcessor      BatchProcessor // Added for notification publishing
 
 	// Chain-specific fields
 	chainID    int64

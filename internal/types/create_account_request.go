@@ -24,10 +24,9 @@ type CreateAccountRequest struct {
 	// Required: true
 	ChainID *int64 `json:"chain_id"`
 
-	// Owner EOA address
+	// Owner EOA address (if not provided, will be generated automatically)
 	// Example: 0x1234567890123456789012345678901234567890
-	// Required: true
-	OwnerAddress *string `json:"owner_address"`
+	OwnerAddress string `json:"owner_address,omitempty"`
 }
 
 // Validate validates this create account request
@@ -35,10 +34,6 @@ func (m *CreateAccountRequest) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateChainID(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateOwnerAddress(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -51,15 +46,6 @@ func (m *CreateAccountRequest) Validate(formats strfmt.Registry) error {
 func (m *CreateAccountRequest) validateChainID(formats strfmt.Registry) error {
 
 	if err := validate.Required("chain_id", "body", m.ChainID); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *CreateAccountRequest) validateOwnerAddress(formats strfmt.Registry) error {
-
-	if err := validate.Required("owner_address", "body", m.OwnerAddress); err != nil {
 		return err
 	}
 

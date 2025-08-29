@@ -45,6 +45,12 @@ type Batch struct {
 	TXHash               null.String       `boil:"tx_hash" json:"tx_hash,omitempty" toml:"tx_hash" yaml:"tx_hash,omitempty"`
 	CreatedAt            null.Time         `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
 	ConfirmedAt          null.Time         `boil:"confirmed_at" json:"confirmed_at,omitempty" toml:"confirmed_at" yaml:"confirmed_at,omitempty"`
+	Confirmations        null.Int          `boil:"confirmations" json:"confirmations,omitempty" toml:"confirmations" yaml:"confirmations,omitempty"`
+	ConfirmedBlock       null.Int64        `boil:"confirmed_block" json:"confirmed_block,omitempty" toml:"confirmed_block" yaml:"confirmed_block,omitempty"`
+	RetryCount           null.Int          `boil:"retry_count" json:"retry_count,omitempty" toml:"retry_count" yaml:"retry_count,omitempty"`
+	FailureReason        null.String       `boil:"failure_reason" json:"failure_reason,omitempty" toml:"failure_reason" yaml:"failure_reason,omitempty"`
+	SubmittedAt          null.Time         `boil:"submitted_at" json:"submitted_at,omitempty" toml:"submitted_at" yaml:"submitted_at,omitempty"`
+	UpdatedAt            null.Time         `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
 
 	R *batchR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L batchL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -71,6 +77,12 @@ var BatchColumns = struct {
 	TXHash               string
 	CreatedAt            string
 	ConfirmedAt          string
+	Confirmations        string
+	ConfirmedBlock       string
+	RetryCount           string
+	FailureReason        string
+	SubmittedAt          string
+	UpdatedAt            string
 }{
 	ID:                   "id",
 	BatchID:              "batch_id",
@@ -92,6 +104,12 @@ var BatchColumns = struct {
 	TXHash:               "tx_hash",
 	CreatedAt:            "created_at",
 	ConfirmedAt:          "confirmed_at",
+	Confirmations:        "confirmations",
+	ConfirmedBlock:       "confirmed_block",
+	RetryCount:           "retry_count",
+	FailureReason:        "failure_reason",
+	SubmittedAt:          "submitted_at",
+	UpdatedAt:            "updated_at",
 }
 
 var BatchTableColumns = struct {
@@ -115,6 +133,12 @@ var BatchTableColumns = struct {
 	TXHash               string
 	CreatedAt            string
 	ConfirmedAt          string
+	Confirmations        string
+	ConfirmedBlock       string
+	RetryCount           string
+	FailureReason        string
+	SubmittedAt          string
+	UpdatedAt            string
 }{
 	ID:                   "batches.id",
 	BatchID:              "batches.batch_id",
@@ -136,6 +160,12 @@ var BatchTableColumns = struct {
 	TXHash:               "batches.tx_hash",
 	CreatedAt:            "batches.created_at",
 	ConfirmedAt:          "batches.confirmed_at",
+	Confirmations:        "batches.confirmations",
+	ConfirmedBlock:       "batches.confirmed_block",
+	RetryCount:           "batches.retry_count",
+	FailureReason:        "batches.failure_reason",
+	SubmittedAt:          "batches.submitted_at",
+	UpdatedAt:            "batches.updated_at",
 }
 
 // Generated where
@@ -330,6 +360,44 @@ func (w whereHelpernull_Bool) GTE(x null.Bool) qm.QueryMod {
 func (w whereHelpernull_Bool) IsNull() qm.QueryMod    { return qmhelper.WhereIsNull(w.field) }
 func (w whereHelpernull_Bool) IsNotNull() qm.QueryMod { return qmhelper.WhereIsNotNull(w.field) }
 
+type whereHelpernull_Int struct{ field string }
+
+func (w whereHelpernull_Int) EQ(x null.Int) qm.QueryMod {
+	return qmhelper.WhereNullEQ(w.field, false, x)
+}
+func (w whereHelpernull_Int) NEQ(x null.Int) qm.QueryMod {
+	return qmhelper.WhereNullEQ(w.field, true, x)
+}
+func (w whereHelpernull_Int) LT(x null.Int) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.LT, x)
+}
+func (w whereHelpernull_Int) LTE(x null.Int) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.LTE, x)
+}
+func (w whereHelpernull_Int) GT(x null.Int) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.GT, x)
+}
+func (w whereHelpernull_Int) GTE(x null.Int) qm.QueryMod {
+	return qmhelper.Where(w.field, qmhelper.GTE, x)
+}
+func (w whereHelpernull_Int) IN(slice []int) qm.QueryMod {
+	values := make([]interface{}, 0, len(slice))
+	for _, value := range slice {
+		values = append(values, value)
+	}
+	return qm.WhereIn(fmt.Sprintf("%s IN ?", w.field), values...)
+}
+func (w whereHelpernull_Int) NIN(slice []int) qm.QueryMod {
+	values := make([]interface{}, 0, len(slice))
+	for _, value := range slice {
+		values = append(values, value)
+	}
+	return qm.WhereNotIn(fmt.Sprintf("%s NOT IN ?", w.field), values...)
+}
+
+func (w whereHelpernull_Int) IsNull() qm.QueryMod    { return qmhelper.WhereIsNull(w.field) }
+func (w whereHelpernull_Int) IsNotNull() qm.QueryMod { return qmhelper.WhereIsNotNull(w.field) }
+
 var BatchWhere = struct {
 	ID                   whereHelperint
 	BatchID              whereHelperstring
@@ -351,6 +419,12 @@ var BatchWhere = struct {
 	TXHash               whereHelpernull_String
 	CreatedAt            whereHelpernull_Time
 	ConfirmedAt          whereHelpernull_Time
+	Confirmations        whereHelpernull_Int
+	ConfirmedBlock       whereHelpernull_Int64
+	RetryCount           whereHelpernull_Int
+	FailureReason        whereHelpernull_String
+	SubmittedAt          whereHelpernull_Time
+	UpdatedAt            whereHelpernull_Time
 }{
 	ID:                   whereHelperint{field: "\"batches\".\"id\""},
 	BatchID:              whereHelperstring{field: "\"batches\".\"batch_id\""},
@@ -372,6 +446,12 @@ var BatchWhere = struct {
 	TXHash:               whereHelpernull_String{field: "\"batches\".\"tx_hash\""},
 	CreatedAt:            whereHelpernull_Time{field: "\"batches\".\"created_at\""},
 	ConfirmedAt:          whereHelpernull_Time{field: "\"batches\".\"confirmed_at\""},
+	Confirmations:        whereHelpernull_Int{field: "\"batches\".\"confirmations\""},
+	ConfirmedBlock:       whereHelpernull_Int64{field: "\"batches\".\"confirmed_block\""},
+	RetryCount:           whereHelpernull_Int{field: "\"batches\".\"retry_count\""},
+	FailureReason:        whereHelpernull_String{field: "\"batches\".\"failure_reason\""},
+	SubmittedAt:          whereHelpernull_Time{field: "\"batches\".\"submitted_at\""},
+	UpdatedAt:            whereHelpernull_Time{field: "\"batches\".\"updated_at\""},
 }
 
 // BatchRels is where relationship names are stored.
@@ -412,9 +492,9 @@ func (r *batchR) GetToken() *SupportedToken {
 type batchL struct{}
 
 var (
-	batchAllColumns            = []string{"id", "batch_id", "chain_id", "token_id", "batch_type", "operation_count", "optimal_batch_size", "actual_efficiency", "batch_strategy", "network_condition", "actual_gas_used", "gas_saved", "gas_saved_percentage", "gas_saved_usd", "cpop_operation_type", "master_aggregator_used", "status", "tx_hash", "created_at", "confirmed_at"}
+	batchAllColumns            = []string{"id", "batch_id", "chain_id", "token_id", "batch_type", "operation_count", "optimal_batch_size", "actual_efficiency", "batch_strategy", "network_condition", "actual_gas_used", "gas_saved", "gas_saved_percentage", "gas_saved_usd", "cpop_operation_type", "master_aggregator_used", "status", "tx_hash", "created_at", "confirmed_at", "confirmations", "confirmed_block", "retry_count", "failure_reason", "submitted_at", "updated_at"}
 	batchColumnsWithoutDefault = []string{"batch_id", "chain_id", "token_id", "batch_type", "operation_count", "optimal_batch_size"}
-	batchColumnsWithDefault    = []string{"id", "actual_efficiency", "batch_strategy", "network_condition", "actual_gas_used", "gas_saved", "gas_saved_percentage", "gas_saved_usd", "cpop_operation_type", "master_aggregator_used", "status", "tx_hash", "created_at", "confirmed_at"}
+	batchColumnsWithDefault    = []string{"id", "actual_efficiency", "batch_strategy", "network_condition", "actual_gas_used", "gas_saved", "gas_saved_percentage", "gas_saved_usd", "cpop_operation_type", "master_aggregator_used", "status", "tx_hash", "created_at", "confirmed_at", "confirmations", "confirmed_block", "retry_count", "failure_reason", "submitted_at", "updated_at"}
 	batchPrimaryKeyColumns     = []string{"id"}
 	batchGeneratedColumns      = []string{}
 )
@@ -901,6 +981,9 @@ func (o *Batch) Insert(ctx context.Context, exec boil.ContextExecutor, columns b
 		if queries.MustTime(o.CreatedAt).IsZero() {
 			queries.SetScanner(&o.CreatedAt, currTime)
 		}
+		if queries.MustTime(o.UpdatedAt).IsZero() {
+			queries.SetScanner(&o.UpdatedAt, currTime)
+		}
 	}
 
 	nzDefaults := queries.NonZeroDefaultSet(batchColumnsWithDefault, o)
@@ -973,6 +1056,12 @@ func (o *Batch) Insert(ctx context.Context, exec boil.ContextExecutor, columns b
 // See boil.Columns.UpdateColumnSet documentation to understand column list inference for updates.
 // Update does not automatically update the record in case of default values. Use .Reload() to refresh the records.
 func (o *Batch) Update(ctx context.Context, exec boil.ContextExecutor, columns boil.Columns) (int64, error) {
+	if !boil.TimestampsAreSkipped(ctx) {
+		currTime := time.Now().In(boil.GetLocation())
+
+		queries.SetScanner(&o.UpdatedAt, currTime)
+	}
+
 	var err error
 	key := makeCacheKey(columns, nil)
 	batchUpdateCacheMut.RLock()
@@ -1106,6 +1195,7 @@ func (o *Batch) Upsert(ctx context.Context, exec boil.ContextExecutor, updateOnC
 		if queries.MustTime(o.CreatedAt).IsZero() {
 			queries.SetScanner(&o.CreatedAt, currTime)
 		}
+		queries.SetScanner(&o.UpdatedAt, currTime)
 	}
 
 	nzDefaults := queries.NonZeroDefaultSet(batchColumnsWithDefault, o)

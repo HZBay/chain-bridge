@@ -4,9 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum"
+	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"
@@ -18,16 +22,16 @@ import (
 type TxConfirmationWatcher struct {
 	db          *sql.DB
 	cpopCallers map[int64]*blockchain.CPOPBatchCaller
-	
+
 	// Configuration
 	confirmationBlocks int
 	pollInterval       time.Duration
 	maxRetries         int
-	
+
 	// Control channels
 	stopChan chan struct{}
 	workerWg sync.WaitGroup
-	
+
 	// Metrics
 	processedCount int64
 	failedCount    int64
@@ -36,25 +40,25 @@ type TxConfirmationWatcher struct {
 
 // PendingBatch represents a batch waiting for confirmation
 type PendingBatch struct {
-	BatchID      string    `db:"batch_id"`
-	ChainID      int64     `db:"chain_id"`
-	TokenID      int      `db:"token_id"`
-	TxHash       string    `db:"tx_hash"`
-	Status       string    `db:"status"`
-	SubmittedAt  time.Time `db:"submitted_at"`
-	RetryCount   int       `db:"retry_count"`
-	BatchType    string    `db:"batch_type"`
-	Operations   []BatchOperation
+	BatchID     string    `db:"batch_id"`
+	ChainID     int64     `db:"chain_id"`
+	TokenID     int       `db:"token_id"`
+	TxHash      string    `db:"tx_hash"`
+	Status      string    `db:"status"`
+	SubmittedAt time.Time `db:"submitted_at"`
+	RetryCount  int       `db:"retry_count"`
+	BatchType   string    `db:"batch_type"`
+	Operations  []BatchOperation
 }
 
 // BatchOperation represents an operation within a batch
 type BatchOperation struct {
-	TxID         string          `db:"tx_id"`
-	UserID       string          `db:"user_id"`
-	RelatedUserID sql.NullString `db:"related_user_id"`
-	TxType       string          `db:"tx_type"`
-	Amount       decimal.Decimal `db:"amount"`
-	Direction    sql.NullString  `db:"transfer_direction"`
+	TxID          string          `db:"tx_id"`
+	UserID        string          `db:"user_id"`
+	RelatedUserID sql.NullString  `db:"related_user_id"`
+	TxType        string          `db:"tx_type"`
+	Amount        decimal.Decimal `db:"amount"`
+	Direction     sql.NullString  `db:"transfer_direction"`
 }
 
 // NewTxConfirmationWatcher creates a new transaction confirmation watcher
@@ -65,12 +69,12 @@ func NewTxConfirmationWatcher(
 	return &TxConfirmationWatcher{
 		db:          db,
 		cpopCallers: cpopCallers,
-		
+
 		// Default configuration
-		confirmationBlocks: 6,           // 6 blocks for confirmation
+		confirmationBlocks: 6,                // 6 blocks for confirmation
 		pollInterval:       30 * time.Second, // Check every 30 seconds
-		maxRetries:         10,          // Maximum retry attempts
-		
+		maxRetries:         10,               // Maximum retry attempts
+
 		stopChan: make(chan struct{}),
 	}
 }
@@ -82,17 +86,17 @@ func (w *TxConfirmationWatcher) Start(ctx context.Context) error {
 		Dur("poll_interval", w.pollInterval).
 		Int("max_retries", w.maxRetries).
 		Msg("Starting transaction confirmation watcher")
-	
+
 	w.startedAt = time.Now()
-	
+
 	// Start main monitoring loop
 	w.workerWg.Add(1)
 	go w.runConfirmationLoop(ctx)
-	
+
 	// Start cleanup job for old failed batches
 	w.workerWg.Add(1)
 	go w.runCleanupLoop(ctx)
-	
+
 	log.Info().Msg("Transaction confirmation watcher started successfully")
 	return nil
 }
@@ -100,17 +104,17 @@ func (w *TxConfirmationWatcher) Start(ctx context.Context) error {
 // Stop stops the confirmation watcher
 func (w *TxConfirmationWatcher) Stop(ctx context.Context) error {
 	log.Info().Msg("Stopping transaction confirmation watcher")
-	
+
 	// Signal stop
 	close(w.stopChan)
-	
+
 	// Wait for workers to finish with timeout
 	done := make(chan struct{})
 	go func() {
 		w.workerWg.Wait()
 		close(done)
 	}()
-	
+
 	select {
 	case <-done:
 		log.Info().
@@ -121,19 +125,19 @@ func (w *TxConfirmationWatcher) Stop(ctx context.Context) error {
 	case <-time.After(30 * time.Second):
 		log.Warn().Msg("Timeout waiting for confirmation watcher to stop")
 	}
-	
+
 	return nil
 }
 
 // runConfirmationLoop runs the main confirmation monitoring loop
 func (w *TxConfirmationWatcher) runConfirmationLoop(ctx context.Context) {
 	defer w.workerWg.Done()
-	
+
 	ticker := time.NewTicker(w.pollInterval)
 	defer ticker.Stop()
-	
+
 	log.Info().Msg("Starting confirmation monitoring loop")
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -149,13 +153,13 @@ func (w *TxConfirmationWatcher) runConfirmationLoop(ctx context.Context) {
 // runCleanupLoop runs the cleanup loop for old failed batches
 func (w *TxConfirmationWatcher) runCleanupLoop(ctx context.Context) {
 	defer w.workerWg.Done()
-	
+
 	// Clean up every hour
 	ticker := time.NewTicker(time.Hour)
 	defer ticker.Stop()
-	
+
 	log.Info().Msg("Starting confirmation watcher cleanup loop")
-	
+
 	for {
 		select {
 		case <-ctx.Done():
@@ -175,16 +179,16 @@ func (w *TxConfirmationWatcher) processPendingBatches(ctx context.Context) {
 		log.Error().Err(err).Msg("Failed to get pending batches")
 		return
 	}
-	
+
 	if len(pendingBatches) == 0 {
 		log.Debug().Msg("No pending batches to process")
 		return
 	}
-	
+
 	log.Info().
 		Int("pending_count", len(pendingBatches)).
 		Msg("Processing pending batches for confirmation")
-	
+
 	for _, batch := range pendingBatches {
 		select {
 		case <-ctx.Done():
@@ -212,13 +216,13 @@ func (w *TxConfirmationWatcher) getPendingBatches(ctx context.Context) ([]Pendin
 		AND COALESCE(retry_count, 0) < $1
 		ORDER BY submitted_at ASC
 		LIMIT 50`
-	
+
 	rows, err := w.db.QueryContext(ctx, query, w.maxRetries)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query pending batches: %w", err)
 	}
 	defer rows.Close()
-	
+
 	var batches []PendingBatch
 	for rows.Next() {
 		var batch PendingBatch
@@ -236,7 +240,7 @@ func (w *TxConfirmationWatcher) getPendingBatches(ctx context.Context) ([]Pendin
 			log.Error().Err(err).Msg("Failed to scan batch row")
 			continue
 		}
-		
+
 		// Get operations for this batch
 		operations, err := w.getBatchOperations(ctx, batch.BatchID)
 		if err != nil {
@@ -247,14 +251,14 @@ func (w *TxConfirmationWatcher) getPendingBatches(ctx context.Context) ([]Pendin
 			continue
 		}
 		batch.Operations = operations
-		
+
 		batches = append(batches, batch)
 	}
-	
+
 	if err = rows.Err(); err != nil {
 		return nil, fmt.Errorf("failed to iterate batch rows: %w", err)
 	}
-	
+
 	return batches, nil
 }
 
@@ -267,13 +271,13 @@ func (w *TxConfirmationWatcher) getBatchOperations(ctx context.Context, batchID 
 		FROM transactions 
 		WHERE batch_id = $1 
 		ORDER BY created_at ASC`
-	
+
 	rows, err := w.db.QueryContext(ctx, query, batchID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query batch operations: %w", err)
 	}
 	defer rows.Close()
-	
+
 	var operations []BatchOperation
 	for rows.Next() {
 		var op BatchOperation
@@ -291,7 +295,7 @@ func (w *TxConfirmationWatcher) getBatchOperations(ctx context.Context, batchID 
 		}
 		operations = append(operations, op)
 	}
-	
+
 	return operations, rows.Err()
 }
 
@@ -302,7 +306,7 @@ func (w *TxConfirmationWatcher) processBatchConfirmation(ctx context.Context, ba
 		Int64("chain_id", batch.ChainID).
 		Str("tx_hash", batch.TxHash).
 		Msg("Processing batch confirmation")
-	
+
 	caller := w.cpopCallers[batch.ChainID]
 	if caller == nil {
 		log.Error().
@@ -312,7 +316,7 @@ func (w *TxConfirmationWatcher) processBatchConfirmation(ctx context.Context, ba
 		w.markBatchAsFailed(ctx, batch, "no_caller_found")
 		return
 	}
-	
+
 	// Check transaction confirmation status (simplified implementation)
 	confirmed, confirmationCount, err := w.checkTransactionConfirmation(ctx, caller, batch.TxHash, w.confirmationBlocks)
 	if err != nil {
@@ -321,12 +325,12 @@ func (w *TxConfirmationWatcher) processBatchConfirmation(ctx context.Context, ba
 			Str("tx_hash", batch.TxHash).
 			Err(err).
 			Msg("Failed to check transaction confirmation")
-		
+
 		// Increment retry count
 		w.incrementBatchRetryCount(ctx, batch)
 		return
 	}
-	
+
 	if confirmed {
 		// Transaction is confirmed
 		log.Info().
@@ -334,7 +338,7 @@ func (w *TxConfirmationWatcher) processBatchConfirmation(ctx context.Context, ba
 			Str("tx_hash", batch.TxHash).
 			Int("confirmations", confirmationCount).
 			Msg("Batch transaction confirmed")
-		
+
 		err = w.confirmBatch(ctx, batch)
 		if err != nil {
 			log.Error().
@@ -354,7 +358,7 @@ func (w *TxConfirmationWatcher) processBatchConfirmation(ctx context.Context, ba
 				Dur("pending_time", time.Since(batch.SubmittedAt)).
 				Int("confirmations", confirmationCount).
 				Msg("Batch transaction pending for too long")
-			
+
 			// For now, just increment retry count
 			// In production, you might want more sophisticated logic
 			w.incrementBatchRetryCount(ctx, batch)
@@ -376,35 +380,35 @@ func (w *TxConfirmationWatcher) confirmBatch(ctx context.Context, batch PendingB
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer tx.Rollback()
-	
+
 	// Update batch status to confirmed
 	err = w.updateBatchToConfirmed(tx, batch.BatchID)
 	if err != nil {
 		return fmt.Errorf("failed to update batch to confirmed: %w", err)
 	}
-	
+
 	// Update all associated transactions to confirmed
 	err = w.updateTransactionsToConfirmed(tx, batch.BatchID)
 	if err != nil {
 		return fmt.Errorf("failed to update transactions to confirmed: %w", err)
 	}
-	
+
 	// Finalize user balances based on operations
 	err = w.finalizeUserBalancesForBatch(tx, batch)
 	if err != nil {
 		return fmt.Errorf("failed to finalize user balances: %w", err)
 	}
-	
+
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit batch confirmation: %w", err)
 	}
-	
+
 	log.Info().
 		Str("batch_id", batch.BatchID).
 		Str("tx_hash", batch.TxHash).
 		Int("operations", len(batch.Operations)).
 		Msg("Batch successfully confirmed")
-	
+
 	return nil
 }
 
@@ -416,12 +420,12 @@ func (w *TxConfirmationWatcher) updateBatchToConfirmed(tx *sql.Tx, batchID strin
 			status = 'confirmed',
 			confirmed_at = $2
 		WHERE batch_id = $1`
-	
+
 	_, err := tx.Exec(query, batchID, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to update batch to confirmed: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -433,12 +437,12 @@ func (w *TxConfirmationWatcher) updateTransactionsToConfirmed(tx *sql.Tx, batchI
 			status = 'confirmed',
 			confirmed_at = $2
 		WHERE batch_id = $1`
-	
+
 	_, err := tx.Exec(query, batchID, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to update transactions to confirmed: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -477,7 +481,7 @@ func (w *TxConfirmationWatcher) finalizeBalanceForMint(tx *sql.Tx, op BatchOpera
 	if err != nil {
 		return fmt.Errorf("invalid user ID: %s", op.UserID)
 	}
-	
+
 	// Add minted amount directly to confirmed_balance
 	query := `
 		INSERT INTO user_balances (user_id, chain_id, token_id, confirmed_balance, pending_balance, created_at, updated_at)
@@ -487,12 +491,12 @@ func (w *TxConfirmationWatcher) finalizeBalanceForMint(tx *sql.Tx, op BatchOpera
 			confirmed_balance = user_balances.confirmed_balance + $4,
 			updated_at = $5,
 			last_change_time = $5`
-	
+
 	_, err = tx.Exec(query, userUUID, chainID, tokenID, op.Amount, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to finalize mint balance: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -502,7 +506,7 @@ func (w *TxConfirmationWatcher) finalizeBalanceForBurn(tx *sql.Tx, op BatchOpera
 	if err != nil {
 		return fmt.Errorf("invalid user ID: %s", op.UserID)
 	}
-	
+
 	// Clear the pending_balance (amount was frozen during batching)
 	query := `
 		UPDATE user_balances 
@@ -511,12 +515,12 @@ func (w *TxConfirmationWatcher) finalizeBalanceForBurn(tx *sql.Tx, op BatchOpera
 			updated_at = $5,
 			last_change_time = $5
 		WHERE user_id = $1 AND chain_id = $2 AND token_id = $3`
-	
+
 	_, err = tx.Exec(query, userUUID, chainID, tokenID, op.Amount.Abs(), time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to finalize burn balance: %w", err)
 	}
-	
+
 	return nil
 }
 
@@ -526,16 +530,16 @@ func (w *TxConfirmationWatcher) finalizeBalanceForTransfer(tx *sql.Tx, op BatchO
 	if err != nil {
 		return fmt.Errorf("invalid user ID: %s", op.UserID)
 	}
-	
+
 	if !op.RelatedUserID.Valid {
 		return fmt.Errorf("transfer operation missing related user ID")
 	}
-	
+
 	toUserUUID, err := uuid.Parse(op.RelatedUserID.String)
 	if err != nil {
 		return fmt.Errorf("invalid related user ID: %s", op.RelatedUserID.String)
 	}
-	
+
 	// Check transfer direction and process accordingly
 	if op.Direction.Valid && op.Direction.String == "outgoing" {
 		// Clear sender's pending_balance (was frozen)
@@ -546,12 +550,12 @@ func (w *TxConfirmationWatcher) finalizeBalanceForTransfer(tx *sql.Tx, op BatchO
 				updated_at = $5,
 				last_change_time = $5
 			WHERE user_id = $1 AND chain_id = $2 AND token_id = $3`
-		
+
 		_, err = tx.Exec(senderQuery, fromUserUUID, chainID, tokenID, op.Amount, time.Now())
 		if err != nil {
 			return fmt.Errorf("failed to finalize sender balance: %w", err)
 		}
-		
+
 		// Add amount to receiver's confirmed_balance
 		receiverQuery := `
 			INSERT INTO user_balances (user_id, chain_id, token_id, confirmed_balance, pending_balance, created_at, updated_at)
@@ -561,13 +565,13 @@ func (w *TxConfirmationWatcher) finalizeBalanceForTransfer(tx *sql.Tx, op BatchO
 				confirmed_balance = user_balances.confirmed_balance + $4,
 				updated_at = $5,
 				last_change_time = $5`
-		
+
 		_, err = tx.Exec(receiverQuery, toUserUUID, chainID, tokenID, op.Amount, time.Now())
 		if err != nil {
 			return fmt.Errorf("failed to finalize receiver balance: %w", err)
 		}
 	}
-	
+
 	return nil
 }
 
@@ -579,7 +583,7 @@ func (w *TxConfirmationWatcher) markBatchAsFailed(ctx context.Context, batch Pen
 		return
 	}
 	defer tx.Rollback()
-	
+
 	// Update batch status to failed
 	batchQuery := `
 		UPDATE batches 
@@ -587,13 +591,13 @@ func (w *TxConfirmationWatcher) markBatchAsFailed(ctx context.Context, batch Pen
 			status = 'failed',
 			failure_reason = $2
 		WHERE batch_id = $1`
-	
+
 	_, err = tx.Exec(batchQuery, batch.BatchID, reason)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to update batch to failed")
 		return
 	}
-	
+
 	// Update transactions to failed
 	txQuery := `UPDATE transactions SET status = 'failed' WHERE batch_id = $1`
 	_, err = tx.Exec(txQuery, batch.BatchID)
@@ -601,7 +605,7 @@ func (w *TxConfirmationWatcher) markBatchAsFailed(ctx context.Context, batch Pen
 		log.Error().Err(err).Msg("Failed to update transactions to failed")
 		return
 	}
-	
+
 	// Unfreeze balances for failed operations
 	for _, op := range batch.Operations {
 		err = w.unfreezeBalanceForOperation(tx, op, batch.ChainID, batch.TokenID)
@@ -612,7 +616,7 @@ func (w *TxConfirmationWatcher) markBatchAsFailed(ctx context.Context, batch Pen
 				Msg("Failed to unfreeze balance for failed operation")
 		}
 	}
-	
+
 	if err = tx.Commit(); err != nil {
 		log.Error().Err(err).Msg("Failed to commit batch failure")
 	} else {
@@ -630,7 +634,7 @@ func (w *TxConfirmationWatcher) unfreezeBalanceForOperation(tx *sql.Tx, op Batch
 	if err != nil {
 		return fmt.Errorf("invalid user ID: %s", op.UserID)
 	}
-	
+
 	switch op.TxType {
 	case "burn":
 		// Unfreeze: move from pending_balance back to confirmed_balance
@@ -643,10 +647,10 @@ func (w *TxConfirmationWatcher) unfreezeBalanceForOperation(tx *sql.Tx, op Batch
 				last_change_time = $5
 			WHERE user_id = $1 AND chain_id = $2 AND token_id = $3 
 			AND pending_balance >= $4`
-		
+
 		_, err = tx.Exec(query, userUUID, chainID, tokenID, op.Amount.Abs(), time.Now())
 		return err
-		
+
 	case "transfer":
 		if op.Direction.Valid && op.Direction.String == "outgoing" {
 			// Unfreeze sender's balance
@@ -659,12 +663,12 @@ func (w *TxConfirmationWatcher) unfreezeBalanceForOperation(tx *sql.Tx, op Batch
 					last_change_time = $5
 				WHERE user_id = $1 AND chain_id = $2 AND token_id = $3 
 				AND pending_balance >= $4`
-			
+
 			_, err = tx.Exec(query, userUUID, chainID, tokenID, op.Amount, time.Now())
 			return err
 		}
 	}
-	
+
 	// Mint operations don't need unfreezing
 	return nil
 }
@@ -675,7 +679,7 @@ func (w *TxConfirmationWatcher) incrementBatchRetryCount(ctx context.Context, ba
 		UPDATE batches 
 		SET retry_count = COALESCE(retry_count, 0) + 1 
 		WHERE batch_id = $1`
-	
+
 	_, err := w.db.ExecContext(ctx, query, batch.BatchID)
 	if err != nil {
 		log.Error().
@@ -701,14 +705,14 @@ func (w *TxConfirmationWatcher) cleanupOldFailedBatches(ctx context.Context) {
 		WHERE status = 'submitted' 
 		AND COALESCE(retry_count, 0) >= $1
 		AND submitted_at < $2`
-	
+
 	cutoffTime := time.Now().Add(-24 * time.Hour) // 24 hours old
 	result, err := w.db.ExecContext(ctx, failedQuery, w.maxRetries, cutoffTime)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to mark old batches as failed")
 		return
 	}
-	
+
 	rowsAffected, err := result.RowsAffected()
 	if err == nil && rowsAffected > 0 {
 		log.Info().
@@ -720,61 +724,180 @@ func (w *TxConfirmationWatcher) cleanupOldFailedBatches(ctx context.Context) {
 // GetMetrics returns monitoring metrics for the confirmation watcher
 func (w *TxConfirmationWatcher) GetMetrics() map[string]interface{} {
 	uptime := time.Since(w.startedAt)
-	
+
 	return map[string]interface{}{
-		"processed_count": w.processedCount,
-		"failed_count":    w.failedCount,
-		"uptime_seconds":  uptime.Seconds(),
-		"poll_interval":   w.pollInterval.String(),
+		"processed_count":     w.processedCount,
+		"failed_count":        w.failedCount,
+		"uptime_seconds":      uptime.Seconds(),
+		"poll_interval":       w.pollInterval.String(),
 		"confirmation_blocks": w.confirmationBlocks,
-		"max_retries":     w.maxRetries,
-		"started_at":      w.startedAt,
+		"max_retries":         w.maxRetries,
+		"started_at":          w.startedAt,
 	}
 }
 
 // checkTransactionConfirmation checks if a transaction has enough confirmations
-// This is a simplified implementation - in production you would use the actual blockchain client
 func (w *TxConfirmationWatcher) checkTransactionConfirmation(
-	ctx context.Context, 
-	caller *blockchain.CPOPBatchCaller, 
-	txHash string, 
+	ctx context.Context,
+	caller *blockchain.CPOPBatchCaller,
+	txHash string,
 	requiredBlocks int,
 ) (bool, int, error) {
-	// For testing purposes, simulate confirmation logic
-	// In production, this would:
-	// 1. Query the blockchain for transaction receipt
-	// 2. Get current block number
-	// 3. Calculate confirmations = current_block - tx_block
-	// 4. Return confirmed = confirmations >= requiredBlocks
-	
-	// Simplified logic: assume transactions older than 2 minutes are confirmed
-	// This is only for demonstration - replace with real blockchain calls
-	currentTime := time.Now()
-	
-	// Parse transaction from database to get submission time
-	var submittedAt time.Time
-	query := `SELECT COALESCE(submitted_at, created_at) FROM batches WHERE tx_hash = $1`
-	err := w.db.QueryRowContext(ctx, query, txHash).Scan(&submittedAt)
+	// Get the ethereum client from the CPOP caller
+	client := caller.GetEthClient()
+	if client == nil {
+		return false, 0, fmt.Errorf("ethereum client not available")
+	}
+
+	// Convert string hash to common.Hash type
+	hash := common.HexToHash(txHash)
+
+	// 1. Get transaction receipt
+	receipt, err := client.TransactionReceipt(ctx, hash)
 	if err != nil {
-		return false, 0, fmt.Errorf("failed to get batch submission time: %w", err)
+		if err == ethereum.NotFound {
+			// Transaction not yet mined, return unconfirmed status
+			log.Debug().
+				Str("tx_hash", txHash).
+				Msg("Transaction not yet mined")
+			return false, 0, nil
+		}
+		return false, 0, fmt.Errorf("failed to get transaction receipt: %w", err)
 	}
-	
-	timeSinceSubmission := currentTime.Sub(submittedAt)
-	
-	// Simulate confirmation logic:
-	// - If submitted more than 2 minutes ago, consider confirmed
-	// - Otherwise, calculate mock confirmation count based on time elapsed
-	if timeSinceSubmission > 2*time.Minute {
-		return true, requiredBlocks + 1, nil // More than required confirmations
+
+	// 2. Check transaction status (success or failure)
+	if receipt.Status != types.ReceiptStatusSuccessful {
+		log.Error().
+			Str("tx_hash", txHash).
+			Uint64("status", receipt.Status).
+			Msg("Transaction failed or was reverted")
+		return false, 0, fmt.Errorf("transaction failed or was reverted")
 	}
-	
-	// Mock confirmation count based on time (1 confirmation per 30 seconds)
-	mockConfirmations := int(timeSinceSubmission.Seconds() / 30)
-	if mockConfirmations < 0 {
-		mockConfirmations = 0
+
+	// 3. Get current latest block number
+	header, err := client.HeaderByNumber(ctx, nil)
+	if err != nil {
+		return false, 0, fmt.Errorf("failed to get latest block header: %w", err)
 	}
-	
-	return mockConfirmations >= requiredBlocks, mockConfirmations, nil
+
+	currentBlock := header.Number
+	txBlock := receipt.BlockNumber
+
+	// 4. Calculate confirmations
+	confirmations := new(big.Int).Sub(currentBlock, txBlock).Int64()
+	if confirmations < 0 {
+		// Should not happen theoretically, but treat as 0 confirmations if it does
+		confirmations = 0
+	}
+
+	// 5. Check if required confirmations are met
+	confirmed := int(confirmations) >= requiredBlocks
+
+	// 6. Update database confirmation status if confirmed
+	if confirmed {
+		err = w.updateConfirmationStatus(ctx, txHash, int(confirmations), receipt.BlockNumber.Uint64())
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("tx_hash", txHash).
+				Msg("Failed to update confirmation status in database")
+		}
+	}
+
+	log.Debug().
+		Str("tx_hash", txHash).
+		Int("confirmations", int(confirmations)).
+		Int("required", requiredBlocks).
+		Bool("confirmed", confirmed).
+		Msg("Transaction confirmation check result")
+
+	return confirmed, int(confirmations), nil
+}
+
+// updateConfirmationStatus updates database with transaction confirmation status
+func (w *TxConfirmationWatcher) updateConfirmationStatus(
+	ctx context.Context,
+	txHash string,
+	confirmations int,
+	blockNumber uint64,
+) error {
+	query := `
+		UPDATE batches 
+		SET 
+			confirmations = $2, 
+			confirmed_block = $3,
+			updated_at = $4
+		WHERE tx_hash = $1`
+
+	_, err := w.db.ExecContext(ctx, query, txHash, confirmations, blockNumber, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to update confirmation status: %w", err)
+	}
+
+	log.Debug().
+		Str("tx_hash", txHash).
+		Int("confirmations", confirmations).
+		Uint64("block_number", blockNumber).
+		Msg("Updated batch confirmation status in database")
+
+	return nil
+}
+
+// WaitForConfirmation waits for a transaction to reach the specified number of confirmations
+func (w *TxConfirmationWatcher) WaitForConfirmation(
+	ctx context.Context,
+	caller *blockchain.CPOPBatchCaller,
+	txHash string,
+	requiredBlocks int,
+	timeout time.Duration,
+) (bool, int, error) {
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	ticker := time.NewTicker(15 * time.Second) // Check every 15 seconds
+	defer ticker.Stop()
+
+	log.Info().
+		Str("tx_hash", txHash).
+		Int("required_blocks", requiredBlocks).
+		Dur("timeout", timeout).
+		Msg("Waiting for transaction confirmation")
+
+	for {
+		select {
+		case <-timeoutCtx.Done():
+			log.Warn().
+				Str("tx_hash", txHash).
+				Dur("timeout", timeout).
+				Msg("Timeout waiting for transaction confirmation")
+			return false, 0, fmt.Errorf("timeout waiting for transaction confirmation")
+
+		case <-ticker.C:
+			confirmed, confirmations, err := w.checkTransactionConfirmation(timeoutCtx, caller, txHash, requiredBlocks)
+			if err != nil {
+				log.Error().
+					Str("tx_hash", txHash).
+					Err(err).
+					Msg("Error checking transaction confirmation")
+				return false, 0, err
+			}
+
+			if confirmed {
+				log.Info().
+					Str("tx_hash", txHash).
+					Int("confirmations", confirmations).
+					Int("required", requiredBlocks).
+					Msg("Transaction confirmed")
+				return true, confirmations, nil
+			}
+
+			log.Debug().
+				Str("tx_hash", txHash).
+				Int("confirmations", confirmations).
+				Int("required", requiredBlocks).
+				Msg("Transaction confirmation in progress")
+		}
+	}
 }
 
 // IsHealthy checks if the confirmation watcher is healthy
@@ -783,10 +906,10 @@ func (w *TxConfirmationWatcher) IsHealthy() bool {
 	if w.db == nil {
 		return false
 	}
-	
+
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	
+
 	err := w.db.PingContext(ctx)
 	return err == nil
 }

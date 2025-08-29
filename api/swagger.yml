@@ -2788,7 +2788,6 @@ definitions:
   createAccountRequest:
     type: object
     required:
-    - owner_address
     - chain_id
     properties:
       chain_id:
@@ -2797,7 +2796,7 @@ definitions:
         format: int64
         example: 56
       owner_address:
-        description: Owner EOA address
+        description: Owner EOA address (if not provided, will be generated automatically)
         type: string
         example: 0x1234567890123456789012345678901234567890
   createAccountResponse:
