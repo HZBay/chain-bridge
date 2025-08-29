@@ -3,6 +3,7 @@ package transfer
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -23,7 +24,7 @@ import (
 // Service defines the transfer service interface
 type Service interface {
 	TransferAssets(ctx context.Context, req *types.TransferRequest) (*types.TransferResponse, *types.BatchInfo, error)
-	GetUserTransactions(ctx context.Context, userID string, params GetTransactionsParams) (*types.TransactionHistoryResponse, *types.TransactionSummary, error)
+	GetUserTransactions(ctx context.Context, userID string, params GetTransactionsParams) (*types.TransactionHistoryResponse, error)
 }
 
 // TODO: 这里使用make swagger生成的结构体，不要自己定义
@@ -62,6 +63,7 @@ func NewService(db *sql.DB, batchProcessor queue.BatchProcessor, batchOptimizer 
 // TransferAssets handles user-to-user asset transfers
 func (s *service) TransferAssets(ctx context.Context, req *types.TransferRequest) (*types.TransferResponse, *types.BatchInfo, error) {
 	log.Info().
+		Str("operation_id", *req.OperationID).
 		Str("from_user_id", *req.FromUserID).
 		Str("to_user_id", *req.ToUserID).
 		Str("amount", *req.Amount).
@@ -71,10 +73,39 @@ func (s *service) TransferAssets(ctx context.Context, req *types.TransferRequest
 
 	// Request validation is handled at handler layer
 
+	// 1. 幂等性检查 - 检查 OperationID 是否已经存在
+	mainOperationID := uuid.MustParse(*req.OperationID)
+	existingTx, err := models.Transactions(
+		models.TransactionWhere.OperationID.EQ(null.StringFrom(mainOperationID.String())),
+		models.TransactionWhere.TXType.EQ("transfer"),
+		models.TransactionWhere.BusinessType.EQ("transfer"),
+	).One(ctx, s.db)
+
+	if err == nil && existingTx != nil {
+		// OperationID 已存在，返回已有结果
+		log.Info().
+			Str("operation_id", *req.OperationID).
+			Str("existing_tx_id", existingTx.TXID).
+			Msg("Transfer operation already processed, returning existing result")
+
+		existingResponse, batchInfo, err := s.buildExistingTransferResponse(ctx, mainOperationID.String())
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to build existing transfer response: %w", err)
+		}
+
+		return existingResponse, batchInfo, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		// 数据库查询错误（非记录不存在）
+		return nil, nil, fmt.Errorf("failed to check operation idempotency: %w", err)
+	}
+
+	// OperationID 不存在，继续正常处理
+	log.Debug().Str("operation_id", *req.OperationID).Msg("New transfer operation, proceeding with processing")
+
 	// 2. Generate transaction IDs
 	outgoingTxID := uuid.New()
 	incomingTxID := uuid.New()
-	operationID := uuid.New()
+	operationID := mainOperationID
 
 	// 3. Create outgoing transaction record (debit from sender)
 	outgoingTx := &models.Transaction{
@@ -213,7 +244,7 @@ func (s *service) TransferAssets(ctx context.Context, req *types.TransferRequest
 }
 
 // GetUserTransactions retrieves user transaction history
-func (s *service) GetUserTransactions(ctx context.Context, userID string, params GetTransactionsParams) (*types.TransactionHistoryResponse, *types.TransactionSummary, error) {
+func (s *service) GetUserTransactions(ctx context.Context, userID string, params GetTransactionsParams) (*types.TransactionHistoryResponse, error) {
 	log.Info().
 		Str("user_id", userID).
 		Int("page", params.Page).
@@ -250,7 +281,7 @@ func (s *service) GetUserTransactions(ctx context.Context, userID string, params
 	// Get total count (without pagination)
 	totalCount, err := models.Transactions(queryMods...).Count(ctx, s.db)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to count transactions: %w", err)
+		return nil, fmt.Errorf("failed to count transactions: %w", err)
 	}
 
 	// Apply pagination
@@ -260,7 +291,7 @@ func (s *service) GetUserTransactions(ctx context.Context, userID string, params
 	// Execute query
 	transactions, err := models.Transactions(queryMods...).All(ctx, s.db)
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to query transactions: %w", err)
+		return nil, fmt.Errorf("failed to query transactions: %w", err)
 	}
 
 	// Convert to API types
@@ -361,14 +392,8 @@ func (s *service) GetUserTransactions(ctx context.Context, userID string, params
 		Transactions: transactionInfos,
 	}
 
-	// Calculate net change and format summary
+	// Calculate net change for logging
 	netChange := totalIncoming - totalOutgoing
-	summary := &types.TransactionSummary{
-		TotalIncoming: fmt.Sprintf("%.18f", totalIncoming),
-		TotalOutgoing: fmt.Sprintf("%.18f", totalOutgoing),
-		NetChange:     fmt.Sprintf("%.18f", netChange),
-		GasSavedTotal: fmt.Sprintf("%.2f USD", totalGasSaved),
-	}
 
 	log.Info().
 		Str("user_id", userID).
@@ -379,7 +404,7 @@ func (s *service) GetUserTransactions(ctx context.Context, userID string, params
 		Float64("net_change", netChange).
 		Msg("User transactions retrieved successfully")
 
-	return response, summary, nil
+	return response, nil
 }
 
 // Helper methods
@@ -470,4 +495,112 @@ func (s *service) getOptimalBatchSize(chainID int64, tokenID int) int {
 	}
 
 	return 25 // Default fallback
+}
+
+// buildExistingTransferResponse builds response from existing transfer transactions
+func (s *service) buildExistingTransferResponse(ctx context.Context, operationID string) (*types.TransferResponse, *types.BatchInfo, error) {
+	// Query all transactions for this operation ID
+	transactions, err := models.Transactions(
+		models.TransactionWhere.OperationID.EQ(null.StringFrom(operationID)),
+		models.TransactionWhere.TXType.EQ("transfer"),
+		models.TransactionWhere.BusinessType.EQ("transfer"),
+		qm.OrderBy(models.TransactionColumns.CreatedAt+" ASC"),
+	).All(ctx, s.db)
+
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to query existing transactions: %w", err)
+	}
+
+	if len(transactions) == 0 {
+		return nil, nil, fmt.Errorf("no transactions found for operation_id: %s", operationID)
+	}
+
+	// Build response from existing transactions
+	var fromUserID, toUserID, amount, tokenSymbol string
+	var chainID int64
+	transferRecords := make([]*types.TransferRecord, 0, len(transactions))
+
+	for _, tx := range transactions {
+		amountStr := tx.Amount.String()
+
+		transferRecord := &types.TransferRecord{
+			Amount: amountStr,
+			TxID:   tx.TXID,
+			UserID: tx.UserID,
+		}
+
+		if tx.TransferDirection.Valid {
+			transferRecord.TransferDirection = tx.TransferDirection.String
+
+			// Extract transfer details from the transactions
+			if tx.TransferDirection.String == "outgoing" {
+				fromUserID = tx.UserID
+				if tx.RelatedUserID.Valid {
+					toUserID = tx.RelatedUserID.String
+				}
+				// Convert negative amount back to positive for API response
+				if amountDecimal := tx.Amount.Big; amountDecimal != nil {
+					absAmount := new(decimal.Big).Abs(amountDecimal)
+					amount = absAmount.String()
+				}
+			} else if tx.TransferDirection.String == "incoming" {
+				toUserID = tx.UserID
+				if tx.RelatedUserID.Valid {
+					fromUserID = tx.RelatedUserID.String
+				}
+				amount = amountStr
+			}
+		}
+
+		chainID = tx.ChainID
+
+		// Get token symbol from token_id (cached)
+		if tokenSymbol == "" {
+			ctx2, cancel := context.WithTimeout(ctx, 5*time.Second)
+			defer cancel()
+
+			token, err := models.SupportedTokens(
+				models.SupportedTokenWhere.ID.EQ(tx.TokenID),
+			).One(ctx2, s.db)
+
+			if err == nil {
+				tokenSymbol = token.Symbol
+			}
+		}
+
+		transferRecords = append(transferRecords, transferRecord)
+	}
+
+	// Get current status from the most recent transaction
+	status := "recorded" // default
+	if len(transactions) > 0 && transactions[0].Status.Valid {
+		status = transactions[0].Status.String
+	}
+
+	response := &types.TransferResponse{
+		Amount:          &amount,
+		ChainID:         &chainID,
+		FromUserID:      &fromUserID,
+		ToUserID:        &toUserID,
+		OperationID:     &operationID,
+		Status:          &status,
+		TokenSymbol:     &tokenSymbol,
+		TransferRecords: transferRecords,
+	}
+
+	// Build batch info using the first transaction's chain/token info
+	var tokenID int
+	if len(transactions) > 0 {
+		tokenID = transactions[0].TokenID
+	}
+
+	batchInfo := &types.BatchInfo{
+		WillBeBatched:      true,
+		BatchType:          "batchTransferFrom",
+		CurrentBatchSize:   int64(s.getCurrentBatchSize(chainID, tokenID)),
+		OptimalBatchSize:   int64(s.getOptimalBatchSize(chainID, tokenID)),
+		ExpectedEfficiency: "74-76%",
+	}
+
+	return response, batchInfo, nil
 }

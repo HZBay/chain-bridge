@@ -44,8 +44,9 @@ func (h *Handler) GetQueueMetrics(c echo.Context) error {
 		AverageProcessingTimeMs: avgProcessingTime,
 	}
 
+	// QueueMetricsResponse is now just an embedded QueueMetrics
 	response := &types.QueueMetricsResponse{
-		Data: metrics,
+		QueueMetrics: *metrics,
 	}
 
 	return util.ValidateAndReturn(c, http.StatusOK, response)

@@ -12,50 +12,28 @@ import (
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
-	"github.com/go-openapi/validate"
 )
 
 // ChainsResponse chains response
 //
 // swagger:model ChainsResponse
-type ChainsResponse struct {
-
-	// data
-	// Required: true
-	Data []*ChainsResponseDataItems0 `json:"data"`
-}
+type ChainsResponse []*ChainResponse
 
 // Validate validates this chains response
-func (m *ChainsResponse) Validate(formats strfmt.Registry) error {
+func (m ChainsResponse) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateData(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if len(res) > 0 {
-		return errors.CompositeValidationError(res...)
-	}
-	return nil
-}
-
-func (m *ChainsResponse) validateData(formats strfmt.Registry) error {
-
-	if err := validate.Required("data", "body", m.Data); err != nil {
-		return err
-	}
-
-	for i := 0; i < len(m.Data); i++ {
-		if swag.IsZero(m.Data[i]) { // not required
+	for i := 0; i < len(m); i++ {
+		if swag.IsZero(m[i]) { // not required
 			continue
 		}
 
-		if m.Data[i] != nil {
-			if err := m.Data[i].Validate(formats); err != nil {
+		if m[i] != nil {
+			if err := m[i].Validate(formats); err != nil {
 				if ve, ok := err.(*errors.Validation); ok {
-					return ve.ValidateName("data" + "." + strconv.Itoa(i))
+					return ve.ValidateName(strconv.Itoa(i))
 				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("data" + "." + strconv.Itoa(i))
+					return ce.ValidateName(strconv.Itoa(i))
 				}
 				return err
 			}
@@ -63,33 +41,24 @@ func (m *ChainsResponse) validateData(formats strfmt.Registry) error {
 
 	}
 
+	if len(res) > 0 {
+		return errors.CompositeValidationError(res...)
+	}
 	return nil
 }
 
 // ContextValidate validate this chains response based on the context it is used
-func (m *ChainsResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+func (m ChainsResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateData(ctx, formats); err != nil {
-		res = append(res, err)
-	}
+	for i := 0; i < len(m); i++ {
 
-	if len(res) > 0 {
-		return errors.CompositeValidationError(res...)
-	}
-	return nil
-}
-
-func (m *ChainsResponse) contextValidateData(ctx context.Context, formats strfmt.Registry) error {
-
-	for i := 0; i < len(m.Data); i++ {
-
-		if m.Data[i] != nil {
-			if err := m.Data[i].ContextValidate(ctx, formats); err != nil {
+		if m[i] != nil {
+			if err := m[i].ContextValidate(ctx, formats); err != nil {
 				if ve, ok := err.(*errors.Validation); ok {
-					return ve.ValidateName("data" + "." + strconv.Itoa(i))
+					return ve.ValidateName(strconv.Itoa(i))
 				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("data" + "." + strconv.Itoa(i))
+					return ce.ValidateName(strconv.Itoa(i))
 				}
 				return err
 			}
@@ -97,81 +66,8 @@ func (m *ChainsResponse) contextValidateData(ctx context.Context, formats strfmt
 
 	}
 
-	return nil
-}
-
-// MarshalBinary interface implementation
-func (m *ChainsResponse) MarshalBinary() ([]byte, error) {
-	if m == nil {
-		return nil, nil
+	if len(res) > 0 {
+		return errors.CompositeValidationError(res...)
 	}
-	return swag.WriteJSON(m)
-}
-
-// UnmarshalBinary interface implementation
-func (m *ChainsResponse) UnmarshalBinary(b []byte) error {
-	var res ChainsResponse
-	if err := swag.ReadJSON(b, &res); err != nil {
-		return err
-	}
-	*m = res
-	return nil
-}
-
-// ChainsResponseDataItems0 chains response data items0
-//
-// swagger:model ChainsResponseDataItems0
-type ChainsResponseDataItems0 struct {
-
-	// Batch size for processing
-	// Example: 25
-	BatchSize int64 `json:"batch_size,omitempty"`
-
-	// Batch timeout in seconds
-	// Example: 300
-	BatchTimeout int64 `json:"batch_timeout,omitempty"`
-
-	// Chain ID
-	// Example: 56
-	ChainID int64 `json:"chain_id,omitempty"`
-
-	// Whether chain is enabled
-	// Example: true
-	IsEnabled bool `json:"is_enabled,omitempty"`
-
-	// Chain name
-	// Example: BSC
-	Name string `json:"name,omitempty"`
-
-	// RPC endpoint URL
-	// Example: https://bsc-dataseed.binance.org/
-	RPCURL string `json:"rpc_url,omitempty"`
-}
-
-// Validate validates this chains response data items0
-func (m *ChainsResponseDataItems0) Validate(formats strfmt.Registry) error {
-	return nil
-}
-
-// ContextValidate validates this chains response data items0 based on context it is used
-func (m *ChainsResponseDataItems0) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
-	return nil
-}
-
-// MarshalBinary interface implementation
-func (m *ChainsResponseDataItems0) MarshalBinary() ([]byte, error) {
-	if m == nil {
-		return nil, nil
-	}
-	return swag.WriteJSON(m)
-}
-
-// UnmarshalBinary interface implementation
-func (m *ChainsResponseDataItems0) UnmarshalBinary(b []byte) error {
-	var res ChainsResponseDataItems0
-	if err := swag.ReadJSON(b, &res); err != nil {
-		return err
-	}
-	*m = res
 	return nil
 }

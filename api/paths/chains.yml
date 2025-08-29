@@ -2,30 +2,59 @@ swagger: "2.0"
 info:
   title: github.com/hzbay/chain-bridge
   version: 0.1.0
-definitions:
-
 paths:
   # Chain configuration endpoints
   /-/chains:
     get:
-      tags: [cpop]
+      tags: [cpop mgmt]
       summary: Get all enabled chains configuration
       description: Retrieves the list of all enabled blockchain networks and their configurations
       operationId: getChains
+      security:
+        - Management: [ ]
       responses:
         200:
           description: Successfully retrieved chains configuration
           schema:
-            $ref: '../definitions/chains.yml#/definitions/ChainsResponse'
+            $ref: '#/definitions/ChainsResponse'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+    post:
+      tags: [cpop mgmt]
+      summary: Create new chain configuration
+      description: Adds a new blockchain network to the supported chains list
+      operationId: createChain
+      security:
+        - Management: [ ]
+      parameters:
+        - name: request
+          in: body
+          required: true
+          description: Chain creation request
+          schema:
+            $ref: '#/definitions/createChainRequest'
+      responses:
+        201:
+          description: Chain created successfully
+          schema:
+            $ref: '#/definitions/chainCreateResponse'
+        400:
+          $ref: '../definitions/errors.yml#/responses/BadRequestError'
+        409:
+          description: Chain already exists
+          schema:
+            $ref: '../definitions/errors.yml#/definitions/APIError'
         500:
           $ref: '../definitions/errors.yml#/responses/InternalError'
 
   /-/chains/{chain_id}:
     get:
-      tags: [cpop]
+      tags: [cpop mgmt]
       summary: Get chain configuration by ID
       description: Retrieves detailed configuration for a specific blockchain network
       operationId: getChainConfig
+      security:
+        - Management: [ ]
       parameters:
         - name: chain_id
           in: path
@@ -37,20 +66,82 @@ paths:
         200:
           description: Successfully retrieved chain configuration
           schema:
-            $ref: '../definitions/chains.yml#/definitions/ChainResponse'
+            $ref: '#/definitions/ChainResponse'
         400:
           $ref: '../definitions/errors.yml#/responses/BadRequestError'
         404:
           $ref: '../definitions/errors.yml#/responses/NotFoundError'
         500:
           $ref: '../definitions/errors.yml#/responses/InternalError'
+    put:
+      tags: [cpop mgmt]
+      summary: Update chain configuration
+      description: Updates the configuration for a specific blockchain network
+      operationId: updateChain
+      security:
+        - Management: [ ]
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: integer
+          format: int64
+          description: The blockchain network ID
+        - name: request
+          in: body
+          required: true
+          description: Chain update request
+          schema:
+            $ref: '#/definitions/updateChainRequest'
+      responses:
+        200:
+          description: Chain updated successfully
+          schema:
+            $ref: '#/definitions/chainUpdateResponse'
+        400:
+          $ref: '../definitions/errors.yml#/responses/BadRequestError'
+        404:
+          $ref: '../definitions/errors.yml#/responses/NotFoundError'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+    delete:
+      tags: [cpop mgmt]
+      summary: Delete chain configuration
+      description: Removes a blockchain network from the supported chains list
+      operationId: deleteChain
+      security:
+        - Management: [ ]
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: integer
+          format: int64
+          description: The blockchain network ID
+      responses:
+        200:
+          description: Chain deleted successfully
+          schema:
+            $ref: '#/definitions/chainDeleteResponse'
+        400:
+          $ref: '../definitions/errors.yml#/responses/BadRequestError'
+        404:
+          $ref: '../definitions/errors.yml#/responses/NotFoundError'
+        409:
+          description: Chain is in use and cannot be deleted
+          schema:
+            $ref: '../definitions/errors.yml#/definitions/APIError'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
 
   /-/chains/{chain_id}/batch-config:
     put:
-      tags: [cpop]
+      tags: [cpop mgmt]
       summary: Update batch configuration for a chain
       description: Updates the batch processing configuration parameters for a specific blockchain network
       operationId: updateChainBatchConfig
+      security:
+        - Management: [ ]
       parameters:
         - name: chain_id
           in: path
@@ -72,7 +163,7 @@ paths:
         200:
           description: Batch configuration updated successfully
           schema:
-            $ref: '../definitions/chains.yml#/definitions/BatchConfigUpdateResponse'
+            $ref: '#/definitions/BatchConfigUpdateResponse'
         400:
           $ref: '../definitions/errors.yml#/responses/BadRequestError'
         404:
@@ -82,14 +173,48 @@ paths:
 
   /-/chains/refresh-cache:
     post:
-      tags: [cpop]
+      tags: [cpop mgmt]
       summary: Refresh chains configuration cache
       description: Forces a refresh of the cached chain configuration data from the database
       operationId: refreshChainsCache
+      security:
+        - Management: [ ]
       responses:
         200:
           description: Cache refreshed successfully
           schema:
-            $ref: '../definitions/chains.yml#/definitions/CacheRefreshResponse'
+            $ref: '#/definitions/CacheRefreshResponse'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+
+  /-/chains/{chain_id}/toggle-status:
+    put:
+      tags: [cpop mgmt]
+      summary: Toggle chain enabled status
+      description: Enables or disables a specific blockchain network
+      operationId: toggleChainStatus
+      security:
+        - Management: [ ]
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: integer
+          format: int64
+          description: The blockchain network ID
+        - name: enabled
+          in: query
+          required: true
+          type: boolean
+          description: Whether to enable or disable the chain
+      responses:
+        200:
+          description: Chain status updated successfully
+          schema:
+            $ref: '#/definitions/chainToggleStatusResponse'
+        400:
+          $ref: '../definitions/errors.yml#/responses/BadRequestError'
+        404:
+          $ref: '../definitions/errors.yml#/responses/NotFoundError'
         500:
           $ref: '../definitions/errors.yml#/responses/InternalError'

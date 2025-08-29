@@ -2,11 +2,11 @@ package chains
 
 import (
 	"net/http"
+	"strconv"
 
 	"github.com/hzbay/chain-bridge/internal/api"
 	"github.com/hzbay/chain-bridge/internal/services/chains"
 	"github.com/hzbay/chain-bridge/internal/types"
-	"github.com/hzbay/chain-bridge/internal/types/cpop"
 	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/labstack/echo/v4"
 )
@@ -22,38 +22,48 @@ func (h *Handler) UpdateBatchConfig(c echo.Context) error {
 	ctx := c.Request().Context()
 	log := util.LogFromContext(ctx)
 
-	// Parse and validate parameters (path + query) using swagger-generated method
-	params := cpop.NewUpdateChainBatchConfigParams()
-	if err := params.BindRequest(c.Request(), nil); err != nil {
-		log.Debug().Err(err).Msg("Failed to bind request parameters")
-		return err
+	// Parse chain ID from path
+	chainIDStr := c.Param("chain_id")
+	chainID, err := strconv.ParseInt(chainIDStr, 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid chain_id parameter")
 	}
 
-	// Parse and validate request body
-	var batchConfig types.BatchConfig
-	if err := util.BindAndValidateBody(c, &batchConfig); err != nil {
-		log.Debug().Err(err).Msg("Failed to bind and validate batch config request")
-		return err
+	// Parse parameters from query
+	batchSizeStr := c.QueryParam("batch_size")
+	batchTimeoutStr := c.QueryParam("batch_timeout")
+
+	if batchSizeStr == "" || batchTimeoutStr == "" {
+		return echo.NewHTTPError(http.StatusBadRequest, "Missing required parameters: batch_size and batch_timeout")
+	}
+
+	batchSize, err := strconv.Atoi(batchSizeStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid batch_size parameter")
+	}
+
+	batchTimeout, err := strconv.Atoi(batchTimeoutStr)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid batch_timeout parameter")
 	}
 
 	// Convert to service type
 	serviceBatchConfig := &chains.BatchConfig{
-		MinBatchSize:     int(*batchConfig.MinBatchSize),
-		MaxBatchSize:     int(*batchConfig.MaxBatchSize),
-		OptimalBatchSize: int(*batchConfig.OptimalBatchSize),
+		OptimalBatchSize: batchSize,
+		MaxBatchSize:     batchSize + 15, // Set max to be larger than optimal
+		MinBatchSize:     batchSize - 15, // Set min to be smaller than optimal
 	}
 
 	// Update batch configuration
-	if err := h.chainsService.UpdateBatchConfig(ctx, params.ChainID, serviceBatchConfig); err != nil {
-		log.Error().Err(err).Int64("chain_id", params.ChainID).Msg("Failed to update batch config")
+	if err := h.chainsService.UpdateBatchConfig(ctx, chainID, serviceBatchConfig); err != nil {
+		log.Error().Err(err).Int64("chain_id", chainID).Msg("Failed to update batch config")
 		return echo.NewHTTPError(http.StatusInternalServerError, "Failed to update batch configuration")
 	}
 
 	log.Info().
-		Int64("chain_id", params.ChainID).
-		Int("optimal_batch_size", int(*batchConfig.OptimalBatchSize)).
-		Int("max_batch_size", int(*batchConfig.MaxBatchSize)).
-		Int("min_batch_size", int(*batchConfig.MinBatchSize)).
+		Int64("chain_id", chainID).
+		Int("optimal_batch_size", batchSize).
+		Int("batch_timeout", batchTimeout).
 		Msg("Updated batch configuration")
 
 	// Use proper response type

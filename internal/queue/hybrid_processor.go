@@ -3,7 +3,7 @@ package queue
 import (
 	"context"
 	"database/sql"
-	"math/rand"
+	"fmt"
 	"time"
 
 	"github.com/hzbay/chain-bridge/internal/blockchain"
@@ -11,15 +11,13 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// HybridBatchProcessor combines RabbitMQ and memory processors for gradual rollout
+// HybridBatchProcessor wraps RabbitMQ processor with configuration management
 type HybridBatchProcessor struct {
 	rabbitmqProcessor *RabbitMQProcessor
-	memoryProcessor   *MemoryProcessor
 	config            config.BatchProcessingStrategy
 
-	// Metrics for comparison
+	// Metrics for monitoring
 	rabbitmqStats *ProcessorMetrics
-	memoryStats   *ProcessorMetrics
 }
 
 // Note: RabbitMQProcessor is now implemented in rabbitmq_processor.go
@@ -40,21 +38,17 @@ type ProcessorMetrics struct {
 	LastUsed       time.Time     `json:"last_used"`
 }
 
-// NewHybridBatchProcessor creates a new hybrid batch processor
+// NewHybridBatchProcessor creates a new RabbitMQ-based batch processor
 func NewHybridBatchProcessor(rabbitmqClient *RabbitMQClient, strategy config.BatchProcessingStrategy) *HybridBatchProcessor {
 	processor := &HybridBatchProcessor{
 		rabbitmqProcessor: NewRabbitMQProcessor(rabbitmqClient),
-		memoryProcessor:   NewMemoryProcessor(),
 		config:            strategy,
 		rabbitmqStats:     &ProcessorMetrics{},
-		memoryStats:       &ProcessorMetrics{},
 	}
 
 	log.Info().
 		Bool("rabbitmq_enabled", strategy.EnableRabbitMQ).
-		Int("rabbitmq_percentage", strategy.RabbitMQPercentage).
-		Bool("fallback_enabled", strategy.FallbackToMemory).
-		Msg("Hybrid batch processor initialized")
+		Msg("RabbitMQ batch processor initialized")
 
 	return processor
 }
@@ -122,49 +116,27 @@ func (h *HybridBatchProcessor) PublishNotification(ctx context.Context, job Noti
 	return err
 }
 
-// selectProcessor selects which processor to use based on configuration
+// selectProcessor returns the RabbitMQ processor (simplified implementation)
 func (h *HybridBatchProcessor) selectProcessor() (BatchProcessor, string) {
-	// If RabbitMQ is disabled, use memory processor
+	// Always use RabbitMQ processor - simplified approach
 	if !h.config.EnableRabbitMQ {
-		return h.memoryProcessor, "memory"
+		log.Warn().Msg("RabbitMQ is disabled but no fallback available")
+		return h.rabbitmqProcessor, "rabbitmq_disabled"
 	}
 
 	// Check if RabbitMQ is healthy
 	if !h.rabbitmqProcessor.IsHealthy() {
-		if h.config.FallbackToMemory {
-			log.Warn().Msg("RabbitMQ unhealthy, falling back to memory processor")
-			return h.memoryProcessor, "memory_fallback"
-		}
-		log.Error().Msg("RabbitMQ unhealthy and fallback disabled")
+		log.Warn().Msg("RabbitMQ is unhealthy but no fallback available")
 		return h.rabbitmqProcessor, "rabbitmq_unhealthy"
 	}
 
-	// Gradual rollout: use percentage to determine processor
-	if h.config.RabbitMQPercentage >= 100 {
-		return h.rabbitmqProcessor, "rabbitmq"
-	}
-
-	if h.config.RabbitMQPercentage <= 0 {
-		return h.memoryProcessor, "memory"
-	}
-
-	// Random selection based on percentage
-	if rand.Intn(100) < h.config.RabbitMQPercentage {
-		return h.rabbitmqProcessor, "rabbitmq"
-	}
-
-	return h.memoryProcessor, "memory"
+	return h.rabbitmqProcessor, "rabbitmq"
 }
 
-// updateMetrics updates processor performance metrics
+// updateMetrics updates RabbitMQ processor performance metrics
 func (h *HybridBatchProcessor) updateMetrics(processorType string, success bool, latency time.Duration) {
-	var metrics *ProcessorMetrics
-
-	if processorType == "rabbitmq" || processorType == "rabbitmq_unhealthy" {
-		metrics = h.rabbitmqStats
-	} else {
-		metrics = h.memoryStats
-	}
+	// Only track RabbitMQ metrics now
+	metrics := h.rabbitmqStats
 
 	metrics.TotalJobs++
 	if success {
@@ -182,54 +154,40 @@ func (h *HybridBatchProcessor) updateMetrics(processorType string, success bool,
 	}
 }
 
-// StartBatchConsumer starts batch consumers for both processors
+// StartBatchConsumer starts the RabbitMQ batch consumer
 func (h *HybridBatchProcessor) StartBatchConsumer(ctx context.Context) error {
-	log.Info().Msg("Starting hybrid batch consumer")
+	log.Info().Msg("Starting RabbitMQ batch consumer")
 
-	// Start RabbitMQ consumer if enabled
-	if h.config.EnableRabbitMQ && h.rabbitmqProcessor.IsHealthy() {
+	// Start RabbitMQ consumer
+	if h.config.EnableRabbitMQ {
 		if err := h.rabbitmqProcessor.StartBatchConsumer(ctx); err != nil {
 			log.Error().Err(err).Msg("Failed to start RabbitMQ batch consumer")
-			if !h.config.FallbackToMemory {
-				return err
-			}
+			return err
 		}
-	}
-
-	// Memory processor dependencies are now set via SetBatchDependencies method
-	log.Debug().Msg("Memory processor will use dependencies set via SetBatchDependencies")
-
-	// Always start memory processor consumer (as fallback)
-	if err := h.memoryProcessor.StartBatchConsumer(ctx); err != nil {
-		log.Error().Err(err).Msg("Failed to start memory batch consumer")
-		return err
+	} else {
+		log.Warn().Msg("RabbitMQ is disabled in configuration")
+		return fmt.Errorf("RabbitMQ is disabled and no fallback processor available")
 	}
 
 	return nil
 }
 
-// StopBatchConsumer stops batch consumers for both processors
+// StopBatchConsumer stops the RabbitMQ batch consumer
 func (h *HybridBatchProcessor) StopBatchConsumer(ctx context.Context) error {
-	log.Info().Msg("Stopping hybrid batch consumer")
+	log.Info().Msg("Stopping RabbitMQ batch consumer")
 
 	// Stop RabbitMQ consumer
 	if h.rabbitmqProcessor != nil {
 		if err := h.rabbitmqProcessor.StopBatchConsumer(ctx); err != nil {
 			log.Error().Err(err).Msg("Failed to stop RabbitMQ batch consumer")
-		}
-	}
-
-	// Stop memory processor consumer
-	if h.memoryProcessor != nil {
-		if err := h.memoryProcessor.StopBatchConsumer(ctx); err != nil {
-			log.Error().Err(err).Msg("Failed to stop memory batch consumer")
+			return err
 		}
 	}
 
 	return nil
 }
 
-// GetQueueStats returns queue statistics from both processors
+// GetQueueStats returns RabbitMQ queue statistics
 func (h *HybridBatchProcessor) GetQueueStats() map[string]QueueStats {
 	result := make(map[string]QueueStats)
 
@@ -241,70 +199,31 @@ func (h *HybridBatchProcessor) GetQueueStats() map[string]QueueStats {
 		}
 	}
 
-	// Get memory processor stats
-	if h.memoryProcessor != nil {
-		memoryStats := h.memoryProcessor.GetQueueStats()
-		for name, stats := range memoryStats {
-			result["memory."+name] = stats
-		}
-	}
-
 	return result
 }
 
-// IsHealthy checks if at least one processor is healthy
+// IsHealthy checks if RabbitMQ processor is healthy
 func (h *HybridBatchProcessor) IsHealthy() bool {
-	rabbitmqHealthy := h.rabbitmqProcessor != nil && h.rabbitmqProcessor.IsHealthy()
-	memoryHealthy := h.memoryProcessor.IsHealthy()
-
-	// If RabbitMQ is enabled, check its health
-	if h.config.EnableRabbitMQ {
-		if rabbitmqHealthy {
-			return true
-		}
-		// If RabbitMQ is unhealthy but fallback is enabled, check memory processor
-		if h.config.FallbackToMemory && memoryHealthy {
-			return true
-		}
-		return false
-	}
-
-	// If RabbitMQ is disabled, only check memory processor
-	return memoryHealthy
+	return h.rabbitmqProcessor != nil && h.rabbitmqProcessor.IsHealthy()
 }
 
-// Close closes both processors
+// Close closes the RabbitMQ processor
 func (h *HybridBatchProcessor) Close() error {
-	var lastErr error
-
 	if h.rabbitmqProcessor != nil {
 		if err := h.rabbitmqProcessor.Close(); err != nil {
 			log.Error().Err(err).Msg("Failed to close RabbitMQ processor")
-			lastErr = err
+			return err
 		}
 	}
 
-	if h.memoryProcessor != nil {
-		if err := h.memoryProcessor.Close(); err != nil {
-			log.Error().Err(err).Msg("Failed to close memory processor")
-			lastErr = err
-		}
-	}
-
-	return lastErr
+	return nil
 }
 
-// SetBatchDependencies sets the batch processing dependencies for hybrid processor
+// SetBatchDependencies sets the batch processing dependencies for RabbitMQ processor
 func (h *HybridBatchProcessor) SetBatchDependencies(db *sql.DB, optimizer *BatchOptimizer, cpopCallers map[int64]*blockchain.CPOPBatchCaller) {
 	// Set dependencies for RabbitMQ processor
 	if h.rabbitmqProcessor != nil {
 		h.rabbitmqProcessor.SetDependencies(db, optimizer, cpopCallers)
 		log.Debug().Msg("RabbitMQ processor dependencies set")
-	}
-
-	// Set dependencies for memory processor (existing logic)
-	if h.memoryProcessor != nil {
-		h.memoryProcessor.SetDependencies(db, optimizer, cpopCallers)
-		log.Debug().Msg("Memory processor dependencies set")
 	}
 }

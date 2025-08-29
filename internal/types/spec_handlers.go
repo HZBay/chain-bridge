@@ -52,7 +52,11 @@ func (o *SwaggerSpec) initHandlerCache() {
 	o.Handlers["PUT"]["/api/v1/push/token"] = true
 	o.Handlers["POST"]["/api/v1/assets/adjust"] = true
 	o.Handlers["GET"]["/-/monitoring/queue/health"] = true
+	o.Handlers["POST"]["/-/chains"] = true
+	o.Handlers["POST"]["/-/tokens"] = true
 	o.Handlers["POST"]["/api/v1/account/{user_id}/create"] = true
+	o.Handlers["DELETE"]["/-/chains/{chain_id}"] = true
+	o.Handlers["DELETE"]["/-/tokens/{token_id}"] = true
 	o.Handlers["POST"]["/api/v1/account/{user_id}/deploy"] = true
 	o.Handlers["GET"]["/-/batches/{batch_id}"] = true
 	o.Handlers["GET"]["/-/chains/{chain_id}"] = true
@@ -60,11 +64,18 @@ func (o *SwaggerSpec) initHandlerCache() {
 	o.Handlers["GET"]["/-/monitoring/optimization/{chain_id}/{token_id}"] = true
 	o.Handlers["GET"]["/-/monitoring/queue/metrics"] = true
 	o.Handlers["GET"]["/-/monitoring/queue/stats"] = true
+	o.Handlers["GET"]["/-/tokens/{token_id}"] = true
+	o.Handlers["GET"]["/-/tokens"] = true
+	o.Handlers["GET"]["/-/tokens/chain/{chain_id}"] = true
 	o.Handlers["GET"]["/api/v1/account/{user_id}"] = true
 	o.Handlers["GET"]["/api/v1/assets/{user_id}"] = true
 	o.Handlers["GET"]["/api/v1/assets/{user_id}/transactions"] = true
 	o.Handlers["POST"]["/-/chains/refresh-cache"] = true
-	o.Handlers["GET"]["/subscribe"] = true
+	o.Handlers["POST"]["/-/tokens/refresh-cache"] = true
+	o.Handlers["PUT"]["/-/chains/{chain_id}/toggle-status"] = true
+	o.Handlers["PUT"]["/-/tokens/{token_id}/toggle-status"] = true
 	o.Handlers["POST"]["/api/v1/assets/transfer"] = true
+	o.Handlers["PUT"]["/-/chains/{chain_id}"] = true
 	o.Handlers["PUT"]["/-/chains/{chain_id}/batch-config"] = true
+	o.Handlers["PUT"]["/-/tokens/{token_id}"] = true
 }

@@ -13,6 +13,7 @@ import (
 	"github.com/hzbay/chain-bridge/internal/config"
 	"github.com/hzbay/chain-bridge/internal/models"
 	"github.com/rs/zerolog/log"
+	"github.com/volatiletech/null/v8"
 	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 )
@@ -25,6 +26,12 @@ type Service interface {
 	UpdateBatchConfig(ctx context.Context, chainID int64, config *BatchConfig) error
 	IsChainEnabled(ctx context.Context, chainID int64) (bool, error)
 	RefreshCache(ctx context.Context) error
+
+	// CRUD operations for chain management
+	CreateChain(ctx context.Context, request *CreateChainRequest) (*ChainConfig, error)
+	UpdateChain(ctx context.Context, chainID int64, request *UpdateChainRequest) error
+	DeleteChain(ctx context.Context, chainID int64) error
+	ToggleChainStatus(ctx context.Context, chainID int64, enabled bool) error
 
 	// 为其他服务提供 CPOP 配置
 	GetCPOPConfigs(ctx context.Context) (map[int64]blockchain.CPOPConfig, error)
@@ -60,6 +67,39 @@ var DefaultBatchConfig = BatchConfig{
 	OptimalBatchSize: 25,
 	MaxBatchSize:     40,
 	MinBatchSize:     10,
+}
+
+// CreateChainRequest represents a request to create a new chain
+type CreateChainRequest struct {
+	ChainID                 int64   `json:"chain_id"`
+	Name                    string  `json:"name"`
+	ShortName               string  `json:"short_name"`
+	RPCURL                  string  `json:"rpc_url"`
+	ExplorerURL             *string `json:"explorer_url,omitempty"`
+	EntryPointAddress       *string `json:"entry_point_address,omitempty"`
+	CpopTokenAddress        *string `json:"cpop_token_address,omitempty"`
+	MasterAggregatorAddress *string `json:"master_aggregator_address,omitempty"`
+	AccountManagerAddress   *string `json:"account_manager_address,omitempty"`
+	OptimalBatchSize        *int    `json:"optimal_batch_size,omitempty"`
+	MaxBatchSize            *int    `json:"max_batch_size,omitempty"`
+	MinBatchSize            *int    `json:"min_batch_size,omitempty"`
+	IsEnabled               *bool   `json:"is_enabled,omitempty"`
+}
+
+// UpdateChainRequest represents a request to update chain configuration
+type UpdateChainRequest struct {
+	Name                    *string `json:"name,omitempty"`
+	ShortName               *string `json:"short_name,omitempty"`
+	RPCURL                  *string `json:"rpc_url,omitempty"`
+	ExplorerURL             *string `json:"explorer_url,omitempty"`
+	EntryPointAddress       *string `json:"entry_point_address,omitempty"`
+	CpopTokenAddress        *string `json:"cpop_token_address,omitempty"`
+	MasterAggregatorAddress *string `json:"master_aggregator_address,omitempty"`
+	AccountManagerAddress   *string `json:"account_manager_address,omitempty"`
+	OptimalBatchSize        *int    `json:"optimal_batch_size,omitempty"`
+	MaxBatchSize            *int    `json:"max_batch_size,omitempty"`
+	MinBatchSize            *int    `json:"min_batch_size,omitempty"`
+	IsEnabled               *bool   `json:"is_enabled,omitempty"`
 }
 
 // service implements the chains service
@@ -185,18 +225,34 @@ func (s *service) IsChainEnabled(ctx context.Context, chainID int64) (bool, erro
 
 // RefreshCache force refreshes the cache
 func (s *service) RefreshCache(ctx context.Context) error {
+	// Fetch chains from database without holding lock
+	chains, err := models.Chains(
+		qm.Where("is_enabled = ?", true),
+		qm.OrderBy("chain_id"),
+	).All(ctx, s.db)
+	if err != nil {
+		return fmt.Errorf("failed to fetch enabled chains: %w", err)
+	}
+
+	// Convert all chains to configs
+	var configs []*ChainConfig
+	for _, chain := range chains {
+		config := s.convertToChainConfig(chain)
+		configs = append(configs, config)
+	}
+
+	// Now acquire lock and update cache atomically
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
 	// Clear cache
 	s.cache = make(map[int64]*ChainConfig)
-	s.lastCacheUpdate = time.Time{}
 
-	// Pre-load all enabled chains
-	_, err := s.GetAllEnabledChains(ctx)
-	if err != nil {
-		return fmt.Errorf("failed to refresh chain cache: %w", err)
+	// Populate cache with new data
+	for _, config := range configs {
+		s.cache[config.ChainID] = config
 	}
+	s.lastCacheUpdate = time.Now()
 
 	log.Info().Msg("Chain configuration cache refreshed")
 	return nil
@@ -365,5 +421,215 @@ func (s *service) validateChainForCPOP(chain *ChainConfig) error {
 	if chain.EntryPointAddress == "" {
 		return fmt.Errorf("Entry Point Address is required")
 	}
+	return nil
+}
+
+// CreateChain creates a new chain configuration
+func (s *service) CreateChain(ctx context.Context, request *CreateChainRequest) (*ChainConfig, error) {
+	// Check if chain already exists
+	exists, err := models.Chains(
+		qm.Where("chain_id = ?", request.ChainID),
+	).Exists(ctx, s.db)
+	if err != nil {
+		return nil, fmt.Errorf("failed to check chain existence: %w", err)
+	}
+	if exists {
+		return nil, fmt.Errorf("chain with ID %d already exists", request.ChainID)
+	}
+
+	// Create new chain model
+	chain := &models.Chain{
+		ChainID:   request.ChainID,
+		Name:      request.Name,
+		ShortName: request.ShortName,
+		RPCURL:    request.RPCURL,
+		IsEnabled: null.BoolFrom(true), // Default to enabled
+	}
+
+	// Set optional fields
+	if request.ExplorerURL != nil {
+		chain.ExplorerURL = null.StringFrom(*request.ExplorerURL)
+	}
+	if request.EntryPointAddress != nil {
+		chain.EntryPointAddress = null.StringFrom(*request.EntryPointAddress)
+	}
+	if request.CpopTokenAddress != nil {
+		chain.CpopTokenAddress = null.StringFrom(*request.CpopTokenAddress)
+	}
+	if request.MasterAggregatorAddress != nil {
+		chain.MasterAggregatorAddress = null.StringFrom(*request.MasterAggregatorAddress)
+	}
+	if request.AccountManagerAddress != nil {
+		chain.AccountManagerAddress = null.StringFrom(*request.AccountManagerAddress)
+	}
+	if request.OptimalBatchSize != nil {
+		chain.OptimalBatchSize = null.IntFrom(*request.OptimalBatchSize)
+	} else {
+		chain.OptimalBatchSize = null.IntFrom(DefaultBatchConfig.OptimalBatchSize)
+	}
+	if request.MaxBatchSize != nil {
+		chain.MaxBatchSize = null.IntFrom(*request.MaxBatchSize)
+	} else {
+		chain.MaxBatchSize = null.IntFrom(DefaultBatchConfig.MaxBatchSize)
+	}
+	if request.MinBatchSize != nil {
+		chain.MinBatchSize = null.IntFrom(*request.MinBatchSize)
+	} else {
+		chain.MinBatchSize = null.IntFrom(DefaultBatchConfig.MinBatchSize)
+	}
+	if request.IsEnabled != nil {
+		chain.IsEnabled = null.BoolFrom(*request.IsEnabled)
+	}
+
+	// Insert into database
+	if err := chain.Insert(ctx, s.db, boil.Infer()); err != nil {
+		return nil, fmt.Errorf("failed to create chain: %w", err)
+	}
+
+	log.Info().
+		Int64("chain_id", request.ChainID).
+		Str("name", request.Name).
+		Str("short_name", request.ShortName).
+		Msg("Chain created successfully")
+
+	// Convert to ChainConfig and cache
+	config := s.convertToChainConfig(chain)
+	s.setCachedConfig(config.ChainID, config)
+
+	return config, nil
+}
+
+// UpdateChain updates an existing chain configuration
+func (s *service) UpdateChain(ctx context.Context, chainID int64, request *UpdateChainRequest) error {
+	// Find existing chain
+	chain, err := models.Chains(
+		qm.Where("chain_id = ?", chainID),
+	).One(ctx, s.db)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("chain %d not found", chainID)
+		}
+		return fmt.Errorf("failed to fetch chain: %w", err)
+	}
+
+	// Update fields if provided
+	if request.Name != nil {
+		chain.Name = *request.Name
+	}
+	if request.ShortName != nil {
+		chain.ShortName = *request.ShortName
+	}
+	if request.RPCURL != nil {
+		chain.RPCURL = *request.RPCURL
+	}
+	if request.ExplorerURL != nil {
+		chain.ExplorerURL = null.StringFrom(*request.ExplorerURL)
+	}
+	if request.EntryPointAddress != nil {
+		chain.EntryPointAddress = null.StringFrom(*request.EntryPointAddress)
+	}
+	if request.CpopTokenAddress != nil {
+		chain.CpopTokenAddress = null.StringFrom(*request.CpopTokenAddress)
+	}
+	if request.MasterAggregatorAddress != nil {
+		chain.MasterAggregatorAddress = null.StringFrom(*request.MasterAggregatorAddress)
+	}
+	if request.AccountManagerAddress != nil {
+		chain.AccountManagerAddress = null.StringFrom(*request.AccountManagerAddress)
+	}
+	if request.OptimalBatchSize != nil {
+		chain.OptimalBatchSize = null.IntFrom(*request.OptimalBatchSize)
+	}
+	if request.MaxBatchSize != nil {
+		chain.MaxBatchSize = null.IntFrom(*request.MaxBatchSize)
+	}
+	if request.MinBatchSize != nil {
+		chain.MinBatchSize = null.IntFrom(*request.MinBatchSize)
+	}
+	if request.IsEnabled != nil {
+		chain.IsEnabled = null.BoolFrom(*request.IsEnabled)
+	}
+
+	// Update in database
+	if _, err := chain.Update(ctx, s.db, boil.Infer()); err != nil {
+		return fmt.Errorf("failed to update chain: %w", err)
+	}
+
+	// Invalidate cache
+	s.invalidateCache(chainID)
+
+	log.Info().
+		Int64("chain_id", chainID).
+		Msg("Chain configuration updated successfully")
+
+	return nil
+}
+
+// DeleteChain removes a chain configuration
+func (s *service) DeleteChain(ctx context.Context, chainID int64) error {
+	// Check if chain exists
+	chain, err := models.Chains(
+		qm.Where("chain_id = ?", chainID),
+	).One(ctx, s.db)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("chain %d not found", chainID)
+		}
+		return fmt.Errorf("failed to fetch chain: %w", err)
+	}
+
+	// TODO: Add checks for chain usage (tokens, transactions, etc.)
+	// For now, we'll allow deletion but could add validation later
+
+	// Delete from database
+	if _, err := chain.Delete(ctx, s.db); err != nil {
+		return fmt.Errorf("failed to delete chain: %w", err)
+	}
+
+	// Remove from cache
+	s.invalidateCache(chainID)
+
+	log.Info().
+		Int64("chain_id", chainID).
+		Str("name", chain.Name).
+		Msg("Chain deleted successfully")
+
+	return nil
+}
+
+// ToggleChainStatus enables or disables a chain
+func (s *service) ToggleChainStatus(ctx context.Context, chainID int64, enabled bool) error {
+	// Find existing chain
+	chain, err := models.Chains(
+		qm.Where("chain_id = ?", chainID),
+	).One(ctx, s.db)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("chain %d not found", chainID)
+		}
+		return fmt.Errorf("failed to fetch chain: %w", err)
+	}
+
+	// Update enabled status
+	chain.IsEnabled = null.BoolFrom(enabled)
+
+	// Save to database
+	if _, err := chain.Update(ctx, s.db, boil.Infer()); err != nil {
+		return fmt.Errorf("failed to update chain status: %w", err)
+	}
+
+	// Invalidate cache
+	s.invalidateCache(chainID)
+
+	status := "disabled"
+	if enabled {
+		status = "enabled"
+	}
+
+	log.Info().
+		Int64("chain_id", chainID).
+		Str("status", status).
+		Msg("Chain status updated successfully")
+
 	return nil
 }

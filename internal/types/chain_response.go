@@ -19,16 +19,69 @@ import (
 // swagger:model ChainResponse
 type ChainResponse struct {
 
-	// data
-	// Required: true
-	Data *ChainResponseData `json:"data"`
+	// Account manager contract address
+	// Example: 0xabcdefabcdefabcdefabcdefabcdefabcdefabcd
+	AccountManagerAddress string `json:"account_manager_address,omitempty"`
+
+	// Chain ID
+	// Example: 11155111
+	ChainID int64 `json:"chain_id,omitempty"`
+
+	// CPOP token contract address
+	// Example: 0x1234567890123456789012345678901234567890
+	CpopTokenAddress string `json:"cpop_token_address,omitempty"`
+
+	// Chain creation timestamp
+	// Example: 2024-12-21T00:00:00Z
+	// Format: date-time
+	CreatedAt strfmt.DateTime `json:"created_at,omitempty"`
+
+	// EntryPoint contract address
+	// Example: 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789
+	EntryPointAddress string `json:"entry_point_address,omitempty"`
+
+	// Block explorer URL
+	// Example: https://sepolia.etherscan.io
+	ExplorerURL string `json:"explorer_url,omitempty"`
+
+	// Whether chain is enabled
+	// Example: true
+	IsEnabled bool `json:"is_enabled,omitempty"`
+
+	// Master aggregator contract address
+	// Example: 0x0987654321098765432109876543210987654321
+	MasterAggregatorAddress string `json:"master_aggregator_address,omitempty"`
+
+	// Maximum batch size
+	// Example: 40
+	MaxBatchSize int64 `json:"max_batch_size,omitempty"`
+
+	// Minimum batch size
+	// Example: 10
+	MinBatchSize int64 `json:"min_batch_size,omitempty"`
+
+	// Chain name
+	// Example: Sepolia Testnet
+	Name string `json:"name,omitempty"`
+
+	// Optimal batch size for processing
+	// Example: 25
+	OptimalBatchSize int64 `json:"optimal_batch_size,omitempty"`
+
+	// RPC endpoint URL
+	// Example: https://eth-sepolia.g.alchemy.com/v2/xxx
+	RPCURL string `json:"rpc_url,omitempty"`
+
+	// Chain short name
+	// Example: sepolia
+	ShortName string `json:"short_name,omitempty"`
 }
 
 // Validate validates this chain response
 func (m *ChainResponse) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateData(formats); err != nil {
+	if err := m.validateCreatedAt(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -38,53 +91,20 @@ func (m *ChainResponse) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *ChainResponse) validateData(formats strfmt.Registry) error {
+func (m *ChainResponse) validateCreatedAt(formats strfmt.Registry) error {
+	if swag.IsZero(m.CreatedAt) { // not required
+		return nil
+	}
 
-	if err := validate.Required("data", "body", m.Data); err != nil {
+	if err := validate.FormatOf("created_at", "body", "date-time", m.CreatedAt.String(), formats); err != nil {
 		return err
 	}
 
-	if m.Data != nil {
-		if err := m.Data.Validate(formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("data")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("data")
-			}
-			return err
-		}
-	}
-
 	return nil
 }
 
-// ContextValidate validate this chain response based on the context it is used
+// ContextValidate validates this chain response based on context it is used
 func (m *ChainResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
-	var res []error
-
-	if err := m.contextValidateData(ctx, formats); err != nil {
-		res = append(res, err)
-	}
-
-	if len(res) > 0 {
-		return errors.CompositeValidationError(res...)
-	}
-	return nil
-}
-
-func (m *ChainResponse) contextValidateData(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.Data != nil {
-		if err := m.Data.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("data")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("data")
-			}
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -99,64 +119,6 @@ func (m *ChainResponse) MarshalBinary() ([]byte, error) {
 // UnmarshalBinary interface implementation
 func (m *ChainResponse) UnmarshalBinary(b []byte) error {
 	var res ChainResponse
-	if err := swag.ReadJSON(b, &res); err != nil {
-		return err
-	}
-	*m = res
-	return nil
-}
-
-// ChainResponseData chain response data
-//
-// swagger:model ChainResponseData
-type ChainResponseData struct {
-
-	// Batch size for processing
-	// Example: 25
-	BatchSize int64 `json:"batch_size,omitempty"`
-
-	// Batch timeout in seconds
-	// Example: 300
-	BatchTimeout int64 `json:"batch_timeout,omitempty"`
-
-	// Chain ID
-	// Example: 56
-	ChainID int64 `json:"chain_id,omitempty"`
-
-	// Whether chain is enabled
-	// Example: true
-	IsEnabled bool `json:"is_enabled,omitempty"`
-
-	// Chain name
-	// Example: BSC
-	Name string `json:"name,omitempty"`
-
-	// RPC endpoint URL
-	// Example: https://bsc-dataseed.binance.org/
-	RPCURL string `json:"rpc_url,omitempty"`
-}
-
-// Validate validates this chain response data
-func (m *ChainResponseData) Validate(formats strfmt.Registry) error {
-	return nil
-}
-
-// ContextValidate validates this chain response data based on context it is used
-func (m *ChainResponseData) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
-	return nil
-}
-
-// MarshalBinary interface implementation
-func (m *ChainResponseData) MarshalBinary() ([]byte, error) {
-	if m == nil {
-		return nil, nil
-	}
-	return swag.WriteJSON(m)
-}
-
-// UnmarshalBinary interface implementation
-func (m *ChainResponseData) UnmarshalBinary(b []byte) error {
-	var res ChainResponseData
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}

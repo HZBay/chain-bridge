@@ -40,69 +40,221 @@ definitions:
   ChainResponse:
     type: object
     properties:
-      data:
-        type: object
-        properties:
-          chain_id:
-            type: integer
-            format: int64
-            description: "Chain ID"
-            example: 56
-          name:
-            type: string
-            description: "Chain name"
-            example: "BSC"
-          rpc_url:
-            type: string
-            description: "RPC endpoint URL"
-            example: "https://bsc-dataseed.binance.org/"
-          is_enabled:
-            type: boolean
-            description: "Whether chain is enabled"
-            example: true
-          batch_size:
-            type: integer
-            description: "Batch size for processing"
-            example: 25
-          batch_timeout:
-            type: integer
-            description: "Batch timeout in seconds"
-            example: 300
-    required:
-      - data
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 11155111
+      name:
+        type: string
+        description: "Chain name"
+        example: "Sepolia Testnet"
+      short_name:
+        type: string
+        description: "Chain short name"
+        example: "sepolia"
+      rpc_url:
+        type: string
+        description: "RPC endpoint URL"
+        example: "https://eth-sepolia.g.alchemy.com/v2/xxx"
+      explorer_url:
+        type: string
+        description: "Block explorer URL"
+        example: "https://sepolia.etherscan.io"
+      entry_point_address:
+        type: string
+        description: "EntryPoint contract address"
+        example: "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"
+      cpop_token_address:
+        type: string
+        description: "CPOP token contract address"
+        example: "0x1234567890123456789012345678901234567890"
+      master_aggregator_address:
+        type: string
+        description: "Master aggregator contract address"
+        example: "0x0987654321098765432109876543210987654321"
+      account_manager_address:
+        type: string
+        description: "Account manager contract address"
+        example: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+      optimal_batch_size:
+        type: integer
+        description: "Optimal batch size for processing"
+        example: 25
+      max_batch_size:
+        type: integer
+        description: "Maximum batch size"
+        example: 40
+      min_batch_size:
+        type: integer
+        description: "Minimum batch size"
+        example: 10
+      is_enabled:
+        type: boolean
+        description: "Whether chain is enabled"
+        example: true
+      created_at:
+        type: string
+        format: date-time
+        description: "Chain creation timestamp"
+        example: "2024-12-21T00:00:00Z"
 
   ChainsResponse:
+    type: array
+    items:
+      $ref: "#/definitions/ChainResponse"
+
+  CreateChainRequest:
     type: object
     properties:
-      data:
-        type: array
-        items:
-          type: object
-          properties:
-            chain_id:
-              type: integer
-              format: int64
-              description: "Chain ID"
-              example: 56
-            name:
-              type: string
-              description: "Chain name"
-              example: "BSC"
-            rpc_url:
-              type: string
-              description: "RPC endpoint URL"
-              example: "https://bsc-dataseed.binance.org/"
-            is_enabled:
-              type: boolean
-              description: "Whether chain is enabled"
-              example: true
-            batch_size:
-              type: integer
-              description: "Batch size for processing"
-              example: 25
-            batch_timeout:
-              type: integer
-              description: "Batch timeout in seconds"
-              example: 300
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 11155111
+      name:
+        type: string
+        description: "Chain name"
+        example: "Sepolia Testnet"
+      short_name:
+        type: string
+        description: "Chain short name"
+        example: "sepolia"
+      rpc_url:
+        type: string
+        description: "RPC endpoint URL"
+        example: "https://eth-sepolia.g.alchemy.com/v2/xxx"
+      explorer_url:
+        type: string
+        description: "Block explorer URL"
+        example: "https://sepolia.etherscan.io"
+      entry_point_address:
+        type: string
+        description: "EntryPoint contract address"
+        example: "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"
+      cpop_token_address:
+        type: string
+        description: "CPOP token contract address"
+        example: "0x1234567890123456789012345678901234567890"
+      master_aggregator_address:
+        type: string
+        description: "Master aggregator contract address"
+        example: "0x0987654321098765432109876543210987654321"
+      account_manager_address:
+        type: string
+        description: "Account manager contract address"
+        example: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+      optimal_batch_size:
+        type: integer
+        description: "Optimal batch size for processing"
+        example: 25
+      max_batch_size:
+        type: integer
+        description: "Maximum batch size"
+        example: 40
+      min_batch_size:
+        type: integer
+        description: "Minimum batch size"
+        example: 10
+      is_enabled:
+        type: boolean
+        description: "Whether chain is enabled"
+        example: true
     required:
-      - data
+      - chain_id
+      - name
+      - short_name
+      - rpc_url
+
+  UpdateChainRequest:
+    type: object
+    properties:
+      name:
+        type: string
+        description: "Chain name"
+        example: "Updated Chain Name"
+      short_name:
+        type: string
+        description: "Chain short name"
+        example: "updated"
+      rpc_url:
+        type: string
+        description: "RPC endpoint URL"
+        example: "https://updated-rpc.example.com"
+      explorer_url:
+        type: string
+        description: "Block explorer URL"
+        example: "https://updated-explorer.example.com"
+      entry_point_address:
+        type: string
+        description: "EntryPoint contract address"
+        example: "0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789"
+      cpop_token_address:
+        type: string
+        description: "CPOP token contract address"
+        example: "0x1234567890123456789012345678901234567890"
+      master_aggregator_address:
+        type: string
+        description: "Master aggregator contract address"
+        example: "0x0987654321098765432109876543210987654321"
+      account_manager_address:
+        type: string
+        description: "Account manager contract address"
+        example: "0xabcdefabcdefabcdefabcdefabcdefabcdefabcd"
+      optimal_batch_size:
+        type: integer
+        description: "Optimal batch size for processing"
+        example: 30
+      max_batch_size:
+        type: integer
+        description: "Maximum batch size"
+        example: 50
+      min_batch_size:
+        type: integer
+        description: "Minimum batch size"
+        example: 15
+      is_enabled:
+        type: boolean
+        description: "Whether chain is enabled"
+        example: false
+
+  ChainCreateResponse:
+    type: object
+    properties:
+      message:
+        type: string
+        example: "Chain created successfully"
+      chain_id:
+        type: integer
+        format: int64
+        example: 11155111
+    required:
+      - message
+      - chain_id
+
+  ChainUpdateResponse:
+    type: object
+    properties:
+      message:
+        type: string
+        example: "Chain configuration updated successfully"
+    required:
+      - message
+
+  ChainDeleteResponse:
+    type: object
+    properties:
+      message:
+        type: string
+        example: "Chain deleted successfully"
+    required:
+      - message
+
+  ChainToggleStatusResponse:
+    type: object
+    properties:
+      message:
+        type: string
+        example: "Chain status updated successfully"
+    required:
+      - message

@@ -7,37 +7,27 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// NewBatchProcessor creates a new BatchProcessor based on configuration
+// NewBatchProcessor creates a new RabbitMQ-based BatchProcessor
 func NewBatchProcessor(cfg config.Server) (BatchProcessor, error) {
-	// If RabbitMQ is disabled, use memory processor only
+	// RabbitMQ is now required - no fallback to memory processor
 	if !cfg.RabbitMQ.Enabled {
-		log.Info().Msg("RabbitMQ disabled, using memory processor (simulation mode)")
-		// Note: Dependencies will be set when StartBatchConsumer is called if needed
-		return NewMemoryProcessor(), nil
+		log.Error().Msg("RabbitMQ is disabled but required for batch processing")
+		return nil, fmt.Errorf("RabbitMQ is required for batch processing but is disabled in configuration")
 	}
 
 	// Try to create RabbitMQ client
 	rabbitmqClient, err := NewRabbitMQClient(cfg.RabbitMQ)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to create RabbitMQ client")
-
-		// Fallback to memory processor if allowed
-		if cfg.RabbitMQ.BatchStrategy.FallbackToMemory {
-			log.Warn().Msg("Falling back to memory processor (simulation mode)")
-			// Note: Dependencies won't be available, will run in simulation mode
-			return NewMemoryProcessor(), nil
-		}
-
-		return nil, fmt.Errorf("failed to create RabbitMQ client and fallback disabled: %w", err)
+		return nil, fmt.Errorf("failed to create RabbitMQ client: %w", err)
 	}
 
-	// Create hybrid processor for gradual rollout
+	// Create simplified hybrid processor (RabbitMQ only)
 	hybridProcessor := NewHybridBatchProcessor(rabbitmqClient, cfg.RabbitMQ.BatchStrategy)
 
 	log.Info().
 		Bool("rabbitmq_enabled", cfg.RabbitMQ.BatchStrategy.EnableRabbitMQ).
-		Int("rabbitmq_percentage", cfg.RabbitMQ.BatchStrategy.RabbitMQPercentage).
-		Msg("Hybrid batch processor created")
+		Msg("RabbitMQ batch processor created")
 
 	return hybridProcessor, nil
 }

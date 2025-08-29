@@ -11,6 +11,7 @@ import (
 	"github.com/hzbay/chain-bridge/internal/api/handlers/common"
 	"github.com/hzbay/chain-bridge/internal/api/handlers/monitoring"
 	"github.com/hzbay/chain-bridge/internal/api/handlers/push"
+	"github.com/hzbay/chain-bridge/internal/api/handlers/tokens"
 	"github.com/hzbay/chain-bridge/internal/api/handlers/transfer"
 	"github.com/labstack/echo/v4"
 )
@@ -33,10 +34,14 @@ func AttachAllRoutes(s *api.Server) {
 		auth.PostRefreshRoute(s),
 		auth.PostRegisterRoute(s),
 		batch.GetBatchStatusRoute(s),
+		chains.DeleteChainRoute(s),
 		chains.GetChainConfigRoute(s),
 		chains.GetChainsRoute(s),
 		chains.PostChainsRefreshCacheRoute(s),
+		chains.PostCreateChainRoute(s),
 		chains.PutChainBatchConfigRoute(s),
+		chains.PutToggleChainStatusRoute(s),
+		chains.PutUpdateChainRoute(s),
 		common.GetHealthyRoute(s),
 		common.GetReadyRoute(s),
 		common.GetSwaggerRoute(s),
@@ -46,6 +51,14 @@ func AttachAllRoutes(s *api.Server) {
 		monitoring.GetQueueMetricsRoute(s),
 		monitoring.GetQueueStatsRoute(s),
 		push.PutUpdatePushTokenRoute(s),
+		tokens.DeleteTokenRoute(s),
+		tokens.GetTokenRoute(s),
+		tokens.GetTokensByChainRoute(s),
+		tokens.GetTokensRoute(s),
+		tokens.PostCreateTokenRoute(s),
+		tokens.PostTokensRefreshCacheRoute(s),
+		tokens.PutTokenRoute(s),
+		tokens.PutTokenStatusRoute(s),
 		transfer.GetUserTransactionsRoute(s),
 		transfer.PostTransferAssetsRoute(s),
 	}

@@ -103,8 +103,12 @@ definitions:
   # 转账请求
   TransferRequest:
     type: object
-    required: [from_user_id, to_user_id, chain_id, token_symbol, amount]
+    required: [operation_id, from_user_id, to_user_id, chain_id, token_symbol, amount]
     properties:
+      operation_id:
+        type: string
+        description: "Operation ID for idempotency"
+        example: "op_transfer_001"
       from_user_id:
         type: string
         description: "Sender user ID"
@@ -247,3 +251,104 @@ definitions:
         $ref: "#/definitions/TransferResponse"
       batch_info:
         $ref: "./assets.yml#/definitions/BatchInfo"
+
+  # 用户交易历史完整响应 (不带data包装，平级字段)
+  UserTransactionHistoryResponse:
+    type: object
+    required: [user_id, total_count, page, limit, transactions, total_incoming, total_outgoing, net_change, gas_saved_total]
+    properties:
+      user_id:
+        type: string
+        description: "User ID"
+        example: "user_123"
+      total_count:
+        type: integer
+        description: "Total transaction count"
+        example: 156
+      page:
+        type: integer
+        description: "Current page"
+        example: 1
+      limit:
+        type: integer
+        description: "Page size"
+        example: 20
+      transactions:
+        type: array
+        items:
+          $ref: "#/definitions/TransactionInfo"
+      total_incoming:
+        type: string
+        description: "Total incoming amount"
+        example: "2150.000000000000000000"
+      total_outgoing:
+        type: string
+        description: "Total outgoing amount"
+        example: "1850.000000000000000000"
+      net_change:
+        type: string
+        description: "Net change amount"
+        example: "300.000000000000000000"
+      gas_saved_total:
+        type: string
+        description: "Total gas saved"
+        example: "45.80 USD"
+
+  # 转账响应 (不带data包装，平级字段，包含batch_info字段)
+  UserTransferResponse:
+    type: object
+    required: [operation_id, from_user_id, to_user_id, chain_id, token_symbol, amount, status, transfer_records, will_be_batched, batch_type, current_batch_size, optimal_batch_size, expected_efficiency]
+    properties:
+      operation_id:
+        type: string
+        description: "Operation ID"
+        example: "op_transfer_001"
+      from_user_id:
+        type: string
+        description: "Sender user ID"
+        example: "user_123"
+      to_user_id:
+        type: string
+        description: "Recipient user ID"
+        example: "user_456"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      token_symbol:
+        type: string
+        description: "Token symbol"
+        example: "CPOP"
+      amount:
+        type: string
+        description: "Transfer amount"
+        example: "50.000000000000000000"
+      status:
+        type: string
+        description: "Transfer status"
+        example: "recorded"
+      transfer_records:
+        type: array
+        items:
+          $ref: "#/definitions/TransferRecord"
+      will_be_batched:
+        type: boolean
+        description: "Whether will be batched"
+        example: true
+      batch_type:
+        type: string
+        description: "Batch operation type"
+        example: "batchTransferFrom"
+      current_batch_size:
+        type: integer
+        description: "Current batch size"
+        example: 12
+      optimal_batch_size:
+        type: integer
+        description: "Optimal batch size"
+        example: 25
+      expected_efficiency:
+        type: string
+        description: "Expected efficiency"
+        example: "74-76%"

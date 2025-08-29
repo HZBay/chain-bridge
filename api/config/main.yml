@@ -54,6 +54,18 @@ definitions:
     $ref: "../definitions/chains.yml#/definitions/ChainResponse"
   ChainsResponse:
     $ref: "../definitions/chains.yml#/definitions/ChainsResponse"
+  createChainRequest:
+    $ref: "../definitions/chains.yml#/definitions/CreateChainRequest"
+  updateChainRequest:
+    $ref: "../definitions/chains.yml#/definitions/UpdateChainRequest"
+  chainCreateResponse:
+    $ref: "../definitions/chains.yml#/definitions/ChainCreateResponse"
+  chainUpdateResponse:
+    $ref: "../definitions/chains.yml#/definitions/ChainUpdateResponse"
+  chainDeleteResponse:
+    $ref: "../definitions/chains.yml#/definitions/ChainDeleteResponse"
+  chainToggleStatusResponse:
+    $ref: "../definitions/chains.yml#/definitions/ChainToggleStatusResponse"
   # Monitoring definitions
   queueMetricsResponse:
     $ref: "../definitions/monitoring.yml#/definitions/queueMetricsResponse"
@@ -63,6 +75,8 @@ definitions:
     $ref: "../definitions/monitoring.yml#/definitions/queueHealthResponse"
   optimizationRecommendationResponse:
     $ref: "../definitions/monitoring.yml#/definitions/optimizationRecommendationResponse"
+  userOptimizationRecommendationResponse:
+    $ref: "../definitions/monitoring.yml#/definitions/userOptimizationRecommendationResponse"
   # Assets definitions
   assetAdjustResponse:
     $ref: "../definitions/assets.yml#/definitions/AssetAdjustResponse"
@@ -84,6 +98,10 @@ definitions:
     $ref: "../definitions/transfer.yml#/definitions/TransferCompleteResponse"
   transactionHistoryResponse:
     $ref: "../definitions/transfer.yml#/definitions/TransactionHistoryResponse"
+  userTransactionHistoryResponse:
+    $ref: "../definitions/transfer.yml#/definitions/UserTransactionHistoryResponse"
+  userTransferResponse:
+    $ref: "../definitions/transfer.yml#/definitions/UserTransferResponse"
   # Account definitions
   accountResponse:
     $ref: "../definitions/account.yml#/definitions/AccountResponse"
@@ -91,3 +109,18 @@ definitions:
     $ref: "../definitions/account.yml#/definitions/CreateAccountResponse"
   deployAccountResponse:
     $ref: "../definitions/account.yml#/definitions/DeployAccountResponse"
+  # Tokens definitions
+  tokenResponse:
+    $ref: "../definitions/tokens.yml#/definitions/TokenResponse"
+  tokensResponse:
+    $ref: "../definitions/tokens.yml#/definitions/TokensResponse"
+  createTokenRequest:
+    $ref: "../definitions/tokens.yml#/definitions/CreateTokenRequest"
+  updateTokenRequest:
+    $ref: "../definitions/tokens.yml#/definitions/UpdateTokenRequest"
+  tokenConfigUpdateResponse:
+    $ref: "../definitions/tokens.yml#/definitions/TokenConfigUpdateResponse"
+  tokenCreateResponse:
+    $ref: "../definitions/tokens.yml#/definitions/TokenCreateResponse"
+  tokenDeleteResponse:
+    $ref: "../definitions/tokens.yml#/definitions/TokenDeleteResponse"

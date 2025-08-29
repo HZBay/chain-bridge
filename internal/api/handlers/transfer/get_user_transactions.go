@@ -82,19 +82,13 @@ func (h *GetUserTransactionsHandler) Handle(c echo.Context) error {
 		Msg("Retrieving user transactions")
 
 	// Call transfer service
-	transactionResponse, summary, err := h.transferService.GetUserTransactions(ctx, params.UserID, serviceParams)
+	transactionResponse, err := h.transferService.GetUserTransactions(ctx, params.UserID, serviceParams)
 	if err != nil {
 		log.Error().Err(err).
 			Str("user_id", params.UserID).
 			Interface("params", serviceParams).
 			Msg("Failed to get user transactions")
 		return err
-	}
-
-	// Build response matching API specification
-	response := map[string]interface{}{
-		"data":    transactionResponse,
-		"summary": summary,
 	}
 
 	log.Info().
@@ -104,7 +98,7 @@ func (h *GetUserTransactionsHandler) Handle(c echo.Context) error {
 		Int64("limit", *transactionResponse.Limit).
 		Msg("User transactions retrieved successfully")
 
-	return c.JSON(http.StatusOK, response)
+	return util.ValidateAndReturn(c, http.StatusOK, transactionResponse)
 }
 
 // convertDateToString converts strfmt.Date to string pointer

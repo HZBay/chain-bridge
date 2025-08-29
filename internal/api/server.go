@@ -22,6 +22,7 @@ import (
 	"github.com/hzbay/chain-bridge/internal/queue"
 	"github.com/hzbay/chain-bridge/internal/services/account"
 	"github.com/hzbay/chain-bridge/internal/services/chains"
+	"github.com/hzbay/chain-bridge/internal/services/tokens"
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog/log"
 
@@ -56,6 +57,7 @@ type Server struct {
 	QueueMonitor   *queue.QueueMonitor
 	BatchOptimizer *queue.BatchOptimizer
 	ChainsService  chains.Service
+	TokensService  tokens.Service
 }
 
 type AuthService interface {
@@ -143,6 +145,10 @@ func (s *Server) InitCmd() *Server {
 		log.Fatal().Err(err).Msg("Failed to initialize chains service")
 	}
 
+	if err := s.InitTokensService(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize tokens service")
+	}
+
 	if err := s.InitBatchProcessor(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize batch processor")
 	}
@@ -180,6 +186,13 @@ func (s *Server) InitChainsService() error {
 	s.ChainsService = chains.NewService(s.DB, s.Config.Blockchain)
 
 	log.Info().Msg("Chains service initialized with blockchain configuration")
+	return nil
+}
+
+func (s *Server) InitTokensService() error {
+	s.TokensService = tokens.New(s.DB)
+
+	log.Info().Msg("Tokens service initialized")
 	return nil
 }
 

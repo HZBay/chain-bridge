@@ -1,0 +1,168 @@
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths: {}
+definitions:
+  TokenResponse:
+    type: object
+    properties:
+      id:
+        type: integer
+        description: "Token ID"
+        example: 1
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      contract_address:
+        type: string
+        description: "Token contract address (null for native tokens)"
+        example: "0x1234567890123456789012345678901234567890"
+      symbol:
+        type: string
+        description: "Token symbol"
+        example: "CPOP"
+      name:
+        type: string
+        description: "Token name"
+        example: "CPOP Token"
+      decimals:
+        type: integer
+        description: "Token decimals"
+        example: 18
+      token_type:
+        type: string
+        enum: ["native", "erc20"]
+        description: "Token type"
+        example: "erc20"
+      supports_batch_operations:
+        type: boolean
+        description: "Whether token supports batch operations"
+        example: true
+      batch_operations:
+        type: object
+        description: "Supported batch operations configuration"
+        additionalProperties: true
+        example:
+          batchTransfer: true
+          batchMint: true
+          batchBurn: true
+      is_enabled:
+        type: boolean
+        description: "Whether token is enabled"
+        example: true
+      created_at:
+        type: string
+        format: date-time
+        description: "Token creation timestamp"
+        example: "2024-12-21T00:00:00Z"
+
+  TokensResponse:
+    type: array
+    items:
+      $ref: "#/definitions/TokenResponse"
+
+  CreateTokenRequest:
+    type: object
+    properties:
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      contract_address:
+        type: string
+        description: "Token contract address (null for native tokens)"
+        example: "0x1234567890123456789012345678901234567890"
+      symbol:
+        type: string
+        description: "Token symbol"
+        example: "USDT"
+      name:
+        type: string
+        description: "Token name"
+        example: "Tether USD"
+      decimals:
+        type: integer
+        description: "Token decimals"
+        example: 6
+      token_type:
+        type: string
+        enum: ["native", "erc20"]
+        description: "Token type"
+        example: "erc20"
+      supports_batch_operations:
+        type: boolean
+        description: "Whether token supports batch operations"
+        example: false
+      batch_operations:
+        type: object
+        description: "Supported batch operations configuration"
+        additionalProperties: true
+        example:
+          batchTransfer: false
+          batchMint: false
+          batchBurn: false
+    required:
+      - chain_id
+      - symbol
+      - name
+      - decimals
+      - token_type
+
+  UpdateTokenRequest:
+    type: object
+    properties:
+      name:
+        type: string
+        description: "Token name"
+        example: "Updated Token Name"
+      supports_batch_operations:
+        type: boolean
+        description: "Whether token supports batch operations"
+        example: true
+      batch_operations:
+        type: object
+        description: "Supported batch operations configuration"
+        additionalProperties: true
+        example:
+          batchTransfer: true
+          batchMint: true
+          batchBurn: false
+      is_enabled:
+        type: boolean
+        description: "Whether token is enabled"
+        example: false
+
+  TokenConfigUpdateResponse:
+    type: object
+    properties:
+      message:
+        type: string
+        example: "Token configuration updated successfully"
+    required:
+      - message
+
+  TokenCreateResponse:
+    type: object
+    properties:
+      message:
+        type: string
+        example: "Token created successfully"
+      token_id:
+        type: integer
+        example: 123
+    required:
+      - message
+      - token_id
+
+  TokenDeleteResponse:
+    type: object
+    properties:
+      message:
+        type: string
+        example: "Token deleted successfully"
+    required:
+      - message

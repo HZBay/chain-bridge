@@ -24,37 +24,30 @@ paths:
         "200":
           description: Transfer recorded successfully
           schema:
-            type: object
-            properties:
-              data:
-                $ref: "../definitions/transfer.yml#/definitions/TransferResponse"
-              batch_info:
-                $ref: "../definitions/assets.yml#/definitions/BatchInfo"
+            $ref: "../definitions/transfer.yml#/definitions/UserTransferResponse"
           examples:
             application/json:
-              data:
-                operation_id: "op_transfer_001"
-                from_user_id: "user_123"
-                to_user_id: "user_456"
-                chain_id: 56
-                token_symbol: "CPOP"
-                amount: "50.000000000000000000"
-                status: "recorded"
-                transfer_records:
-                  - tx_id: "tx_outgoing_001"
-                    user_id: "user_123"
-                    transfer_direction: "outgoing"
-                    amount: "-50.000000000000000000"
-                  - tx_id: "tx_incoming_001"
-                    user_id: "user_456"
-                    transfer_direction: "incoming"
-                    amount: "50.000000000000000000"
-              batch_info:
-                will_be_batched: true
-                batch_type: "batchTransferFrom"
-                current_batch_size: 12
-                optimal_batch_size: 25
-                expected_efficiency: "74-76%"
+              operation_id: "op_transfer_001"
+              from_user_id: "user_123"
+              to_user_id: "user_456"
+              chain_id: 56
+              token_symbol: "CPOP"
+              amount: "50.000000000000000000"
+              status: "recorded"
+              transfer_records:
+                - tx_id: "tx_outgoing_001"
+                  user_id: "user_123"
+                  transfer_direction: "outgoing"
+                  amount: "-50.000000000000000000"
+                - tx_id: "tx_incoming_001"
+                  user_id: "user_456"
+                  transfer_direction: "incoming"
+                  amount: "50.000000000000000000"
+              will_be_batched: true
+              batch_type: "batchTransferFrom"
+              current_batch_size: 12
+              optimal_batch_size: 25
+              expected_efficiency: "74-76%"
         "400":
           description: Invalid transfer parameters
           schema:
@@ -146,63 +139,56 @@ paths:
         "200":
           description: User transactions retrieved successfully
           schema:
-            type: object
-            properties:
-              data:
-                $ref: "../definitions/transfer.yml#/definitions/TransactionHistoryResponse"
-              summary:
-                $ref: "../definitions/transfer.yml#/definitions/TransactionSummary"
+            $ref: "../definitions/transfer.yml#/definitions/UserTransactionHistoryResponse"
           examples:
             application/json:
-              data:
-                user_id: "user_123"
-                total_count: 156
-                page: 1
-                limit: 20
-                transactions:
-                  - tx_id: "tx_001"
-                    operation_id: "op_transfer_001"
-                    chain_id: 56
-                    chain_name: "BSC"
-                    token_symbol: "CPOP"
-                    tx_type: "transfer"
-                    business_type: "transfer"
-                    transfer_direction: "outgoing"
-                    related_user_id: "user_456"
-                    amount: "-50.000000000000000000"
-                    amount_usd: "-2.50"
-                    status: "confirmed"
-                    tx_hash: "0xabc123..."
-                    reason_type: "user_transfer"
-                    reason_detail: "朋友转账"
-                    is_batch_operation: true
-                    batch_id: "batch_transfer_001"
-                    gas_saved_percentage: 76.8
-                    created_at: "2024-12-15T10:30:00Z"
-                    confirmed_at: "2024-12-15T10:35:00Z"
-                  - tx_id: "tx_002"
-                    operation_id: "op_reward_daily_001"
-                    chain_id: 56
-                    chain_name: "BSC"
-                    token_symbol: "CPOP"
-                    tx_type: "mint"
-                    business_type: "reward"
-                    amount: "100.000000000000000000"
-                    amount_usd: "5.00"
-                    status: "confirmed"
-                    tx_hash: "0xdef456..."
-                    reason_type: "daily_checkin"
-                    reason_detail: "每日签到奖励"
-                    is_batch_operation: true
-                    batch_id: "batch_mint_002"
-                    gas_saved_percentage: 78.2
-                    created_at: "2024-12-14T09:00:00Z"
-                    confirmed_at: "2024-12-14T09:05:00Z"
-              summary:
-                total_incoming: "2150.000000000000000000"
-                total_outgoing: "1850.000000000000000000"
-                net_change: "300.000000000000000000"
-                gas_saved_total: "45.80 USD"
+              user_id: "user_123"
+              total_count: 156
+              page: 1
+              limit: 20
+              transactions:
+                - tx_id: "tx_001"
+                  operation_id: "op_transfer_001"
+                  chain_id: 56
+                  chain_name: "BSC"
+                  token_symbol: "CPOP"
+                  tx_type: "transfer"
+                  business_type: "transfer"
+                  transfer_direction: "outgoing"
+                  related_user_id: "user_456"
+                  amount: "-50.000000000000000000"
+                  amount_usd: "-2.50"
+                  status: "confirmed"
+                  tx_hash: "0xabc123..."
+                  reason_type: "user_transfer"
+                  reason_detail: "朋友转账"
+                  is_batch_operation: true
+                  batch_id: "batch_transfer_001"
+                  gas_saved_percentage: 76.8
+                  created_at: "2024-12-15T10:30:00Z"
+                  confirmed_at: "2024-12-15T10:35:00Z"
+                - tx_id: "tx_002"
+                  operation_id: "op_reward_daily_001"
+                  chain_id: 56
+                  chain_name: "BSC"
+                  token_symbol: "CPOP"
+                  tx_type: "mint"
+                  business_type: "reward"
+                  amount: "100.000000000000000000"
+                  amount_usd: "5.00"
+                  status: "confirmed"
+                  tx_hash: "0xdef456..."
+                  reason_type: "daily_checkin"
+                  reason_detail: "每日签到奖励"
+                  is_batch_operation: true
+                  batch_id: "batch_mint_002"
+                  gas_saved_percentage: 78.2
+                  created_at: "2024-12-14T09:00:00Z"
+                  confirmed_at: "2024-12-14T09:05:00Z"
+              total_incoming: "2150.000000000000000000"
+              total_outgoing: "1850.000000000000000000"
+              net_change: "300.000000000000000000"
+              gas_saved_total: "45.80 USD"
         "400":
           description: Invalid query parameters
           schema:

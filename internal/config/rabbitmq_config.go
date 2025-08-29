@@ -39,20 +39,20 @@ type BatchProcessingStrategy struct {
 // LoadRabbitMQConfig loads RabbitMQ configuration from environment variables
 func LoadRabbitMQConfig() RabbitMQConfig {
 	return RabbitMQConfig{
-		Enabled:        util.GetEnvAsBool("RABBITMQ_ENABLED", false), // Default: disabled
-		Host:           util.GetEnv("RABBITMQ_HOST", "localhost"),
+		Enabled:        util.GetEnvAsBool("RABBITMQ_ENABLED", true), // Default: disabled
+		Host:           util.GetEnv("RABBITMQ_HOST", "rabbitmq"),
 		Port:           util.GetEnvAsInt("RABBITMQ_PORT", 5672),
-		Username:       util.GetEnv("RABBITMQ_USERNAME", "guest"),
-		Password:       util.GetEnv("RABBITMQ_PASSWORD", "guest"),
-		VHost:          util.GetEnv("RABBITMQ_VHOST", "/"),
+		Username:       util.GetEnv("RABBITMQ_DEFAULT_USER", "chain-bridge"),
+		Password:       util.GetEnv("RABBITMQ_DEFAULT_PASS", "your-secure-password"),
+		VHost:          util.GetEnv("RABBITMQ_DEFAULT_VHOST", "/"),
 		MaxConnections: util.GetEnvAsInt("RABBITMQ_MAX_CONNECTIONS", 10),
 		Heartbeat:      time.Second * time.Duration(util.GetEnvAsInt("RABBITMQ_HEARTBEAT_SECONDS", 60)),
 		QueuePrefix:    util.GetEnv("RABBITMQ_QUEUE_PREFIX", "chain-bridge"),
 		DurableQueues:  util.GetEnvAsBool("RABBITMQ_DURABLE_QUEUES", true),
 		BatchStrategy: BatchProcessingStrategy{
-			EnableRabbitMQ:     util.GetEnvAsBool("BATCH_ENABLE_RABBITMQ", false),
+			EnableRabbitMQ:     util.GetEnvAsBool("BATCH_ENABLE_RABBITMQ", true),
 			RabbitMQPercentage: util.GetEnvAsInt("BATCH_RABBITMQ_PERCENTAGE", 0), // Start with 0%
-			FallbackToMemory:   util.GetEnvAsBool("BATCH_FALLBACK_TO_MEMORY", true),
+			FallbackToMemory:   util.GetEnvAsBool("BATCH_FALLBACK_TO_MEMORY", false),
 			MonitoringEnabled:  util.GetEnvAsBool("BATCH_MONITORING_ENABLED", true),
 		},
 	}

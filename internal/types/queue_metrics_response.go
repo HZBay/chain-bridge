@@ -11,50 +11,41 @@ import (
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/strfmt"
 	"github.com/go-openapi/swag"
-	"github.com/go-openapi/validate"
 )
 
 // QueueMetricsResponse queue metrics response
 //
 // swagger:model queueMetricsResponse
 type QueueMetricsResponse struct {
+	QueueMetrics
+}
 
-	// data
-	// Required: true
-	Data *QueueMetrics `json:"data"`
+// UnmarshalJSON unmarshals this object from a JSON structure
+func (m *QueueMetricsResponse) UnmarshalJSON(raw []byte) error {
+	// AO0
+	var aO0 QueueMetrics
+	if err := swag.ReadJSON(raw, &aO0); err != nil {
+		return err
+	}
+	m.QueueMetrics = aO0
+
+	return nil
+}
+
+// MarshalJSON marshals this object to a JSON structure
+func (m QueueMetricsResponse) MarshalJSON() ([]byte, error) {
+	_parts := make([][]byte, 0, 1)
+
+	aO0, err := swag.WriteJSON(m.QueueMetrics)
+	if err != nil {
+		return nil, err
+	}
+	_parts = append(_parts, aO0)
+	return swag.ConcatJSON(_parts...), nil
 }
 
 // Validate validates this queue metrics response
 func (m *QueueMetricsResponse) Validate(formats strfmt.Registry) error {
-	var res []error
-
-	if err := m.validateData(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if len(res) > 0 {
-		return errors.CompositeValidationError(res...)
-	}
-	return nil
-}
-
-func (m *QueueMetricsResponse) validateData(formats strfmt.Registry) error {
-
-	if err := validate.Required("data", "body", m.Data); err != nil {
-		return err
-	}
-
-	if m.Data != nil {
-		if err := m.Data.Validate(formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("data")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("data")
-			}
-			return err
-		}
-	}
-
 	return nil
 }
 
@@ -62,46 +53,13 @@ func (m *QueueMetricsResponse) validateData(formats strfmt.Registry) error {
 func (m *QueueMetricsResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateData(ctx, formats); err != nil {
+	// validation for a type composition with QueueMetrics
+	if err := m.QueueMetrics.ContextValidate(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
-	return nil
-}
-
-func (m *QueueMetricsResponse) contextValidateData(ctx context.Context, formats strfmt.Registry) error {
-
-	if m.Data != nil {
-		if err := m.Data.ContextValidate(ctx, formats); err != nil {
-			if ve, ok := err.(*errors.Validation); ok {
-				return ve.ValidateName("data")
-			} else if ce, ok := err.(*errors.CompositeError); ok {
-				return ce.ValidateName("data")
-			}
-			return err
-		}
-	}
-
-	return nil
-}
-
-// MarshalBinary interface implementation
-func (m *QueueMetricsResponse) MarshalBinary() ([]byte, error) {
-	if m == nil {
-		return nil, nil
-	}
-	return swag.WriteJSON(m)
-}
-
-// UnmarshalBinary interface implementation
-func (m *QueueMetricsResponse) UnmarshalBinary(b []byte) error {
-	var res QueueMetricsResponse
-	if err := swag.ReadJSON(b, &res); err != nil {
-		return err
-	}
-	*m = res
 	return nil
 }

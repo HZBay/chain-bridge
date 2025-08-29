@@ -9,12 +9,7 @@ paths: {}
 definitions:
   # Queue metrics response
   queueMetricsResponse:
-    type: object
-    required:
-      - data
-    properties:
-      data:
-        $ref: '#/definitions/queueMetrics'
+    $ref: '#/definitions/queueMetrics'
 
   queueMetrics:
     type: object
@@ -67,14 +62,9 @@ definitions:
 
   # Queue statistics response  
   queueStatsResponse:
-    type: object
-    required:
-      - data
-    properties:
-      data:
-        type: array
-        items:
-          $ref: '#/definitions/queueStats'
+    type: array
+    items:
+      $ref: '#/definitions/queueStats'
 
   queueStats:
     type: object
@@ -153,7 +143,7 @@ definitions:
         description: Error message if health check failed
         example: "Connection timeout to RabbitMQ server"
 
-  # Optimization recommendation response
+  # Optimization recommendation response (with data wrapper)
   optimizationRecommendationResponse:
     type: object
     required:
@@ -161,6 +151,72 @@ definitions:
     properties:
       data:
         $ref: '#/definitions/optimizationRecommendation'
+
+  # Optimization recommendation response (flat structure, no data wrapper)
+  userOptimizationRecommendationResponse:
+    type: object
+    required:
+      - chain_id
+      - token_id
+      - current_batch_size
+      - recommended_size
+      - expected_improvement
+      - confidence_level
+      - reasoning
+      - average_processing_time_ms
+      - gas_saved_percentage
+      - efficiency_rating
+      - sample_size
+    properties:
+      chain_id:
+        type: integer
+        format: int64
+        description: Chain ID for this recommendation
+        example: 56
+      token_id:
+        type: integer
+        description: Token ID for this recommendation
+        example: 1
+      current_batch_size:
+        type: integer
+        description: Current batch size being used
+        example: 25
+      recommended_size:
+        type: integer
+        description: Recommended optimal batch size
+        example: 30
+      expected_improvement:
+        type: number
+        format: float
+        description: Expected improvement percentage
+        example: 12.5
+      confidence_level:
+        type: number
+        format: float
+        description: Confidence level of the recommendation (0-100)
+        example: 87.3
+      reasoning:
+        type: string
+        description: Human-readable explanation of the recommendation
+        example: "Increasing batch size to 30 will improve efficiency by 12.5% based on recent performance data"
+      average_processing_time_ms:
+        type: integer
+        description: Average processing time in milliseconds
+        example: 2150
+      gas_saved_percentage:
+        type: number
+        format: float
+        description: Gas saved percentage compared to individual transactions
+        example: 78.2
+      efficiency_rating:
+        type: number
+        format: float
+        description: Overall efficiency rating (0-100)
+        example: 82.6
+      sample_size:
+        type: integer
+        description: Number of samples used for this analysis
+        example: 156
 
   optimizationRecommendation:
     type: object

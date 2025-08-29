@@ -3,6 +3,7 @@ package assets
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -53,14 +54,70 @@ func (s *service) AdjustAssets(ctx context.Context, req *types.AssetAdjustReques
 		Msg("Processing asset adjustment request")
 
 	// Request validation is handled at handler layer
-	// TODO: OperationID 少幂等判断
+
+	// 1. 幂等性检查 - 检查 OperationID 是否已经存在
+	mainOperationID := uuid.MustParse(*req.OperationID)
+	existingTx, err := models.Transactions(
+		models.TransactionWhere.OperationID.EQ(null.StringFrom(mainOperationID.String())),
+	).One(ctx, s.db)
+
+	if err == nil && existingTx != nil {
+		// OperationID 已存在，返回已有结果
+		log.Info().
+			Str("operation_id", *req.OperationID).
+			Str("existing_tx_id", existingTx.TXID).
+			Msg("Operation already processed, returning existing result")
+
+		// 统计已处理的记录数
+		processedCount, err := models.Transactions(
+			models.TransactionWhere.OperationID.EQ(null.StringFrom(mainOperationID.String())),
+		).Count(ctx, s.db)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to count existing transactions")
+			processedCount = int64(len(req.Adjustments)) // fallback
+		}
+
+		// 返回已有结果
+		status := existingTx.Status.String
+		if status == "" {
+			status = "recorded"
+		}
+
+		response := &types.AssetAdjustResponse{
+			OperationID:    req.OperationID,
+			ProcessedCount: &processedCount,
+			Status:         &status,
+		}
+
+		// Build batch info for idempotent response
+		var chainID int64
+		var tokenID int
+		if len(req.Adjustments) > 0 {
+			chainID = *req.Adjustments[0].ChainID
+			tokenID = s.getTokenIDBySymbol(*req.Adjustments[0].ChainID, *req.Adjustments[0].TokenSymbol)
+		}
+
+		batchInfo := &types.BatchInfo{
+			WillBeBatched:      true,
+			BatchType:          "batchAdjustAssets",
+			CurrentBatchSize:   int64(s.getCurrentBatchSize(chainID, tokenID)),
+			OptimalBatchSize:   int64(s.getOptimalBatchSize(chainID, tokenID)),
+			ExpectedEfficiency: "74-76%",
+		}
+
+		return response, batchInfo, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		// 数据库查询错误（非记录不存在）
+		return nil, nil, fmt.Errorf("failed to check operation idempotency: %w", err)
+	}
+
+	// OperationID 不存在，继续正常处理
+	log.Debug().Str("operation_id", *req.OperationID).Msg("New operation, proceeding with processing")
 	// TODO: 是否要更新user_balances表
 
 	// 2. Process each adjustment
 	var adjustJobs []queue.AssetAdjustJob
 	var transactionRecords []*models.Transaction
-
-	mainOperationID := uuid.MustParse(*req.OperationID)
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {

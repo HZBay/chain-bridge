@@ -38,6 +38,11 @@ type TransferRequest struct {
 	// Example: 朋友转账
 	Memo string `json:"memo,omitempty"`
 
+	// Operation ID for idempotency
+	// Example: op_transfer_001
+	// Required: true
+	OperationID *string `json:"operation_id"`
+
 	// Recipient user ID
 	// Example: user_456
 	// Required: true
@@ -62,6 +67,10 @@ func (m *TransferRequest) Validate(formats strfmt.Registry) error {
 	}
 
 	if err := m.validateFromUserID(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateOperationID(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -100,6 +109,15 @@ func (m *TransferRequest) validateChainID(formats strfmt.Registry) error {
 func (m *TransferRequest) validateFromUserID(formats strfmt.Registry) error {
 
 	if err := validate.Required("from_user_id", "body", m.FromUserID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *TransferRequest) validateOperationID(formats strfmt.Registry) error {
+
+	if err := validate.Required("operation_id", "body", m.OperationID); err != nil {
 		return err
 	}
 

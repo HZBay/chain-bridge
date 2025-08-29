@@ -1,0 +1,244 @@
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths:
+  # Token management endpoints
+  /-/tokens:
+    get:
+      tags: [cpop mgmt]
+      summary: Get all supported tokens
+      description: Retrieves the list of all supported tokens across all chains
+      operationId: getTokens
+      security:
+        - Management: [ ]
+      parameters:
+        - name: chain_id
+          in: query
+          type: integer
+          format: int64
+          description: Filter tokens by chain ID
+        - name: enabled_only
+          in: query
+          type: boolean
+          default: false
+          description: Only return enabled tokens
+        - name: batch_support_only
+          in: query
+          type: boolean
+          default: false
+          description: Only return tokens that support batch operations
+      responses:
+        200:
+          description: Successfully retrieved tokens
+          schema:
+            $ref: '#/definitions/tokensResponse'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+    post:
+      tags: [cpop mgmt]
+      summary: Create new supported token
+      description: Adds a new token to the supported tokens list
+      operationId: createToken
+      security:
+        - Management: [ ]
+      parameters:
+        - name: request
+          in: body
+          required: true
+          description: Token creation request
+          schema:
+            $ref: '#/definitions/createTokenRequest'
+      responses:
+        201:
+          description: Token created successfully
+          schema:
+            $ref: '#/definitions/tokenCreateResponse'
+        400:
+          $ref: '../definitions/errors.yml#/responses/BadRequestError'
+        409:
+          description: Token already exists
+          schema:
+            $ref: '../definitions/errors.yml#/definitions/APIError'
+        422:
+          description: Chain not found or validation failed
+          schema:
+            $ref: '../definitions/errors.yml#/definitions/APIError'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+
+  /-/tokens/{token_id}:
+    get:
+      tags: [cpop mgmt]
+      summary: Get token by ID
+      description: Retrieves detailed information for a specific token
+      operationId: getToken
+      security:
+        - Management: [ ]
+      parameters:
+        - name: token_id
+          in: path
+          required: true
+          type: integer
+          description: The token ID
+      responses:
+        200:
+          description: Successfully retrieved token
+          schema:
+            $ref: '#/definitions/tokenResponse'
+        400:
+          $ref: '../definitions/errors.yml#/responses/BadRequestError'
+        404:
+          $ref: '../definitions/errors.yml#/responses/NotFoundError'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+    put:
+      tags: [cpop mgmt]
+      summary: Update token configuration
+      description: Updates the configuration for a specific token
+      operationId: updateToken
+      security:
+        - Management: [ ]
+      parameters:
+        - name: token_id
+          in: path
+          required: true
+          type: integer
+          description: The token ID
+        - name: request
+          in: body
+          required: true
+          description: Token update request
+          schema:
+            $ref: '#/definitions/updateTokenRequest'
+      responses:
+        200:
+          description: Token updated successfully
+          schema:
+            $ref: '#/definitions/tokenConfigUpdateResponse'
+        400:
+          $ref: '../definitions/errors.yml#/responses/BadRequestError'
+        404:
+          $ref: '../definitions/errors.yml#/responses/NotFoundError'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+    delete:
+      tags: [cpop mgmt]
+      summary: Delete token
+      description: Removes a token from the supported tokens list
+      operationId: deleteToken
+      security:
+        - Management: [ ]
+      parameters:
+        - name: token_id
+          in: path
+          required: true
+          type: integer
+          description: The token ID
+      responses:
+        200:
+          description: Token deleted successfully
+          schema:
+            $ref: '#/definitions/tokenDeleteResponse'
+        400:
+          $ref: '../definitions/errors.yml#/responses/BadRequestError'
+        404:
+          $ref: '../definitions/errors.yml#/responses/NotFoundError'
+        409:
+          description: Token is in use and cannot be deleted
+          schema:
+            $ref: '../definitions/errors.yml#/definitions/APIError'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+
+  /-/tokens/chain/{chain_id}:
+    get:
+      tags: [cpop mgmt]
+      summary: Get tokens by chain ID
+      description: Retrieves all supported tokens for a specific chain
+      operationId: getTokensByChain
+      security:
+        - Management: [ ]
+      parameters:
+        - name: chain_id
+          in: path
+          required: true
+          type: integer
+          format: int64
+          description: The blockchain network ID
+        - name: enabled_only
+          in: query
+          type: boolean
+          default: false
+          description: Only return enabled tokens
+        - name: batch_support_only
+          in: query
+          type: boolean
+          default: false
+          description: Only return tokens that support batch operations
+      responses:
+        200:
+          description: Successfully retrieved chain tokens
+          schema:
+            $ref: '#/definitions/tokensResponse'
+        400:
+          $ref: '../definitions/errors.yml#/responses/BadRequestError'
+        404:
+          description: Chain not found
+          schema:
+            $ref: '../definitions/errors.yml#/definitions/APIError'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+
+  /-/tokens/{token_id}/toggle-status:
+    put:
+      tags: [cpop mgmt]
+      summary: Toggle token enabled status
+      description: Enables or disables a specific token
+      operationId: toggleTokenStatus
+      security:
+        - Management: [ ]
+      parameters:
+        - name: token_id
+          in: path
+          required: true
+          type: integer
+          description: The token ID
+        - name: enabled
+          in: query
+          required: true
+          type: boolean
+          description: Whether to enable or disable the token
+      responses:
+        200:
+          description: Token status updated successfully
+          schema:
+            $ref: '#/definitions/tokenConfigUpdateResponse'
+        400:
+          $ref: '../definitions/errors.yml#/responses/BadRequestError'
+        404:
+          $ref: '../definitions/errors.yml#/responses/NotFoundError'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+
+  /-/tokens/refresh-cache:
+    post:
+      tags: [cpop mgmt]
+      summary: Refresh tokens cache
+      description: Forces a refresh of the cached token configuration data
+      operationId: refreshTokensCache
+      security:
+        - Management: [ ]
+      responses:
+        200:
+          description: Cache refreshed successfully
+          schema:
+            type: object
+            properties:
+              message:
+                type: string
+                example: "Tokens cache refreshed successfully"
+            required:
+              - message
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'

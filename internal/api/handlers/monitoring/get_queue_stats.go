@@ -49,9 +49,8 @@ func (h *Handler) GetQueueStats(c echo.Context) error {
 		stats = append(stats, queueStat)
 	}
 
-	response := &types.QueueStatsResponse{
-		Data: stats,
-	}
+	// QueueStatsResponse is now just an array type
+	response := types.QueueStatsResponse(stats)
 
 	return util.ValidateAndReturn(c, http.StatusOK, response)
 }

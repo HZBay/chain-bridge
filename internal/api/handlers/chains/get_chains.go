@@ -3,6 +3,7 @@ package chains
 import (
 	"net/http"
 
+	"github.com/go-openapi/strfmt"
 	"github.com/hzbay/chain-bridge/internal/api"
 	"github.com/hzbay/chain-bridge/internal/types"
 	"github.com/hzbay/chain-bridge/internal/util"
@@ -31,25 +32,30 @@ func (h *Handler) GetChains(c echo.Context) error {
 		Int("chains_count", len(chainConfigs)).
 		Msg("Retrieved chains configuration")
 
-	// TODO: 把类型的转换放到service中处理好一些
-	// Convert to generated types
-	chains := make([]*types.ChainsResponseDataItems0, len(chainConfigs))
+	// Convert to generated types - ChainsResponse is now an array type
+	chains := make([]*types.ChainResponse, len(chainConfigs))
 	for i, config := range chainConfigs {
-		chainData := &types.ChainsResponseDataItems0{
-			ChainID:      config.ChainID,
-			Name:         config.Name,
-			RPCURL:       config.RPCURL,
-			IsEnabled:    config.IsEnabled,
-			BatchSize:    int64(config.BatchConfig.OptimalBatchSize),
-			BatchTimeout: 300, // Default 5 minutes
+		chainData := &types.ChainResponse{
+			ChainID:                 config.ChainID,
+			Name:                    config.Name,
+			ShortName:               config.ShortName,
+			RPCURL:                  config.RPCURL,
+			ExplorerURL:             config.ExplorerURL,
+			EntryPointAddress:       config.EntryPointAddress,
+			CpopTokenAddress:        config.CpopTokenAddress,
+			MasterAggregatorAddress: config.MasterAggregatorAddress,
+			AccountManagerAddress:   config.AccountManagerAddress,
+			OptimalBatchSize:        int64(config.BatchConfig.OptimalBatchSize),
+			MaxBatchSize:            int64(config.BatchConfig.MaxBatchSize),
+			MinBatchSize:            int64(config.BatchConfig.MinBatchSize),
+			IsEnabled:               config.IsEnabled,
+			CreatedAt:               strfmt.DateTime(config.CreatedAt),
 		}
 		chains[i] = chainData
 	}
 
-	// Use proper response type
-	response := &types.ChainsResponse{
-		Data: chains,
-	}
+	// ChainsResponse is now just an array type
+	response := types.ChainsResponse(chains)
 
 	return util.ValidateAndReturn(c, http.StatusOK, response)
 }

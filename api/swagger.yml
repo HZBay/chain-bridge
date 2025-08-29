@@ -15,7 +15,7 @@ paths:
       - Management: []
       description: 获取特定批量处理操作的详细信息，包含CPOP效率指标
       tags:
-      - cpop
+      - cpop mgmt
       summary: Get batch processing status
       operationId: getBatchStatus
       parameters:
@@ -136,50 +136,57 @@ paths:
               message: Internal server error
   /-/chains:
     get:
+      security:
+      - Management: []
       description: Retrieves the list of all enabled blockchain networks and their
         configurations
       tags:
-      - cpop
+      - cpop mgmt
       summary: Get all enabled chains configuration
       operationId: getChains
       responses:
         "200":
           description: Successfully retrieved chains configuration
           schema:
-            type: object
-            required:
-            - data
-            properties:
-              data:
-                type: array
-                items:
-                  type: object
-                  properties:
-                    batch_size:
-                      description: Batch size for processing
-                      type: integer
-                      example: 25
-                    batch_timeout:
-                      description: Batch timeout in seconds
-                      type: integer
-                      example: 300
-                    chain_id:
-                      description: Chain ID
-                      type: integer
-                      format: int64
-                      example: 56
-                    is_enabled:
-                      description: Whether chain is enabled
-                      type: boolean
-                      example: true
-                    name:
-                      description: Chain name
-                      type: string
-                      example: BSC
-                    rpc_url:
-                      description: RPC endpoint URL
-                      type: string
-                      example: https://bsc-dataseed.binance.org/
+            $ref: '#/definitions/ChainsResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+    post:
+      security:
+      - Management: []
+      description: Adds a new blockchain network to the supported chains list
+      tags:
+      - cpop mgmt
+      summary: Create new chain configuration
+      operationId: createChain
+      parameters:
+      - description: Chain creation request
+        name: request
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/createChainRequest'
+      responses:
+        "201":
+          description: Chain created successfully
+          schema:
+            $ref: '#/definitions/chainCreateResponse'
+        "400":
+          description: Bad request error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Bad request
+        "409":
+          description: Chain already exists
+          schema:
+            $ref: '#/definitions/apiError'
         "500":
           description: Internal server error
           schema:
@@ -189,23 +196,19 @@ paths:
               message: Internal server error
   /-/chains/refresh-cache:
     post:
+      security:
+      - Management: []
       description: Forces a refresh of the cached chain configuration data from the
         database
       tags:
-      - cpop
+      - cpop mgmt
       summary: Refresh chains configuration cache
       operationId: refreshChainsCache
       responses:
         "200":
           description: Cache refreshed successfully
           schema:
-            type: object
-            required:
-            - message
-            properties:
-              message:
-                type: string
-                example: Chain cache refreshed successfully
+            $ref: '#/definitions/CacheRefreshResponse'
         "500":
           description: Internal server error
           schema:
@@ -215,9 +218,11 @@ paths:
               message: Internal server error
   /-/chains/{chain_id}:
     get:
+      security:
+      - Management: []
       description: Retrieves detailed configuration for a specific blockchain network
       tags:
-      - cpop
+      - cpop mgmt
       summary: Get chain configuration by ID
       operationId: getChainConfig
       parameters:
@@ -231,38 +236,7 @@ paths:
         "200":
           description: Successfully retrieved chain configuration
           schema:
-            type: object
-            required:
-            - data
-            properties:
-              data:
-                type: object
-                properties:
-                  batch_size:
-                    description: Batch size for processing
-                    type: integer
-                    example: 25
-                  batch_timeout:
-                    description: Batch timeout in seconds
-                    type: integer
-                    example: 300
-                  chain_id:
-                    description: Chain ID
-                    type: integer
-                    format: int64
-                    example: 56
-                  is_enabled:
-                    description: Whether chain is enabled
-                    type: boolean
-                    example: true
-                  name:
-                    description: Chain name
-                    type: string
-                    example: BSC
-                  rpc_url:
-                    description: RPC endpoint URL
-                    type: string
-                    example: https://bsc-dataseed.binance.org/
+            $ref: '#/definitions/ChainResponse'
         "400":
           description: Bad request error
           schema:
@@ -284,12 +258,106 @@ paths:
           examples:
             application/json:
               message: Internal server error
+    put:
+      security:
+      - Management: []
+      description: Updates the configuration for a specific blockchain network
+      tags:
+      - cpop mgmt
+      summary: Update chain configuration
+      operationId: updateChain
+      parameters:
+      - type: integer
+        format: int64
+        description: The blockchain network ID
+        name: chain_id
+        in: path
+        required: true
+      - description: Chain update request
+        name: request
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/updateChainRequest'
+      responses:
+        "200":
+          description: Chain updated successfully
+          schema:
+            $ref: '#/definitions/chainUpdateResponse'
+        "400":
+          description: Bad request error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Bad request
+        "404":
+          description: Not found error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Not found
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+    delete:
+      security:
+      - Management: []
+      description: Removes a blockchain network from the supported chains list
+      tags:
+      - cpop mgmt
+      summary: Delete chain configuration
+      operationId: deleteChain
+      parameters:
+      - type: integer
+        format: int64
+        description: The blockchain network ID
+        name: chain_id
+        in: path
+        required: true
+      responses:
+        "200":
+          description: Chain deleted successfully
+          schema:
+            $ref: '#/definitions/chainDeleteResponse'
+        "400":
+          description: Bad request error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Bad request
+        "404":
+          description: Not found error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Not found
+        "409":
+          description: Chain is in use and cannot be deleted
+          schema:
+            $ref: '#/definitions/apiError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
   /-/chains/{chain_id}/batch-config:
     put:
+      security:
+      - Management: []
       description: Updates the batch processing configuration parameters for a specific
         blockchain network
       tags:
-      - cpop
+      - cpop mgmt
       summary: Update batch configuration for a chain
       operationId: updateChainBatchConfig
       parameters:
@@ -313,13 +381,54 @@ paths:
         "200":
           description: Batch configuration updated successfully
           schema:
-            type: object
-            required:
-            - message
-            properties:
-              message:
-                type: string
-                example: Batch configuration updated successfully
+            $ref: '#/definitions/BatchConfigUpdateResponse'
+        "400":
+          description: Bad request error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Bad request
+        "404":
+          description: Not found error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Not found
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+  /-/chains/{chain_id}/toggle-status:
+    put:
+      security:
+      - Management: []
+      description: Enables or disables a specific blockchain network
+      tags:
+      - cpop mgmt
+      summary: Toggle chain enabled status
+      operationId: toggleChainStatus
+      parameters:
+      - type: integer
+        format: int64
+        description: The blockchain network ID
+        name: chain_id
+        in: path
+        required: true
+      - type: boolean
+        description: Whether to enable or disable the chain
+        name: enabled
+        in: query
+        required: true
+      responses:
+        "200":
+          description: Chain status updated successfully
+          schema:
+            $ref: '#/definitions/chainToggleStatusResponse'
         "400":
           description: Bad request error
           schema:
@@ -387,7 +496,70 @@ paths:
         "200":
           description: Optimization recommendation retrieved successfully
           schema:
-            $ref: '#/definitions/optimizationRecommendationResponse'
+            type: object
+            required:
+            - chain_id
+            - token_id
+            - current_batch_size
+            - recommended_size
+            - expected_improvement
+            - confidence_level
+            - reasoning
+            - average_processing_time_ms
+            - gas_saved_percentage
+            - efficiency_rating
+            - sample_size
+            properties:
+              average_processing_time_ms:
+                description: Average processing time in milliseconds
+                type: integer
+                example: 2150
+              chain_id:
+                description: Chain ID for this recommendation
+                type: integer
+                format: int64
+                example: 56
+              confidence_level:
+                description: Confidence level of the recommendation (0-100)
+                type: number
+                format: float
+                example: 87.3
+              current_batch_size:
+                description: Current batch size being used
+                type: integer
+                example: 25
+              efficiency_rating:
+                description: Overall efficiency rating (0-100)
+                type: number
+                format: float
+                example: 82.6
+              expected_improvement:
+                description: Expected improvement percentage
+                type: number
+                format: float
+                example: 12.5
+              gas_saved_percentage:
+                description: Gas saved percentage compared to individual transactions
+                type: number
+                format: float
+                example: 78.2
+              reasoning:
+                description: Human-readable explanation of the recommendation
+                type: string
+                example: Increasing batch size to 30 will improve efficiency by 12.5%
+                  based on recent performance data
+              recommended_size:
+                description: Recommended optimal batch size
+                type: integer
+                example: 30
+              sample_size:
+                description: Number of samples used for this analysis
+                type: integer
+                example: 156
+              token_id:
+                description: Token ID for this recommendation
+                type: integer
+                example: 1
         "400":
           description: Bad request error
           schema:
@@ -489,6 +661,338 @@ paths:
           description: Ready.
         "521":
           description: Not ready.
+  /-/tokens:
+    get:
+      security:
+      - Management: []
+      description: Retrieves the list of all supported tokens across all chains
+      tags:
+      - cpop mgmt
+      summary: Get all supported tokens
+      operationId: getTokens
+      parameters:
+      - type: integer
+        format: int64
+        description: Filter tokens by chain ID
+        name: chain_id
+        in: query
+      - type: boolean
+        default: false
+        description: Only return enabled tokens
+        name: enabled_only
+        in: query
+      - type: boolean
+        default: false
+        description: Only return tokens that support batch operations
+        name: batch_support_only
+        in: query
+      responses:
+        "200":
+          description: Successfully retrieved tokens
+          schema:
+            $ref: '#/definitions/tokensResponse'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+    post:
+      security:
+      - Management: []
+      description: Adds a new token to the supported tokens list
+      tags:
+      - cpop mgmt
+      summary: Create new supported token
+      operationId: createToken
+      parameters:
+      - description: Token creation request
+        name: request
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/createTokenRequest'
+      responses:
+        "201":
+          description: Token created successfully
+          schema:
+            $ref: '#/definitions/tokenCreateResponse'
+        "400":
+          description: Bad request error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Bad request
+        "409":
+          description: Token already exists
+          schema:
+            $ref: '#/definitions/apiError'
+        "422":
+          description: Chain not found or validation failed
+          schema:
+            $ref: '#/definitions/apiError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+  /-/tokens/chain/{chain_id}:
+    get:
+      security:
+      - Management: []
+      description: Retrieves all supported tokens for a specific chain
+      tags:
+      - cpop mgmt
+      summary: Get tokens by chain ID
+      operationId: getTokensByChain
+      parameters:
+      - type: integer
+        format: int64
+        description: The blockchain network ID
+        name: chain_id
+        in: path
+        required: true
+      - type: boolean
+        default: false
+        description: Only return enabled tokens
+        name: enabled_only
+        in: query
+      - type: boolean
+        default: false
+        description: Only return tokens that support batch operations
+        name: batch_support_only
+        in: query
+      responses:
+        "200":
+          description: Successfully retrieved chain tokens
+          schema:
+            $ref: '#/definitions/tokensResponse'
+        "400":
+          description: Bad request error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Bad request
+        "404":
+          description: Chain not found
+          schema:
+            $ref: '#/definitions/apiError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+  /-/tokens/refresh-cache:
+    post:
+      security:
+      - Management: []
+      description: Forces a refresh of the cached token configuration data
+      tags:
+      - cpop mgmt
+      summary: Refresh tokens cache
+      operationId: refreshTokensCache
+      responses:
+        "200":
+          description: Cache refreshed successfully
+          schema:
+            type: object
+            required:
+            - message
+            properties:
+              message:
+                type: string
+                example: Tokens cache refreshed successfully
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+  /-/tokens/{token_id}:
+    get:
+      security:
+      - Management: []
+      description: Retrieves detailed information for a specific token
+      tags:
+      - cpop mgmt
+      summary: Get token by ID
+      operationId: getToken
+      parameters:
+      - type: integer
+        description: The token ID
+        name: token_id
+        in: path
+        required: true
+      responses:
+        "200":
+          description: Successfully retrieved token
+          schema:
+            $ref: '#/definitions/tokenResponse'
+        "400":
+          description: Bad request error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Bad request
+        "404":
+          description: Not found error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Not found
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+    put:
+      security:
+      - Management: []
+      description: Updates the configuration for a specific token
+      tags:
+      - cpop mgmt
+      summary: Update token configuration
+      operationId: updateToken
+      parameters:
+      - type: integer
+        description: The token ID
+        name: token_id
+        in: path
+        required: true
+      - description: Token update request
+        name: request
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/updateTokenRequest'
+      responses:
+        "200":
+          description: Token updated successfully
+          schema:
+            $ref: '#/definitions/tokenConfigUpdateResponse'
+        "400":
+          description: Bad request error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Bad request
+        "404":
+          description: Not found error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Not found
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+    delete:
+      security:
+      - Management: []
+      description: Removes a token from the supported tokens list
+      tags:
+      - cpop mgmt
+      summary: Delete token
+      operationId: deleteToken
+      parameters:
+      - type: integer
+        description: The token ID
+        name: token_id
+        in: path
+        required: true
+      responses:
+        "200":
+          description: Token deleted successfully
+          schema:
+            $ref: '#/definitions/tokenDeleteResponse'
+        "400":
+          description: Bad request error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Bad request
+        "404":
+          description: Not found error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Not found
+        "409":
+          description: Token is in use and cannot be deleted
+          schema:
+            $ref: '#/definitions/apiError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+  /-/tokens/{token_id}/toggle-status:
+    put:
+      security:
+      - Management: []
+      description: Enables or disables a specific token
+      tags:
+      - cpop mgmt
+      summary: Toggle token enabled status
+      operationId: toggleTokenStatus
+      parameters:
+      - type: integer
+        description: The token ID
+        name: token_id
+        in: path
+        required: true
+      - type: boolean
+        description: Whether to enable or disable the token
+        name: enabled
+        in: query
+        required: true
+      responses:
+        "200":
+          description: Token status updated successfully
+          schema:
+            $ref: '#/definitions/tokenConfigUpdateResponse'
+        "400":
+          description: Bad request error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Bad request
+        "404":
+          description: Not found error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Not found
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
   /-/version:
     get:
       security:
@@ -790,7 +1294,7 @@ paths:
   /api/v1/assets/adjust:
     post:
       security:
-      - Management: []
+      - Bearer: []
       description: 批量调整用户资产余额（铸造/销毁操作），支持智能批处理
       tags:
       - cpop
@@ -856,36 +1360,116 @@ paths:
           description: Transfer recorded successfully
           schema:
             type: object
+            required:
+            - operation_id
+            - from_user_id
+            - to_user_id
+            - chain_id
+            - token_symbol
+            - amount
+            - status
+            - transfer_records
+            - will_be_batched
+            - batch_type
+            - current_batch_size
+            - optimal_batch_size
+            - expected_efficiency
             properties:
-              batch_info:
-                $ref: '#/definitions/batchInfo'
-              data:
-                $ref: '#/definitions/transferResponse'
+              amount:
+                description: Transfer amount
+                type: string
+                example: "50.000000000000000000"
+              batch_type:
+                description: Batch operation type
+                type: string
+                example: batchTransferFrom
+              chain_id:
+                description: Chain ID
+                type: integer
+                format: int64
+                example: 56
+              current_batch_size:
+                description: Current batch size
+                type: integer
+                example: 12
+              expected_efficiency:
+                description: Expected efficiency
+                type: string
+                example: 74-76%
+              from_user_id:
+                description: Sender user ID
+                type: string
+                example: user_123
+              operation_id:
+                description: Operation ID
+                type: string
+                example: op_transfer_001
+              optimal_batch_size:
+                description: Optimal batch size
+                type: integer
+                example: 25
+              status:
+                description: Transfer status
+                type: string
+                example: recorded
+              to_user_id:
+                description: Recipient user ID
+                type: string
+                example: user_456
+              token_symbol:
+                description: Token symbol
+                type: string
+                example: CPOP
+              transfer_records:
+                type: array
+                items:
+                  type: object
+                  properties:
+                    amount:
+                      description: Amount with sign
+                      type: string
+                      example: "-50.000000000000000000"
+                    transfer_direction:
+                      description: Transfer direction
+                      type: string
+                      enum:
+                      - outgoing
+                      - incoming
+                    tx_id:
+                      description: Transaction ID
+                      type: string
+                      example: tx_outgoing_001
+                    user_id:
+                      description: User ID
+                      type: string
+                      example: user_123
+              will_be_batched:
+                description: Whether will be batched
+                type: boolean
+                example: true
           examples:
             application/json:
-              batch_info:
-                batch_type: batchTransferFrom
-                current_batch_size: 12
-                expected_efficiency: 74-76%
-                optimal_batch_size: 25
-                will_be_batched: true
-              data:
-                amount: "50.000000000000000000"
-                chain_id: 56
-                from_user_id: user_123
-                operation_id: op_transfer_001
-                status: recorded
-                to_user_id: user_456
-                token_symbol: CPOP
-                transfer_records:
-                - amount: "-50.000000000000000000"
-                  transfer_direction: outgoing
-                  tx_id: tx_outgoing_001
-                  user_id: user_123
-                - amount: "50.000000000000000000"
-                  transfer_direction: incoming
-                  tx_id: tx_incoming_001
-                  user_id: user_456
+              amount: "50.000000000000000000"
+              batch_type: batchTransferFrom
+              chain_id: 56
+              current_batch_size: 12
+              expected_efficiency: 74-76%
+              from_user_id: user_123
+              operation_id: op_transfer_001
+              optimal_batch_size: 25
+              status: recorded
+              to_user_id: user_456
+              token_symbol: CPOP
+              transfer_records:
+              - amount: "-50.000000000000000000"
+                transfer_direction: outgoing
+                tx_id: tx_outgoing_001
+                user_id: user_123
+              - amount: "50.000000000000000000"
+                transfer_direction: incoming
+                tx_id: tx_incoming_001
+                user_id: user_456
+              will_be_batched: true
         "400":
           description: Invalid transfer parameters
           schema:
@@ -926,7 +1510,7 @@ paths:
   /api/v1/assets/{user_id}:
     get:
       security:
-      - Management: []
+      - Bearer: []
       description: 获取用户跨链资产概览，包含批量处理状态信息
       tags:
       - cpop
@@ -943,11 +1527,81 @@ paths:
           description: User assets retrieved successfully
           schema:
             type: object
+            required:
+            - user_id
+            - total_value_usd
+            - assets
             properties:
-              batch_info:
-                $ref: '#/definitions/batchInfo'
-              data:
-                $ref: '#/definitions/assetsResponse'
+              assets:
+                type: array
+                items:
+                  type: object
+                  required:
+                  - chain_id
+                  - symbol
+                  - confirmed_balance
+                  - pending_balance
+                  - locked_balance
+                  properties:
+                    balance_usd:
+                      description: Balance in USD
+                      type: number
+                      format: float
+                      example: 250
+                    chain_id:
+                      description: Chain ID
+                      type: integer
+                      format: int64
+                      example: 56
+                    chain_name:
+                      description: Chain name
+                      type: string
+                      example: BSC
+                    confirmed_balance:
+                      description: Confirmed balance on-chain
+                      type: string
+                      example: "5000.0"
+                    contract_address:
+                      description: Token contract address
+                      type: string
+                      example: 0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3
+                    decimals:
+                      description: Token decimals
+                      type: integer
+                      example: 18
+                    locked_balance:
+                      description: Locked balance
+                      type: string
+                      example: "0.0"
+                    name:
+                      description: Token name
+                      type: string
+                      example: ChainBridge PoP Token
+                    pending_balance:
+                      description: Balance including pending changes
+                      type: string
+                      example: "5050.0"
+                    symbol:
+                      description: Token symbol
+                      type: string
+                      example: CPOP
+                    sync_status:
+                      description: Synchronization status
+                      type: string
+                      default: synced
+                      enum:
+                      - synced
+                      - syncing
+                      - pending
+              total_value_usd:
+                description: Total portfolio value in USD
+                type: number
+                format: float
+                example: 1250.5
+              user_id:
+                description: User identifier
+                type: string
+                example: user_123
         "400":
           description: Bad request error
           schema:
@@ -1033,62 +1687,213 @@ paths:
           description: User transactions retrieved successfully
           schema:
             type: object
+            required:
+            - user_id
+            - total_count
+            - page
+            - limit
+            - transactions
+            - total_incoming
+            - total_outgoing
+            - net_change
+            - gas_saved_total
             properties:
-              data:
-                $ref: '#/definitions/transactionHistoryResponse'
-              summary:
-                $ref: '#/definitions/transactionSummary'
+              gas_saved_total:
+                description: Total gas saved
+                type: string
+                example: 45.80 USD
+              limit:
+                description: Page size
+                type: integer
+                example: 20
+              net_change:
+                description: Net change amount
+                type: string
+                example: "300.000000000000000000"
+              page:
+                description: Current page
+                type: integer
+                example: 1
+              total_count:
+                description: Total transaction count
+                type: integer
+                example: 156
+              total_incoming:
+                description: Total incoming amount
+                type: string
+                example: "2150.000000000000000000"
+              total_outgoing:
+                description: Total outgoing amount
+                type: string
+                example: "1850.000000000000000000"
+              transactions:
+                type: array
+                items:
+                  type: object
+                  required:
+                  - tx_id
+                  - chain_id
+                  - token_symbol
+                  - tx_type
+                  - business_type
+                  - amount
+                  - status
+                  properties:
+                    amount:
+                      description: Transaction amount (positive/negative)
+                      type: string
+                      example: "-50.000000000000000000"
+                    amount_usd:
+                      description: Amount in USD
+                      type: string
+                      example: "-2.50"
+                    batch_id:
+                      description: Batch ID if batched
+                      type: string
+                      example: batch_transfer_001
+                    block_number:
+                      description: Block number
+                      type: integer
+                      format: int64
+                    business_type:
+                      description: Business type
+                      type: string
+                      enum:
+                      - transfer
+                      - reward
+                      - gas_fee
+                      - consumption
+                      - refund
+                    chain_id:
+                      description: Chain ID
+                      type: integer
+                      format: int64
+                      example: 56
+                    chain_name:
+                      description: Chain name
+                      type: string
+                      example: BSC
+                    confirmed_at:
+                      description: Confirmation timestamp
+                      type: string
+                      format: date-time
+                    created_at:
+                      description: Creation timestamp
+                      type: string
+                      format: date-time
+                    gas_saved_percentage:
+                      description: Gas saved percentage
+                      type: number
+                      format: float
+                      example: 76.8
+                    is_batch_operation:
+                      description: Whether part of batch operation
+                      type: boolean
+                      default: false
+                    operation_id:
+                      description: Business operation ID
+                      type: string
+                      example: op_transfer_001
+                    reason_detail:
+                      description: Detailed reason
+                      type: string
+                      example: 朋友转账
+                    reason_type:
+                      description: Reason type
+                      type: string
+                      example: user_transfer
+                    related_user_id:
+                      description: Related user ID (for transfers)
+                      type: string
+                      example: user_456
+                    status:
+                      description: Transaction status
+                      type: string
+                      default: pending
+                      enum:
+                      - pending
+                      - batching
+                      - submitted
+                      - confirmed
+                      - failed
+                    token_symbol:
+                      description: Token symbol
+                      type: string
+                      example: CPOP
+                    transfer_direction:
+                      description: Transfer direction (only for transfers)
+                      type: string
+                      enum:
+                      - outgoing
+                      - incoming
+                    tx_hash:
+                      description: Blockchain transaction hash
+                      type: string
+                      example: 0xabc123...
+                    tx_id:
+                      description: Transaction ID
+                      type: string
+                      example: tx_001
+                    tx_type:
+                      description: Transaction type
+                      type: string
+                      enum:
+                      - mint
+                      - burn
+                      - transfer
+              user_id:
+                description: User ID
+                type: string
+                example: user_123
           examples:
             application/json:
-              data:
-                limit: 20
-                page: 1
-                total_count: 156
-                transactions:
-                - amount: "-50.000000000000000000"
-                  amount_usd: "-2.50"
-                  batch_id: batch_transfer_001
-                  business_type: transfer
-                  chain_id: 56
-                  chain_name: BSC
-                  confirmed_at: "2024-12-15T10:35:00Z"
-                  created_at: "2024-12-15T10:30:00Z"
-                  gas_saved_percentage: 76.8
-                  is_batch_operation: true
-                  operation_id: op_transfer_001
-                  reason_detail: 朋友转账
-                  reason_type: user_transfer
-                  related_user_id: user_456
-                  status: confirmed
-                  token_symbol: CPOP
-                  transfer_direction: outgoing
-                  tx_hash: 0xabc123...
-                  tx_id: tx_001
-                  tx_type: transfer
-                - amount: "100.000000000000000000"
-                  amount_usd: "5.00"
-                  batch_id: batch_mint_002
-                  business_type: reward
-                  chain_id: 56
-                  chain_name: BSC
-                  confirmed_at: "2024-12-14T09:05:00Z"
-                  created_at: "2024-12-14T09:00:00Z"
-                  gas_saved_percentage: 78.2
-                  is_batch_operation: true
-                  operation_id: op_reward_daily_001
-                  reason_detail: 每日签到奖励
-                  reason_type: daily_checkin
-                  status: confirmed
-                  token_symbol: CPOP
-                  tx_hash: 0xdef456...
-                  tx_id: tx_002
-                  tx_type: mint
-                user_id: user_123
-              summary:
-                gas_saved_total: 45.80 USD
-                net_change: "300.000000000000000000"
-                total_incoming: "2150.000000000000000000"
-                total_outgoing: "1850.000000000000000000"
+              gas_saved_total: 45.80 USD
+              limit: 20
+              net_change: "300.000000000000000000"
+              page: 1
+              total_count: 156
+              total_incoming: "2150.000000000000000000"
+              total_outgoing: "1850.000000000000000000"
+              transactions:
+              - amount: "-50.000000000000000000"
+                amount_usd: "-2.50"
+                batch_id: batch_transfer_001
+                business_type: transfer
+                chain_id: 56
+                chain_name: BSC
+                confirmed_at: "2024-12-15T10:35:00Z"
+                created_at: "2024-12-15T10:30:00Z"
+                gas_saved_percentage: 76.8
+                is_batch_operation: true
+                operation_id: op_transfer_001
+                reason_detail: 朋友转账
+                reason_type: user_transfer
+                related_user_id: user_456
+                status: confirmed
+                token_symbol: CPOP
+                transfer_direction: outgoing
+                tx_hash: 0xabc123...
+                tx_id: tx_001
+                tx_type: transfer
+              - amount: "100.000000000000000000"
+                amount_usd: "5.00"
+                batch_id: batch_mint_002
+                business_type: reward
+                chain_id: 56
+                chain_name: BSC
+                confirmed_at: "2024-12-14T09:05:00Z"
+                created_at: "2024-12-14T09:00:00Z"
+                gas_saved_percentage: 78.2
+                is_batch_operation: true
+                operation_id: op_reward_daily_001
+                reason_detail: 每日签到奖励
+                reason_type: daily_checkin
+                status: confirmed
+                token_symbol: CPOP
+                tx_hash: 0xdef456...
+                tx_id: tx_002
+                tx_type: mint
+              user_id: user_123
         "400":
           description: Invalid query parameters
           schema:
@@ -1395,104 +2200,6 @@ paths:
           description: PublicHTTPError, type `PUSH_TOKEN_ALREADY_EXISTS`
           schema:
             $ref: '#/definitions/publicHttpError'
-  /subscribe:
-    get:
-      security:
-      - Management: []
-      description: 建立应用级WebSocket连接，用于接收实时通知
-      tags:
-      - cpop
-      summary: Establish WebSocket connection
-      operationId: subscribeNotifications
-      parameters:
-      - type: string
-        description: Event types to subscribe to (comma-separated)
-        name: events
-        in: query
-      - type: string
-        description: Chain IDs to monitor (comma-separated)
-        name: chains
-        in: query
-      - type: string
-        description: Application identifier
-        name: app_id
-        in: query
-        required: true
-      responses:
-        "101":
-          description: WebSocket connection established
-          schema:
-            type: object
-            properties:
-              data:
-                type: object
-                properties:
-                  app_id:
-                    type: string
-                    example: your_app_id
-                  connection_id:
-                    type: string
-                    example: conn_abc123
-                  rate_limit:
-                    type: string
-                    example: 1000 events/minute
-                  subscribed_chains:
-                    type: array
-                    items:
-                      type: integer
-                    example:
-                    - 56
-                    - 1
-                  subscribed_events:
-                    type: array
-                    items:
-                      type: string
-                    example:
-                    - transaction
-                    - batch
-                    - balance
-              type:
-                type: string
-                example: connection_established
-          examples:
-            application/json:
-              data:
-                app_id: your_app_id
-                connection_id: conn_abc123
-                rate_limit: 1000 events/minute
-                subscribed_chains:
-                - 56
-                - 1
-                subscribed_events:
-                - transaction
-                - batch
-                - balance
-              type: connection_established
-        "400":
-          description: Invalid connection parameters
-          schema:
-            $ref: '#/definitions/apiError'
-          examples:
-            application/json:
-              errors:
-              - code: INVALID_APP_ID
-                field: app_id
-                message: app_id is required for WebSocket connection
-              message: Invalid app_id parameter
-        "401":
-          description: Unauthorized error
-          schema:
-            $ref: '#/definitions/apiError'
-          examples:
-            application/json:
-              message: Unauthorized
-        "500":
-          description: Internal server error
-          schema:
-            $ref: '#/definitions/apiError'
-          examples:
-            application/json:
-              message: Internal server error
   /swagger.yml:
     get:
       description: |-
@@ -1601,72 +2308,69 @@ definitions:
         format: date-time
   ChainResponse:
     type: object
-    required:
-    - data
     properties:
-      data:
-        type: object
-        properties:
-          batch_size:
-            description: Batch size for processing
-            type: integer
-            example: 25
-          batch_timeout:
-            description: Batch timeout in seconds
-            type: integer
-            example: 300
-          chain_id:
-            description: Chain ID
-            type: integer
-            format: int64
-            example: 56
-          is_enabled:
-            description: Whether chain is enabled
-            type: boolean
-            example: true
-          name:
-            description: Chain name
-            type: string
-            example: BSC
-          rpc_url:
-            description: RPC endpoint URL
-            type: string
-            example: https://bsc-dataseed.binance.org/
+      account_manager_address:
+        description: Account manager contract address
+        type: string
+        example: 0xabcdefabcdefabcdefabcdefabcdefabcdefabcd
+      chain_id:
+        description: Chain ID
+        type: integer
+        format: int64
+        example: 11155111
+      cpop_token_address:
+        description: CPOP token contract address
+        type: string
+        example: 0x1234567890123456789012345678901234567890
+      created_at:
+        description: Chain creation timestamp
+        type: string
+        format: date-time
+        example: "2024-12-21T00:00:00Z"
+      entry_point_address:
+        description: EntryPoint contract address
+        type: string
+        example: 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789
+      explorer_url:
+        description: Block explorer URL
+        type: string
+        example: https://sepolia.etherscan.io
+      is_enabled:
+        description: Whether chain is enabled
+        type: boolean
+        example: true
+      master_aggregator_address:
+        description: Master aggregator contract address
+        type: string
+        example: 0x0987654321098765432109876543210987654321
+      max_batch_size:
+        description: Maximum batch size
+        type: integer
+        example: 40
+      min_batch_size:
+        description: Minimum batch size
+        type: integer
+        example: 10
+      name:
+        description: Chain name
+        type: string
+        example: Sepolia Testnet
+      optimal_batch_size:
+        description: Optimal batch size for processing
+        type: integer
+        example: 25
+      rpc_url:
+        description: RPC endpoint URL
+        type: string
+        example: https://eth-sepolia.g.alchemy.com/v2/xxx
+      short_name:
+        description: Chain short name
+        type: string
+        example: sepolia
   ChainsResponse:
-    type: object
-    required:
-    - data
-    properties:
-      data:
-        type: array
-        items:
-          type: object
-          properties:
-            batch_size:
-              description: Batch size for processing
-              type: integer
-              example: 25
-            batch_timeout:
-              description: Batch timeout in seconds
-              type: integer
-              example: 300
-            chain_id:
-              description: Chain ID
-              type: integer
-              format: int64
-              example: 56
-            is_enabled:
-              description: Whether chain is enabled
-              type: boolean
-              example: true
-            name:
-              description: Chain name
-              type: string
-              example: BSC
-            rpc_url:
-              description: RPC endpoint URL
-              type: string
-              example: https://bsc-dataseed.binance.org/
+    type: array
+    items:
+      $ref: '#/definitions/ChainResponse'
   UpdateChainBatchConfigBody:
     type: object
     required:
@@ -2044,6 +2748,43 @@ definitions:
         description: Whether master aggregator was used
         type: boolean
         example: true
+  chainCreateResponse:
+    type: object
+    required:
+    - message
+    - chain_id
+    properties:
+      chain_id:
+        type: integer
+        format: int64
+        example: 11155111
+      message:
+        type: string
+        example: Chain created successfully
+  chainDeleteResponse:
+    type: object
+    required:
+    - message
+    properties:
+      message:
+        type: string
+        example: Chain deleted successfully
+  chainToggleStatusResponse:
+    type: object
+    required:
+    - message
+    properties:
+      message:
+        type: string
+        example: Chain status updated successfully
+  chainUpdateResponse:
+    type: object
+    required:
+    - message
+    properties:
+      message:
+        type: string
+        example: Chain configuration updated successfully
   createAccountRequest:
     type: object
     required:
@@ -2091,6 +2832,116 @@ definitions:
         description: User identifier
         type: string
         example: user_123
+  createChainRequest:
+    type: object
+    required:
+    - chain_id
+    - name
+    - short_name
+    - rpc_url
+    properties:
+      account_manager_address:
+        description: Account manager contract address
+        type: string
+        example: 0xabcdefabcdefabcdefabcdefabcdefabcdefabcd
+      chain_id:
+        description: Chain ID
+        type: integer
+        format: int64
+        example: 11155111
+      cpop_token_address:
+        description: CPOP token contract address
+        type: string
+        example: 0x1234567890123456789012345678901234567890
+      entry_point_address:
+        description: EntryPoint contract address
+        type: string
+        example: 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789
+      explorer_url:
+        description: Block explorer URL
+        type: string
+        example: https://sepolia.etherscan.io
+      is_enabled:
+        description: Whether chain is enabled
+        type: boolean
+        example: true
+      master_aggregator_address:
+        description: Master aggregator contract address
+        type: string
+        example: 0x0987654321098765432109876543210987654321
+      max_batch_size:
+        description: Maximum batch size
+        type: integer
+        example: 40
+      min_batch_size:
+        description: Minimum batch size
+        type: integer
+        example: 10
+      name:
+        description: Chain name
+        type: string
+        example: Sepolia Testnet
+      optimal_batch_size:
+        description: Optimal batch size for processing
+        type: integer
+        example: 25
+      rpc_url:
+        description: RPC endpoint URL
+        type: string
+        example: https://eth-sepolia.g.alchemy.com/v2/xxx
+      short_name:
+        description: Chain short name
+        type: string
+        example: sepolia
+  createTokenRequest:
+    type: object
+    required:
+    - chain_id
+    - symbol
+    - name
+    - decimals
+    - token_type
+    properties:
+      batch_operations:
+        description: Supported batch operations configuration
+        type: object
+        additionalProperties: true
+        example:
+          batchBurn: false
+          batchMint: false
+          batchTransfer: false
+      chain_id:
+        description: Chain ID
+        type: integer
+        format: int64
+        example: 56
+      contract_address:
+        description: Token contract address (null for native tokens)
+        type: string
+        example: 0x1234567890123456789012345678901234567890
+      decimals:
+        description: Token decimals
+        type: integer
+        example: 6
+      name:
+        description: Token name
+        type: string
+        example: Tether USD
+      supports_batch_operations:
+        description: Whether token supports batch operations
+        type: boolean
+        example: false
+      symbol:
+        description: Token symbol
+        type: string
+        example: USDT
+      token_type:
+        description: Token type
+        type: string
+        enum:
+        - native
+        - erc20
+        example: erc20
   deleteUserAccountPayload:
     type: object
     required:
@@ -2742,12 +3593,7 @@ definitions:
         format: int64
         example: 15847
   queueMetricsResponse:
-    type: object
-    required:
-    - data
-    properties:
-      data:
-        $ref: '#/definitions/queueMetrics'
+    $ref: '#/definitions/queueMetrics'
   queueStats:
     type: object
     required:
@@ -2799,14 +3645,97 @@ definitions:
         type: integer
         example: 1
   queueStatsResponse:
+    type: array
+    items:
+      $ref: '#/definitions/queueStats'
+  tokenConfigUpdateResponse:
     type: object
     required:
-    - data
+    - message
     properties:
-      data:
-        type: array
-        items:
-          $ref: '#/definitions/queueStats'
+      message:
+        type: string
+        example: Token configuration updated successfully
+  tokenCreateResponse:
+    type: object
+    required:
+    - message
+    - token_id
+    properties:
+      message:
+        type: string
+        example: Token created successfully
+      token_id:
+        type: integer
+        example: 123
+  tokenDeleteResponse:
+    type: object
+    required:
+    - message
+    properties:
+      message:
+        type: string
+        example: Token deleted successfully
+  tokenResponse:
+    type: object
+    properties:
+      batch_operations:
+        description: Supported batch operations configuration
+        type: object
+        additionalProperties: true
+        example:
+          batchBurn: true
+          batchMint: true
+          batchTransfer: true
+      chain_id:
+        description: Chain ID
+        type: integer
+        format: int64
+        example: 56
+      contract_address:
+        description: Token contract address (null for native tokens)
+        type: string
+        example: 0x1234567890123456789012345678901234567890
+      created_at:
+        description: Token creation timestamp
+        type: string
+        format: date-time
+        example: "2024-12-21T00:00:00Z"
+      decimals:
+        description: Token decimals
+        type: integer
+        example: 18
+      id:
+        description: Token ID
+        type: integer
+        example: 1
+      is_enabled:
+        description: Whether token is enabled
+        type: boolean
+        example: true
+      name:
+        description: Token name
+        type: string
+        example: CPOP Token
+      supports_batch_operations:
+        description: Whether token supports batch operations
+        type: boolean
+        example: true
+      symbol:
+        description: Token symbol
+        type: string
+        example: CPOP
+      token_type:
+        description: Token type
+        type: string
+        enum:
+        - native
+        - erc20
+        example: erc20
+  tokensResponse:
+    type: array
+    items:
+      $ref: '#/definitions/tokenResponse'
   transactionHistoryResponse:
     type: object
     required:
@@ -2949,25 +3878,6 @@ definitions:
         - mint
         - burn
         - transfer
-  transactionSummary:
-    type: object
-    properties:
-      gas_saved_total:
-        description: Total gas saved
-        type: string
-        example: 45.80 USD
-      net_change:
-        description: Net change amount
-        type: string
-        example: "300.000000000000000000"
-      total_incoming:
-        description: Total incoming amount
-        type: string
-        example: "2150.000000000000000000"
-      total_outgoing:
-        description: Total outgoing amount
-        type: string
-        example: "1850.000000000000000000"
   transferCompleteResponse:
     type: object
     required:
@@ -3002,6 +3912,7 @@ definitions:
   transferRequest:
     type: object
     required:
+    - operation_id
     - from_user_id
     - to_user_id
     - chain_id
@@ -3025,6 +3936,10 @@ definitions:
         description: Transfer memo
         type: string
         example: 朋友转账
+      operation_id:
+        description: Operation ID for idempotency
+        type: string
+        example: op_transfer_001
       to_user_id:
         description: Recipient user ID
         type: string
@@ -3078,6 +3993,80 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/transferRecord'
+  updateChainRequest:
+    type: object
+    properties:
+      account_manager_address:
+        description: Account manager contract address
+        type: string
+        example: 0xabcdefabcdefabcdefabcdefabcdefabcdefabcd
+      cpop_token_address:
+        description: CPOP token contract address
+        type: string
+        example: 0x1234567890123456789012345678901234567890
+      entry_point_address:
+        description: EntryPoint contract address
+        type: string
+        example: 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789
+      explorer_url:
+        description: Block explorer URL
+        type: string
+        example: https://updated-explorer.example.com
+      is_enabled:
+        description: Whether chain is enabled
+        type: boolean
+        example: false
+      master_aggregator_address:
+        description: Master aggregator contract address
+        type: string
+        example: 0x0987654321098765432109876543210987654321
+      max_batch_size:
+        description: Maximum batch size
+        type: integer
+        example: 50
+      min_batch_size:
+        description: Minimum batch size
+        type: integer
+        example: 15
+      name:
+        description: Chain name
+        type: string
+        example: Updated Chain Name
+      optimal_batch_size:
+        description: Optimal batch size for processing
+        type: integer
+        example: 30
+      rpc_url:
+        description: RPC endpoint URL
+        type: string
+        example: https://updated-rpc.example.com
+      short_name:
+        description: Chain short name
+        type: string
+        example: updated
+  updateTokenRequest:
+    type: object
+    properties:
+      batch_operations:
+        description: Supported batch operations configuration
+        type: object
+        additionalProperties: true
+        example:
+          batchBurn: false
+          batchMint: true
+          batchTransfer: true
+      is_enabled:
+        description: Whether token is enabled
+        type: boolean
+        example: false
+      name:
+        description: Token name
+        type: string
+        example: Updated Token Name
+      supports_batch_operations:
+        description: Whether token supports batch operations
+        type: boolean
+        example: true
   userAssetsCompleteResponse:
     type: object
     required:
@@ -3088,6 +4077,190 @@ definitions:
         $ref: '#/definitions/batchInfo'
       data:
         $ref: '#/definitions/assetsResponse'
+  userOptimizationRecommendationResponse:
+    type: object
+    required:
+    - chain_id
+    - token_id
+    - current_batch_size
+    - recommended_size
+    - expected_improvement
+    - confidence_level
+    - reasoning
+    - average_processing_time_ms
+    - gas_saved_percentage
+    - efficiency_rating
+    - sample_size
+    properties:
+      average_processing_time_ms:
+        description: Average processing time in milliseconds
+        type: integer
+        example: 2150
+      chain_id:
+        description: Chain ID for this recommendation
+        type: integer
+        format: int64
+        example: 56
+      confidence_level:
+        description: Confidence level of the recommendation (0-100)
+        type: number
+        format: float
+        example: 87.3
+      current_batch_size:
+        description: Current batch size being used
+        type: integer
+        example: 25
+      efficiency_rating:
+        description: Overall efficiency rating (0-100)
+        type: number
+        format: float
+        example: 82.6
+      expected_improvement:
+        description: Expected improvement percentage
+        type: number
+        format: float
+        example: 12.5
+      gas_saved_percentage:
+        description: Gas saved percentage compared to individual transactions
+        type: number
+        format: float
+        example: 78.2
+      reasoning:
+        description: Human-readable explanation of the recommendation
+        type: string
+        example: Increasing batch size to 30 will improve efficiency by 12.5% based
+          on recent performance data
+      recommended_size:
+        description: Recommended optimal batch size
+        type: integer
+        example: 30
+      sample_size:
+        description: Number of samples used for this analysis
+        type: integer
+        example: 156
+      token_id:
+        description: Token ID for this recommendation
+        type: integer
+        example: 1
+  userTransactionHistoryResponse:
+    type: object
+    required:
+    - user_id
+    - total_count
+    - page
+    - limit
+    - transactions
+    - total_incoming
+    - total_outgoing
+    - net_change
+    - gas_saved_total
+    properties:
+      gas_saved_total:
+        description: Total gas saved
+        type: string
+        example: 45.80 USD
+      limit:
+        description: Page size
+        type: integer
+        example: 20
+      net_change:
+        description: Net change amount
+        type: string
+        example: "300.000000000000000000"
+      page:
+        description: Current page
+        type: integer
+        example: 1
+      total_count:
+        description: Total transaction count
+        type: integer
+        example: 156
+      total_incoming:
+        description: Total incoming amount
+        type: string
+        example: "2150.000000000000000000"
+      total_outgoing:
+        description: Total outgoing amount
+        type: string
+        example: "1850.000000000000000000"
+      transactions:
+        type: array
+        items:
+          $ref: '#/definitions/transactionInfo'
+      user_id:
+        description: User ID
+        type: string
+        example: user_123
+  userTransferResponse:
+    type: object
+    required:
+    - operation_id
+    - from_user_id
+    - to_user_id
+    - chain_id
+    - token_symbol
+    - amount
+    - status
+    - transfer_records
+    - will_be_batched
+    - batch_type
+    - current_batch_size
+    - optimal_batch_size
+    - expected_efficiency
+    properties:
+      amount:
+        description: Transfer amount
+        type: string
+        example: "50.000000000000000000"
+      batch_type:
+        description: Batch operation type
+        type: string
+        example: batchTransferFrom
+      chain_id:
+        description: Chain ID
+        type: integer
+        format: int64
+        example: 56
+      current_batch_size:
+        description: Current batch size
+        type: integer
+        example: 12
+      expected_efficiency:
+        description: Expected efficiency
+        type: string
+        example: 74-76%
+      from_user_id:
+        description: Sender user ID
+        type: string
+        example: user_123
+      operation_id:
+        description: Operation ID
+        type: string
+        example: op_transfer_001
+      optimal_batch_size:
+        description: Optimal batch size
+        type: integer
+        example: 25
+      status:
+        description: Transfer status
+        type: string
+        example: recorded
+      to_user_id:
+        description: Recipient user ID
+        type: string
+        example: user_456
+      token_symbol:
+        description: Token symbol
+        type: string
+        example: CPOP
+      transfer_records:
+        type: array
+        items:
+          $ref: '#/definitions/transferRecord'
+      will_be_batched:
+        description: Whether will be batched
+        type: boolean
+        example: true
 responses:
   AuthForbiddenResponse:
     description: PublicHTTPError, type `USER_DEACTIVATED`/`NOT_LOCAL_USER`

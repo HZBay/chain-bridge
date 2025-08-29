@@ -2,10 +2,11 @@ package chains
 
 import (
 	"net/http"
+	"strconv"
 
+	"github.com/go-openapi/strfmt"
 	"github.com/hzbay/chain-bridge/internal/api"
 	"github.com/hzbay/chain-bridge/internal/types"
-	"github.com/hzbay/chain-bridge/internal/types/cpop"
 	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/labstack/echo/v4"
 )
@@ -21,14 +22,12 @@ func (h *Handler) GetChainConfig(c echo.Context) error {
 	ctx := c.Request().Context()
 	log := util.LogFromContext(ctx)
 
-	// Parse and validate path parameters using swagger-generated method
-	params := cpop.NewGetChainConfigParams()
-	if err := params.BindRequest(c.Request(), nil); err != nil {
-		log.Debug().Err(err).Msg("Invalid path parameters")
-		return err
+	// Parse chain ID from path
+	chainIDStr := c.Param("chain_id")
+	chainID, err := strconv.ParseInt(chainIDStr, 10, 64)
+	if err != nil {
+		return echo.NewHTTPError(http.StatusBadRequest, "Invalid chain_id parameter")
 	}
-
-	chainID := params.ChainID
 
 	// Get chain configuration
 	chainConfig, err := h.chainsService.GetChainConfig(ctx, chainID)
@@ -43,20 +42,22 @@ func (h *Handler) GetChainConfig(c echo.Context) error {
 		Bool("is_enabled", chainConfig.IsEnabled).
 		Msg("Retrieved chain configuration")
 
-	// TODO: 把类型的转换放到service中处理好一些
-	// Convert to generated type
-	chainData := &types.ChainResponseData{
-		ChainID:      chainConfig.ChainID,
-		Name:         chainConfig.Name,
-		RPCURL:       chainConfig.RPCURL,
-		IsEnabled:    chainConfig.IsEnabled,
-		BatchSize:    int64(chainConfig.BatchConfig.OptimalBatchSize),
-		BatchTimeout: 300, // Default 5 minutes
-	}
-
 	// Use proper response type
 	response := &types.ChainResponse{
-		Data: chainData,
+		ChainID:                 chainConfig.ChainID,
+		Name:                    chainConfig.Name,
+		ShortName:               chainConfig.ShortName,
+		RPCURL:                  chainConfig.RPCURL,
+		ExplorerURL:             chainConfig.ExplorerURL,
+		EntryPointAddress:       chainConfig.EntryPointAddress,
+		CpopTokenAddress:        chainConfig.CpopTokenAddress,
+		MasterAggregatorAddress: chainConfig.MasterAggregatorAddress,
+		AccountManagerAddress:   chainConfig.AccountManagerAddress,
+		OptimalBatchSize:        int64(chainConfig.BatchConfig.OptimalBatchSize),
+		MaxBatchSize:            int64(chainConfig.BatchConfig.MaxBatchSize),
+		MinBatchSize:            int64(chainConfig.BatchConfig.MinBatchSize),
+		IsEnabled:               chainConfig.IsEnabled,
+		CreatedAt:               strfmt.DateTime(chainConfig.CreatedAt),
 	}
 
 	return util.ValidateAndReturn(c, http.StatusOK, response)

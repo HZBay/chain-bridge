@@ -80,7 +80,7 @@ paths:
         200:
           description: Optimization recommendation retrieved successfully
           schema:
-            $ref: '#/definitions/optimizationRecommendationResponse'
+            $ref: '../definitions/monitoring.yml#/definitions/userOptimizationRecommendationResponse'
         400:
           $ref: '../definitions/errors.yml#/responses/BadRequestError'
         500:
