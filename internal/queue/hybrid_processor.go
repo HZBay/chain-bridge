@@ -4,7 +4,6 @@ import (
 	"context"
 	"database/sql"
 	"math/rand"
-	"sync"
 	"time"
 
 	"github.com/hzbay/chain-bridge/internal/blockchain"
@@ -23,19 +22,7 @@ type HybridBatchProcessor struct {
 	memoryStats   *ProcessorMetrics
 }
 
-// RabbitMQProcessor wraps RabbitMQ client for batch processing
-type RabbitMQProcessor struct {
-	client          *RabbitMQClient
-	db              *sql.DB
-	batchOptimizer  *BatchOptimizer
-	cpopCallers     map[int64]*blockchain.CPOPBatchCaller // chainID -> caller
-	stopChan        chan struct{}
-	processingJobs  map[string][]BatchJob // queueName -> jobs
-	processingMutex sync.RWMutex
-
-	// New batch consumer
-	batchConsumer *RabbitMQBatchConsumer
-}
+// Note: RabbitMQProcessor is now implemented in rabbitmq_processor.go
 
 // BatchGroup represents a group of jobs for batch processing
 type BatchGroup struct {
@@ -56,7 +43,7 @@ type ProcessorMetrics struct {
 // NewHybridBatchProcessor creates a new hybrid batch processor
 func NewHybridBatchProcessor(rabbitmqClient *RabbitMQClient, strategy config.BatchProcessingStrategy) *HybridBatchProcessor {
 	processor := &HybridBatchProcessor{
-		rabbitmqProcessor: &RabbitMQProcessor{client: rabbitmqClient},
+		rabbitmqProcessor: NewRabbitMQProcessor(rabbitmqClient),
 		memoryProcessor:   NewMemoryProcessor(),
 		config:            strategy,
 		rabbitmqStats:     &ProcessorMetrics{},
@@ -209,15 +196,8 @@ func (h *HybridBatchProcessor) StartBatchConsumer(ctx context.Context) error {
 		}
 	}
 
-	// Set dependencies for memory processor using RabbitMQ processor's dependencies
-	if h.rabbitmqProcessor != nil {
-		h.memoryProcessor.SetDependencies(
-			h.rabbitmqProcessor.db,
-			h.rabbitmqProcessor.batchOptimizer,
-			h.rabbitmqProcessor.cpopCallers,
-		)
-		log.Debug().Msg("Memory processor dependencies set from RabbitMQ processor")
-	}
+	// Memory processor dependencies are now set via SetBatchDependencies method
+	log.Debug().Msg("Memory processor will use dependencies set via SetBatchDependencies")
 
 	// Always start memory processor consumer (as fallback)
 	if err := h.memoryProcessor.StartBatchConsumer(ctx); err != nil {
@@ -314,72 +294,17 @@ func (h *HybridBatchProcessor) Close() error {
 	return lastErr
 }
 
-// RabbitMQProcessor implementation
-func (r *RabbitMQProcessor) PublishTransfer(ctx context.Context, job TransferJob) error {
-	queueName := r.client.GetQueueName(job.GetJobType(), job.GetChainID(), job.GetTokenID())
-	return r.client.PublishMessage(ctx, queueName, job)
-}
-
-func (r *RabbitMQProcessor) PublishAssetAdjust(ctx context.Context, job AssetAdjustJob) error {
-	queueName := r.client.GetQueueName(job.GetJobType(), job.GetChainID(), job.GetTokenID())
-	return r.client.PublishMessage(ctx, queueName, job)
-}
-
-func (r *RabbitMQProcessor) PublishNotification(ctx context.Context, job NotificationJob) error {
-	queueName := r.client.GetQueueName(job.GetJobType(), job.GetChainID(), job.GetTokenID())
-	return r.client.PublishMessage(ctx, queueName, job)
-}
-
-func (r *RabbitMQProcessor) StartBatchConsumer(ctx context.Context) error {
-	log.Info().Msg("Starting RabbitMQ batch consumer with CPOP integration")
-
-	// Initialize the new batch consumer if not already created
-	if r.batchConsumer == nil {
-		r.batchConsumer = NewRabbitMQBatchConsumer(
-			r.client,
-			r.db,
-			r.batchOptimizer,
-			r.cpopCallers,
-		)
+// SetBatchDependencies sets the batch processing dependencies for hybrid processor
+func (h *HybridBatchProcessor) SetBatchDependencies(db *sql.DB, optimizer *BatchOptimizer, cpopCallers map[int64]*blockchain.CPOPBatchCaller) {
+	// Set dependencies for RabbitMQ processor
+	if h.rabbitmqProcessor != nil {
+		h.rabbitmqProcessor.SetDependencies(db, optimizer, cpopCallers)
+		log.Debug().Msg("RabbitMQ processor dependencies set")
 	}
 
-	// Start the new batch consumer
-	return r.batchConsumer.Start(ctx)
-}
-
-func (r *RabbitMQProcessor) StopBatchConsumer(ctx context.Context) error {
-	log.Info().Msg("Graceful shutdown initiated for RabbitMQ batch consumer")
-
-	// Stop the new batch consumer
-	if r.batchConsumer != nil {
-		return r.batchConsumer.Stop(ctx)
+	// Set dependencies for memory processor (existing logic)
+	if h.memoryProcessor != nil {
+		h.memoryProcessor.SetDependencies(db, optimizer, cpopCallers)
+		log.Debug().Msg("Memory processor dependencies set")
 	}
-
-	return nil
-}
-
-func (r *RabbitMQProcessor) GetQueueStats() map[string]QueueStats {
-	// Delegated to the new batch consumer
-	if r.batchConsumer != nil {
-		return r.batchConsumer.GetQueueStats()
-	}
-	return make(map[string]QueueStats)
-}
-
-func (r *RabbitMQProcessor) IsHealthy() bool {
-	return r.client != nil && r.client.IsHealthy()
-}
-
-func (r *RabbitMQProcessor) Close() error {
-	if r.client != nil {
-		return r.client.Close()
-	}
-	return nil
-}
-
-// setBatchDependencies sets the batch processing dependencies
-func (r *RabbitMQProcessor) setBatchDependencies(db *sql.DB, optimizer *BatchOptimizer, cpopCallers map[int64]*blockchain.CPOPBatchCaller) {
-	r.db = db
-	r.batchOptimizer = optimizer
-	r.cpopCallers = cpopCallers
 }
