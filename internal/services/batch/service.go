@@ -85,13 +85,13 @@ func (s *service) GetBatchStatus(ctx context.Context, batchID string) (*types.Ba
 	if val, ok := batch.GasSavedUsd.Float64(); ok {
 		gasAnalysis.GasSavedUsd = float32(val)
 	}
-	
+
 	// Add actual gas used and gas saved information from new fields
 	if batch.ActualGasUsed.Valid {
 		log.Debug().Int64("actual_gas_used", batch.ActualGasUsed.Int64).Msg("Actual gas used available")
 	}
 	if batch.GasSaved.Valid {
-		log.Debug().Int64("gas_saved", batch.GasSaved.Int64).Msg("Gas saved available") 
+		log.Debug().Int64("gas_saved", batch.GasSaved.Int64).Msg("Gas saved available")
 	}
 
 	// 5. Build CPOP info

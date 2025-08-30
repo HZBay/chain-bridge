@@ -38,6 +38,8 @@ type Chain struct {
 	MinBatchSize            null.Int    `boil:"min_batch_size" json:"min_batch_size,omitempty" toml:"min_batch_size" yaml:"min_batch_size,omitempty"`
 	IsEnabled               null.Bool   `boil:"is_enabled" json:"is_enabled,omitempty" toml:"is_enabled" yaml:"is_enabled,omitempty"`
 	CreatedAt               null.Time   `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
+	// Payment contract address for PaymentMade event listening
+	PaymentContractAddress null.String `boil:"payment_contract_address" json:"payment_contract_address,omitempty" toml:"payment_contract_address" yaml:"payment_contract_address,omitempty"`
 
 	R *chainR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L chainL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -58,6 +60,7 @@ var ChainColumns = struct {
 	MinBatchSize            string
 	IsEnabled               string
 	CreatedAt               string
+	PaymentContractAddress  string
 }{
 	ChainID:                 "chain_id",
 	Name:                    "name",
@@ -73,6 +76,7 @@ var ChainColumns = struct {
 	MinBatchSize:            "min_batch_size",
 	IsEnabled:               "is_enabled",
 	CreatedAt:               "created_at",
+	PaymentContractAddress:  "payment_contract_address",
 }
 
 var ChainTableColumns = struct {
@@ -90,6 +94,7 @@ var ChainTableColumns = struct {
 	MinBatchSize            string
 	IsEnabled               string
 	CreatedAt               string
+	PaymentContractAddress  string
 }{
 	ChainID:                 "chains.chain_id",
 	Name:                    "chains.name",
@@ -105,6 +110,7 @@ var ChainTableColumns = struct {
 	MinBatchSize:            "chains.min_batch_size",
 	IsEnabled:               "chains.is_enabled",
 	CreatedAt:               "chains.created_at",
+	PaymentContractAddress:  "chains.payment_contract_address",
 }
 
 // Generated where
@@ -124,6 +130,7 @@ var ChainWhere = struct {
 	MinBatchSize            whereHelpernull_Int
 	IsEnabled               whereHelpernull_Bool
 	CreatedAt               whereHelpernull_Time
+	PaymentContractAddress  whereHelpernull_String
 }{
 	ChainID:                 whereHelperint64{field: "\"chains\".\"chain_id\""},
 	Name:                    whereHelperstring{field: "\"chains\".\"name\""},
@@ -139,6 +146,7 @@ var ChainWhere = struct {
 	MinBatchSize:            whereHelpernull_Int{field: "\"chains\".\"min_batch_size\""},
 	IsEnabled:               whereHelpernull_Bool{field: "\"chains\".\"is_enabled\""},
 	CreatedAt:               whereHelpernull_Time{field: "\"chains\".\"created_at\""},
+	PaymentContractAddress:  whereHelpernull_String{field: "\"chains\".\"payment_contract_address\""},
 }
 
 // ChainRels is where relationship names are stored.
@@ -209,9 +217,9 @@ func (r *chainR) GetUserBalances() UserBalanceSlice {
 type chainL struct{}
 
 var (
-	chainAllColumns            = []string{"chain_id", "name", "short_name", "rpc_url", "explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "account_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at"}
+	chainAllColumns            = []string{"chain_id", "name", "short_name", "rpc_url", "explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "account_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at", "payment_contract_address"}
 	chainColumnsWithoutDefault = []string{"chain_id", "name", "short_name", "rpc_url"}
-	chainColumnsWithDefault    = []string{"explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "account_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at"}
+	chainColumnsWithDefault    = []string{"explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "account_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at", "payment_contract_address"}
 	chainPrimaryKeyColumns     = []string{"chain_id"}
 	chainGeneratedColumns      = []string{}
 )

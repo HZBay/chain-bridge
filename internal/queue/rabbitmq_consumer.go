@@ -41,7 +41,7 @@ func (c *RabbitMQBatchConsumer) processBatch(ctx context.Context, messages []*Me
 			Int("invalid_count", len(invalidMessages)).
 			Int("valid_count", len(validMessages)).
 			Msg("Some operations have insufficient balance")
-		
+
 		// Process invalid messages separately
 		c.handleInsufficientBalanceMessages(ctx, invalidMessages)
 	}
@@ -322,7 +322,7 @@ func (c *RabbitMQBatchConsumer) handleInsufficientBalanceMessages(ctx context.Co
 
 	for _, msg := range messages {
 		job := msg.Job
-		
+
 		// Update transaction status to failed with specific reason
 		updateQuery := `
 			UPDATE transactions 
@@ -331,7 +331,7 @@ func (c *RabbitMQBatchConsumer) handleInsufficientBalanceMessages(ctx context.Co
 				failure_reason = 'insufficient_balance',
 				updated_at = $2
 			WHERE tx_id = $1`
-		
+
 		_, err = tx.Exec(updateQuery, job.GetID(), time.Now())
 		if err != nil {
 			log.Error().Err(err).
@@ -375,27 +375,27 @@ func (c *RabbitMQBatchConsumer) sendInsufficientBalanceNotification(ctx context.
 	case TransferJob:
 		userID = typedJob.FromUserID
 		notificationData = map[string]interface{}{
-			"type":            "insufficient_balance",
-			"operation":       "transfer",
-			"amount":          typedJob.Amount,
-			"chain_id":        typedJob.ChainID,
-			"token_id":        typedJob.TokenID,
-			"from_user_id":    typedJob.FromUserID,
-			"to_user_id":      typedJob.ToUserID,
-			"business_type":   typedJob.BusinessType,
-			"reason":          "Insufficient balance for transfer operation",
+			"type":          "insufficient_balance",
+			"operation":     "transfer",
+			"amount":        typedJob.Amount,
+			"chain_id":      typedJob.ChainID,
+			"token_id":      typedJob.TokenID,
+			"from_user_id":  typedJob.FromUserID,
+			"to_user_id":    typedJob.ToUserID,
+			"business_type": typedJob.BusinessType,
+			"reason":        "Insufficient balance for transfer operation",
 		}
 	case AssetAdjustJob:
 		userID = typedJob.UserID
 		notificationData = map[string]interface{}{
-			"type":            "insufficient_balance", 
-			"operation":       typedJob.AdjustmentType,
-			"amount":          typedJob.Amount,
-			"chain_id":        typedJob.ChainID,
-			"token_id":        typedJob.TokenID,
-			"user_id":         typedJob.UserID,
-			"business_type":   typedJob.BusinessType,
-			"reason":          fmt.Sprintf("Insufficient balance for %s operation", typedJob.AdjustmentType),
+			"type":          "insufficient_balance",
+			"operation":     typedJob.AdjustmentType,
+			"amount":        typedJob.Amount,
+			"chain_id":      typedJob.ChainID,
+			"token_id":      typedJob.TokenID,
+			"user_id":       typedJob.UserID,
+			"business_type": typedJob.BusinessType,
+			"reason":        fmt.Sprintf("Insufficient balance for %s operation", typedJob.AdjustmentType),
 		}
 	default:
 		log.Warn().Str("job_type", fmt.Sprintf("%T", job)).Msg("Unknown job type for insufficient balance notification")

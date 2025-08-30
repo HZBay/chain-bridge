@@ -13,6 +13,7 @@ import (
 	"github.com/hzbay/chain-bridge/internal/config"
 	"github.com/hzbay/chain-bridge/internal/data/dto"
 	"github.com/hzbay/chain-bridge/internal/data/local"
+	"github.com/hzbay/chain-bridge/internal/events"
 	"github.com/hzbay/chain-bridge/internal/i18n"
 	"github.com/hzbay/chain-bridge/internal/mailer"
 	"github.com/hzbay/chain-bridge/internal/mailer/transport"
@@ -41,23 +42,25 @@ type Router struct {
 }
 
 type Server struct {
-	Config         config.Server
-	DB             *sql.DB
-	Echo           *echo.Echo
-	Router         *Router
-	Mailer         *mailer.Mailer
-	Push           *push.Service
-	I18n           *i18n.Service
-	Clock          time2.Clock
-	Auth           AuthService
-	Local          *local.Service
-	Metrics        *metrics.Service
-	AccountService account.Service
-	BatchProcessor queue.BatchProcessor
-	QueueMonitor   *queue.QueueMonitor
-	BatchOptimizer *queue.BatchOptimizer
-	ChainsService  chains.Service
-	TokensService  tokens.Service
+	Config              config.Server
+	DB                  *sql.DB
+	Echo                *echo.Echo
+	Router              *Router
+	Mailer              *mailer.Mailer
+	Push                *push.Service
+	I18n                *i18n.Service
+	Clock               time2.Clock
+	Auth                AuthService
+	Local               *local.Service
+	Metrics             *metrics.Service
+	AccountService      account.Service
+	BatchProcessor      queue.BatchProcessor
+	QueueMonitor        *queue.QueueMonitor
+	BatchOptimizer      *queue.BatchOptimizer
+	ChainsService       chains.Service
+	TokensService       tokens.Service
+	PaymentEventService *events.PaymentEventService
+	RabbitMQClient      *queue.RabbitMQClient
 }
 
 type AuthService interface {
@@ -102,7 +105,8 @@ func (s *Server) Ready() bool {
 		s.Auth != nil &&
 		s.Local != nil &&
 		s.AccountService != nil &&
-		s.BatchProcessor != nil
+		s.BatchProcessor != nil &&
+		s.PaymentEventService != nil
 }
 
 func (s *Server) InitCmd() *Server {
@@ -157,6 +161,10 @@ func (s *Server) InitCmd() *Server {
 		log.Fatal().Err(err).Msg("Failed to initialize account service")
 	}
 
+	if err := s.InitPaymentEventService(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize payment event service")
+	}
+
 	return s
 }
 
@@ -203,6 +211,14 @@ func (s *Server) InitBatchProcessor() error {
 		return fmt.Errorf("failed to create batch processor: %w", err)
 	}
 
+	// Initialize RabbitMQ client for payment event service
+	if s.Config.RabbitMQ.Enabled {
+		s.RabbitMQClient, err = queue.NewRabbitMQClient(s.Config.RabbitMQ)
+		if err != nil {
+			return fmt.Errorf("failed to create RabbitMQ client: %w", err)
+		}
+	}
+
 	// Initialize queue monitor
 	s.QueueMonitor = queue.NewQueueMonitor(s.BatchProcessor)
 
@@ -233,6 +249,22 @@ func (s *Server) InitAccountService() error {
 
 	log.Info().Int("chains", len(validChains)).Msg("Account service initialized with chains service integration")
 
+	return nil
+}
+
+func (s *Server) InitPaymentEventService() error {
+	// Only initialize payment event service if RabbitMQ is enabled
+	if !s.Config.RabbitMQ.Enabled {
+		log.Info().Msg("RabbitMQ disabled, payment event service will not be initialized")
+		// Create a dummy service to satisfy Ready() check
+		s.PaymentEventService = &events.PaymentEventService{}
+		return nil
+	}
+
+	// Initialize payment event service
+	s.PaymentEventService = events.NewPaymentEventService(s.DB, s.RabbitMQClient)
+
+	log.Info().Msg("Payment event service initialized")
 	return nil
 }
 
@@ -321,6 +353,17 @@ func (s *Server) Start() error {
 		return errors.New("server is not ready")
 	}
 
+	// Start payment event service if enabled
+	if s.PaymentEventService != nil && s.Config.RabbitMQ.Enabled {
+		ctx := context.Background()
+		if err := s.PaymentEventService.Start(ctx); err != nil {
+			log.Error().Err(err).Msg("Failed to start payment event service")
+			// Continue with server startup even if payment service fails
+		} else {
+			log.Info().Msg("Payment event service started")
+		}
+	}
+
 	return s.Echo.Start(s.Config.Echo.ListenAddress)
 }
 
@@ -328,6 +371,26 @@ func (s *Server) Shutdown(ctx context.Context) []error {
 	log.Warn().Msg("Shutting down server")
 
 	var errs []error
+
+	// Stop payment event service first
+	if s.PaymentEventService != nil && s.PaymentEventService.IsStarted() {
+		log.Debug().Msg("Stopping payment event service")
+		if err := s.PaymentEventService.Stop(); err != nil {
+			log.Error().Err(err).Msg("Failed to stop payment event service")
+			errs = append(errs, err)
+		} else {
+			log.Info().Msg("Payment event service stopped")
+		}
+	}
+
+	// Close RabbitMQ client
+	if s.RabbitMQClient != nil {
+		log.Debug().Msg("Closing RabbitMQ client")
+		if err := s.RabbitMQClient.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close RabbitMQ client")
+			errs = append(errs, err)
+		}
+	}
 
 	if s.DB != nil {
 		log.Debug().Msg("Closing database connection")
