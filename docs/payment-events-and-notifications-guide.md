@@ -139,8 +139,37 @@ payment_events.42161  # Arbitrum 主网
 }
 ```
 
-### 2.3 队列名称
-所有通知都发送到：`notifications`
+### 2.3 队列名称规则
+
+通知消息发送到以下队列：
+
+```
+{prefix}.notification.0.0
+```
+
+**默认队列名称示例**：
+```
+chainbridge.notification.0.0
+```
+
+**解释**：
+- `{prefix}`: RabbitMQ 配置中的队列前缀（通常是 `chainbridge`）
+- `notification`: 固定的通知作业类型
+- `0.0`: NotificationJob 不区分链ID和代币ID，统一使用 `0.0`
+
+**配置说明**：
+- 队列前缀可在环境变量 `RABBITMQ_QUEUE_PREFIX` 中配置（默认：`chainbridge`）
+- 所有类型的通知都发送到同一个队列，便于统一处理
+- 与其他业务队列（如 transfer、asset_adjust）格式保持一致
+
+**如何查看实际队列名称**：
+```bash
+# 查看当前配置的队列前缀
+echo $RABBITMQ_QUEUE_PREFIX
+
+# 或查看所有通知相关队列
+rabbitmqctl list_queues name | grep notification
+```
 
 ## 3. 开发人员使用指南
 
@@ -196,7 +225,8 @@ func handlePaymentEvent(event PaymentEventMessage) {
 
 ```go
 func consumeNotifications() {
-    queueName := "notifications"
+    // 根据你的配置设置正确的队列名称
+    queueName := "chainbridge.notification.0.0"  // 使用实际的队列前缀
     
     // 连接设置同上...
     
@@ -234,8 +264,8 @@ func sendBalanceChangeNotification(userID string, chainID int64, oldBalance, new
         "timestamp": time.Now().Unix(),
     }
     
-    // 发送到 RabbitMQ notifications 队列
-    publishToQueue("notifications", notification)
+    // 发送到 RabbitMQ notifications 队列（使用实际的队列名称）
+    publishToQueue("chainbridge.notification.0.0", notification)
 }
 ```
 
@@ -250,7 +280,7 @@ rabbitmqctl list_queues name messages
 rabbitmqctl list_queues name messages | grep payment_events
 
 # 查看通知队列
-rabbitmqctl list_queues name messages | grep notifications
+rabbitmqctl list_queues name messages | grep notification
 ```
 
 **查看服务状态：**
