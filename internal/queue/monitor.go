@@ -89,6 +89,7 @@ func (m *QueueMonitor) HealthCheck(ctx context.Context) error {
 	// Create a test job to verify queue is working
 	testJob := TransferJob{
 		ID:           "health-check-" + time.Now().Format("20060102150405"),
+		JobType:      JobTypeTransfer,
 		ChainID:      1, // Test chain
 		TokenID:      1, // Test token
 		FromUserID:   "health-check-user",

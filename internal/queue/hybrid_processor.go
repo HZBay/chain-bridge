@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/hzbay/chain-bridge/internal/blockchain"
 	"github.com/hzbay/chain-bridge/internal/config"
 	"github.com/rs/zerolog/log"
 )
@@ -14,7 +13,7 @@ import (
 // HybridBatchProcessor wraps RabbitMQ processor with configuration management
 type HybridBatchProcessor struct {
 	rabbitmqProcessor *RabbitMQProcessor
-	config            config.BatchProcessingStrategy
+	config            config.Server
 
 	// Metrics for monitoring
 	rabbitmqStats *ProcessorMetrics
@@ -39,15 +38,15 @@ type ProcessorMetrics struct {
 }
 
 // NewHybridBatchProcessor creates a new RabbitMQ-based batch processor
-func NewHybridBatchProcessor(rabbitmqClient *RabbitMQClient, strategy config.BatchProcessingStrategy) *HybridBatchProcessor {
+func NewHybridBatchProcessor(rabbitmqClient *RabbitMQClient, db *sql.DB, optimizer *BatchOptimizer, config config.Server) *HybridBatchProcessor {
 	processor := &HybridBatchProcessor{
-		rabbitmqProcessor: NewRabbitMQProcessor(rabbitmqClient),
-		config:            strategy,
+		rabbitmqProcessor: NewRabbitMQProcessor(rabbitmqClient, db, optimizer, config),
+		config:            config,
 		rabbitmqStats:     &ProcessorMetrics{},
 	}
 
 	log.Info().
-		Bool("rabbitmq_enabled", strategy.EnableRabbitMQ).
+		Bool("rabbitmq_enabled", config.RabbitMQ.BatchStrategy.EnableRabbitMQ).
 		Msg("RabbitMQ batch processor initialized")
 
 	return processor
@@ -119,7 +118,7 @@ func (h *HybridBatchProcessor) PublishNotification(ctx context.Context, job Noti
 // selectProcessor returns the RabbitMQ processor (simplified implementation)
 func (h *HybridBatchProcessor) selectProcessor() (BatchProcessor, string) {
 	// Always use RabbitMQ processor - simplified approach
-	if !h.config.EnableRabbitMQ {
+	if !h.config.RabbitMQ.BatchStrategy.EnableRabbitMQ {
 		log.Warn().Msg("RabbitMQ is disabled but no fallback available")
 		return h.rabbitmqProcessor, "rabbitmq_disabled"
 	}
@@ -159,7 +158,7 @@ func (h *HybridBatchProcessor) StartBatchConsumer(ctx context.Context) error {
 	log.Info().Msg("Starting RabbitMQ batch consumer")
 
 	// Start RabbitMQ consumer
-	if h.config.EnableRabbitMQ {
+	if h.config.RabbitMQ.BatchStrategy.EnableRabbitMQ {
 		if err := h.rabbitmqProcessor.StartBatchConsumer(ctx); err != nil {
 			log.Error().Err(err).Msg("Failed to start RabbitMQ batch consumer")
 			return err
@@ -217,13 +216,4 @@ func (h *HybridBatchProcessor) Close() error {
 	}
 
 	return nil
-}
-
-// SetBatchDependencies sets the batch processing dependencies for RabbitMQ processor
-func (h *HybridBatchProcessor) SetBatchDependencies(db *sql.DB, optimizer *BatchOptimizer, cpopCallers map[int64]*blockchain.CPOPBatchCaller) {
-	// Set dependencies for RabbitMQ processor
-	if h.rabbitmqProcessor != nil {
-		h.rabbitmqProcessor.SetDependencies(db, optimizer, cpopCallers)
-		log.Debug().Msg("RabbitMQ processor dependencies set")
-	}
 }

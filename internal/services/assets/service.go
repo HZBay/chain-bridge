@@ -9,14 +9,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/ericlagergren/decimal"
 	"github.com/google/uuid"
 	"github.com/hzbay/chain-bridge/internal/models"
 	"github.com/hzbay/chain-bridge/internal/queue"
 	"github.com/hzbay/chain-bridge/internal/types"
 	"github.com/rs/zerolog/log"
 	"github.com/volatiletech/null/v8"
-	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	sqltypes "github.com/volatiletech/sqlboiler/v4/types"
 )
@@ -56,6 +54,13 @@ func (s *service) AdjustAssets(ctx context.Context, req *types.AssetAdjustReques
 		Msg("Processing asset adjustment request")
 
 	// Request validation is handled at handler layer
+
+	// Validate amount format for all adjustments before processing
+	for i, adjustment := range req.Adjustments {
+		if _, err := strconv.ParseFloat(*adjustment.Amount, 64); err != nil {
+			return nil, nil, fmt.Errorf("invalid amount format in adjustment %d: %s", i+1, *adjustment.Amount)
+		}
+	}
 
 	// 1. 幂等性检查 - 检查 OperationID 是否已经存在
 	mainOperationID := uuid.MustParse(*req.OperationID)
@@ -115,7 +120,6 @@ func (s *service) AdjustAssets(ctx context.Context, req *types.AssetAdjustReques
 
 	// OperationID 不存在，继续正常处理
 	log.Debug().Str("operation_id", *req.OperationID).Msg("New operation, proceeding with processing")
-	// TODO: 是否要更新user_balances表
 
 	// 2. Process each adjustment
 	var adjustJobs []queue.AssetAdjustJob
@@ -148,21 +152,39 @@ func (s *service) AdjustAssets(ctx context.Context, req *types.AssetAdjustReques
 			OperationID:  null.StringFrom(mainOperationID.String()),
 			UserID:       *adjustment.UserID,
 			ChainID:      *adjustment.ChainID,
-			TXType:       "asset_adjust",
+			TXType:       adjustmentType, // Use "mint" or "burn" based on amount sign
 			BusinessType: *adjustment.BusinessType,
 			TokenID:      s.getTokenIDBySymbol(*adjustment.ChainID, *adjustment.TokenSymbol),
-			Amount: sqltypes.NewDecimal(func() *decimal.Big {
-				d, _ := decimal.New(0, 0).SetString(amount)
-				return d
-			}()),
+			// Amount field removed - using raw SQL insert to bypass decimal encoding issue
 			Status:           null.StringFrom("pending"),
 			IsBatchOperation: null.BoolFrom(true),
 			ReasonType:       *adjustment.ReasonType,
 			ReasonDetail:     null.StringFromPtr(&adjustment.ReasonDetail),
 		}
 
-		// Insert transaction record
-		if err := transaction.Insert(ctx, tx, boil.Infer()); err != nil {
+		// Insert transaction record using raw SQL to bypass decimal encoding issue
+		insertQuery := `
+			INSERT INTO transactions (
+				tx_id, operation_id, user_id, chain_id, tx_type, business_type, 
+				token_id, amount, status, is_batch_operation, reason_type, reason_detail, created_at
+			) VALUES (
+				$1, $2, $3, $4, $5, $6, $7, $8::numeric, $9, $10, $11, $12, NOW()
+			)`
+		_, err := tx.ExecContext(ctx, insertQuery,
+			transaction.TXID,
+			transaction.OperationID,
+			transaction.UserID,
+			transaction.ChainID,
+			transaction.TXType,
+			transaction.BusinessType,
+			transaction.TokenID,
+			amount, // Use string amount directly
+			transaction.Status,
+			transaction.IsBatchOperation,
+			transaction.ReasonType,
+			transaction.ReasonDetail,
+		)
+		if err != nil {
 			return nil, nil, fmt.Errorf("failed to insert transaction for user %s: %w", *adjustment.UserID, err)
 		}
 
@@ -171,6 +193,7 @@ func (s *service) AdjustAssets(ctx context.Context, req *types.AssetAdjustReques
 		// Create asset adjust job
 		adjustJob := queue.AssetAdjustJob{
 			ID:             txID.String(),
+			JobType:        queue.JobTypeAssetAdjust,
 			TransactionID:  txID,
 			ChainID:        *adjustment.ChainID,
 			TokenID:        s.getTokenIDBySymbol(*adjustment.ChainID, *adjustment.TokenSymbol),
@@ -183,7 +206,6 @@ func (s *service) AdjustAssets(ctx context.Context, req *types.AssetAdjustReques
 			Priority:       s.determinePriority(*adjustment.BusinessType),
 			CreatedAt:      time.Now(),
 		}
-
 		adjustJobs = append(adjustJobs, adjustJob)
 	}
 
@@ -352,9 +374,9 @@ func (s *service) GetUserAssets(ctx context.Context, userID string) (*types.Asse
 	log.Info().Str("user_id", userID).Msg("Getting user assets")
 
 	// Query user balances with chain and token information
+	// Note: Removed ConfirmedBalance.GT filter to avoid types.NullDecimal encoding issues
 	userBalances, err := models.UserBalances(
 		models.UserBalanceWhere.UserID.EQ(userID),
-		models.UserBalanceWhere.ConfirmedBalance.GT(sqltypes.NewNullDecimal(decimal.New(0, 0))),
 		qm.Load(models.UserBalanceRels.Chain),
 		qm.Load(models.UserBalanceRels.Token),
 		qm.OrderBy(models.UserBalanceColumns.ChainID+" ASC, "+models.UserBalanceColumns.TokenID+" ASC"),
@@ -394,6 +416,16 @@ func (s *service) GetUserAssets(ctx context.Context, userID string) (*types.Asse
 
 		chain := balance.R.Chain
 		token := balance.R.Token
+
+		// Skip assets with zero confirmed balance to match previous behavior
+		if balance.ConfirmedBalance.Big == nil || balance.ConfirmedBalance.Big.Sign() <= 0 {
+			log.Debug().
+				Str("user_id", userID).
+				Int64("chain_id", balance.ChainID).
+				Int("token_id", balance.TokenID).
+				Msg("Skipping asset with zero confirmed balance")
+			continue
+		}
 
 		// Convert balance values
 		confirmedBalance := s.formatDecimal(balance.ConfirmedBalance)

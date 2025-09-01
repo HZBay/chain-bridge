@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/hzbay/chain-bridge/internal/blockchain"
+	"github.com/hzbay/chain-bridge/internal/config"
 	"github.com/rs/zerolog/log"
 )
 
@@ -20,31 +21,21 @@ type RabbitMQProcessor struct {
 	consumerManager *ConsumerManager
 	stopChan        chan struct{}
 	processingMutex sync.RWMutex
+
+	config config.Server
 }
 
 // NewRabbitMQProcessor creates a new RabbitMQ processor
-func NewRabbitMQProcessor(client *RabbitMQClient) *RabbitMQProcessor {
-	return &RabbitMQProcessor{
-		client:   client,
-		stopChan: make(chan struct{}),
+func NewRabbitMQProcessor(client *RabbitMQClient, db *sql.DB, optimizer *BatchOptimizer, config config.Server) *RabbitMQProcessor {
+	rp := &RabbitMQProcessor{
+		client:         client,
+		db:             db,
+		batchOptimizer: optimizer,
+		stopChan:       make(chan struct{}),
+		config:         config,
 	}
-}
-
-// SetDependencies sets the required dependencies for the processor
-func (r *RabbitMQProcessor) SetDependencies(
-	db *sql.DB,
-	optimizer *BatchOptimizer,
-	cpopCallers map[int64]*blockchain.CPOPBatchCaller,
-) {
-	r.db = db
-	r.batchOptimizer = optimizer
-	r.cpopCallers = cpopCallers
-
-	// Create confirmation watcher for transaction monitoring
-	confirmationWatcher := NewTxConfirmationWatcher(db, cpopCallers)
-
-	// Initialize consumer manager with all dependencies including self as batch processor for notifications
-	r.consumerManager = NewConsumerManager(r.client, db, optimizer, cpopCallers, confirmationWatcher, r)
+	rp.consumerManager = NewConsumerManager(client, db, optimizer, rp, config)
+	return rp
 }
 
 // PublishTransfer publishes a transfer job to the appropriate chain-specific queue

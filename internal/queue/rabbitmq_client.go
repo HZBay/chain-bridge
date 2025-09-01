@@ -338,13 +338,26 @@ func (c *RabbitMQClient) Ping() error {
 func (c *RabbitMQClient) Close() error {
 	log.Info().Msg("Closing RabbitMQ client")
 
-	// Stop monitoring
-	close(c.stopChan)
+	// Check if already closed
+	c.mutex.Lock()
+	defer c.mutex.Unlock()
+
+	if !c.healthy && c.connection == nil {
+		// Already closed
+		log.Debug().Msg("RabbitMQ client already closed")
+		return nil
+	}
+
+	// Stop monitoring (only if not already stopped)
+	select {
+	case <-c.stopChan:
+		// Channel already closed
+	default:
+		close(c.stopChan)
+	}
 	c.wg.Wait()
 
 	// Close connections
-	c.mutex.Lock()
-	defer c.mutex.Unlock()
 	c.closeConnections()
 
 	log.Info().Msg("RabbitMQ client closed")
