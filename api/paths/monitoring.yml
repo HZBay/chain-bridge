@@ -85,3 +85,36 @@ paths:
           $ref: '../definitions/errors.yml#/responses/BadRequestError'
         500:
           $ref: '../definitions/errors.yml#/responses/InternalError'
+
+  # Payment events monitoring endpoints
+  /-/monitoring/payment-events/stats:
+    get:
+      security:
+        - Management: []
+      tags: [monitoring]
+      summary: Get payment events statistics
+      description: Retrieves statistics for payment event listeners including health status and processing metrics
+      operationId: getPaymentEventsStats
+      responses:
+        200:
+          description: Payment events statistics retrieved successfully
+          schema:
+            $ref: '../definitions/monitoring.yml#/definitions/paymentEventsStatsResponse'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'
+
+  /-/monitoring/payment-events/reload:
+    post:
+      security:
+        - Management: []
+      tags: [monitoring]
+      summary: Reload payment events configuration
+      description: Reloads the payment event listeners configuration and restarts listeners
+      operationId: reloadPaymentEventsConfig
+      responses:
+        200:
+          description: Payment events configuration reloaded successfully
+          schema:
+            $ref: '../definitions/monitoring.yml#/definitions/paymentEventsReloadResponse'
+        500:
+          $ref: '../definitions/errors.yml#/responses/InternalError'

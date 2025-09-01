@@ -62,6 +62,7 @@ func (o *SwaggerSpec) initHandlerCache() {
 	o.Handlers["GET"]["/-/chains/{chain_id}"] = true
 	o.Handlers["GET"]["/-/chains"] = true
 	o.Handlers["GET"]["/-/monitoring/optimization/{chain_id}/{token_id}"] = true
+	o.Handlers["GET"]["/-/monitoring/payment-events/stats"] = true
 	o.Handlers["GET"]["/-/monitoring/queue/metrics"] = true
 	o.Handlers["GET"]["/-/monitoring/queue/stats"] = true
 	o.Handlers["GET"]["/-/tokens/{token_id}"] = true
@@ -72,6 +73,7 @@ func (o *SwaggerSpec) initHandlerCache() {
 	o.Handlers["GET"]["/api/v1/assets/{user_id}/transactions"] = true
 	o.Handlers["POST"]["/-/chains/refresh-cache"] = true
 	o.Handlers["POST"]["/-/tokens/refresh-cache"] = true
+	o.Handlers["POST"]["/-/monitoring/payment-events/reload"] = true
 	o.Handlers["PUT"]["/-/chains/{chain_id}/toggle-status"] = true
 	o.Handlers["PUT"]["/-/tokens/{token_id}/toggle-status"] = true
 	o.Handlers["POST"]["/api/v1/assets/transfer"] = true

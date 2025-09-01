@@ -574,6 +574,160 @@ paths:
           examples:
             application/json:
               message: Internal server error
+  /-/monitoring/payment-events/reload:
+    post:
+      security:
+      - Management: []
+      description: Reloads the payment event listeners configuration and restarts
+        listeners
+      tags:
+      - monitoring
+      summary: Reload payment events configuration
+      operationId: reloadPaymentEventsConfig
+      responses:
+        "200":
+          description: Payment events configuration reloaded successfully
+          schema:
+            type: object
+            required:
+            - success
+            - message
+            - reloaded_listeners
+            properties:
+              errors:
+                description: Any errors that occurred during reload
+                type: array
+                items:
+                  type: string
+                example: []
+              message:
+                description: Status message about the reload operation
+                type: string
+                example: Payment events configuration reloaded successfully
+              reloaded_listeners:
+                description: Number of listeners that were reloaded
+                type: integer
+                example: 3
+              success:
+                description: Whether the reload operation was successful
+                type: boolean
+                example: true
+              timestamp:
+                description: Timestamp when the reload completed
+                type: string
+                format: date-time
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+  /-/monitoring/payment-events/stats:
+    get:
+      security:
+      - Management: []
+      description: Retrieves statistics for payment event listeners including health
+        status and processing metrics
+      tags:
+      - monitoring
+      summary: Get payment events statistics
+      operationId: getPaymentEventsStats
+      responses:
+        "200":
+          description: Payment events statistics retrieved successfully
+          schema:
+            type: object
+            required:
+            - total_listeners
+            - healthy_listeners
+            - total_events_processed
+            - total_errors
+            - listeners
+            properties:
+              healthy_listeners:
+                description: Number of healthy payment event listeners
+                type: integer
+                example: 3
+              listeners:
+                description: Per-chain listener statistics
+                type: object
+                additionalProperties:
+                  type: object
+                  required:
+                  - chain_id
+                  - payment_address
+                  - last_processed_block
+                  - total_events
+                  - total_errors
+                  properties:
+                    chain_id:
+                      description: The blockchain network ID
+                      type: integer
+                      format: int64
+                      example: 1
+                    last_event_time:
+                      description: Timestamp of the last processed event
+                      type: string
+                      format: date-time
+                    last_processed_block:
+                      description: Last processed block number
+                      type: integer
+                      format: int64
+                      example: 18600000
+                    payment_address:
+                      description: Contract address being monitored for payment events
+                      type: string
+                      example: 0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3
+                    processing_latency_ms:
+                      description: Average processing latency in milliseconds
+                      type: integer
+                      example: 150
+                    status:
+                      description: Current status of the listener
+                      type: string
+                      enum:
+                      - running
+                      - stopped
+                      - error
+                      example: running
+                    total_errors:
+                      description: Total number of errors for this listener
+                      type: integer
+                      example: 1
+                    total_events:
+                      description: Total number of payment events processed by this
+                        listener
+                      type: integer
+                      format: int64
+                      example: 856
+                example:
+                  chain_1:
+                    chain_id: 1
+                    last_processed_block: 18600000
+                    payment_address: 0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3
+                    total_errors: 1
+                    total_events: 856
+              total_errors:
+                description: Total number of errors across all listeners
+                type: integer
+                example: 2
+              total_events_processed:
+                description: Total number of payment events processed across all chains
+                type: integer
+                format: int64
+                example: 1245
+              total_listeners:
+                description: Total number of payment event listeners
+                type: integer
+                example: 3
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
   /-/monitoring/queue/health:
     get:
       security:
@@ -3305,6 +3459,121 @@ definitions:
     enum:
     - asc
     - desc
+  paymentEventListenerStats:
+    type: object
+    required:
+    - chain_id
+    - payment_address
+    - last_processed_block
+    - total_events
+    - total_errors
+    properties:
+      chain_id:
+        description: The blockchain network ID
+        type: integer
+        format: int64
+        example: 1
+      last_event_time:
+        description: Timestamp of the last processed event
+        type: string
+        format: date-time
+      last_processed_block:
+        description: Last processed block number
+        type: integer
+        format: int64
+        example: 18600000
+      payment_address:
+        description: Contract address being monitored for payment events
+        type: string
+        example: 0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3
+      processing_latency_ms:
+        description: Average processing latency in milliseconds
+        type: integer
+        example: 150
+      status:
+        description: Current status of the listener
+        type: string
+        enum:
+        - running
+        - stopped
+        - error
+        example: running
+      total_errors:
+        description: Total number of errors for this listener
+        type: integer
+        example: 1
+      total_events:
+        description: Total number of payment events processed by this listener
+        type: integer
+        format: int64
+        example: 856
+  paymentEventsReloadResponse:
+    type: object
+    required:
+    - success
+    - message
+    - reloaded_listeners
+    properties:
+      errors:
+        description: Any errors that occurred during reload
+        type: array
+        items:
+          type: string
+        example: []
+      message:
+        description: Status message about the reload operation
+        type: string
+        example: Payment events configuration reloaded successfully
+      reloaded_listeners:
+        description: Number of listeners that were reloaded
+        type: integer
+        example: 3
+      success:
+        description: Whether the reload operation was successful
+        type: boolean
+        example: true
+      timestamp:
+        description: Timestamp when the reload completed
+        type: string
+        format: date-time
+  paymentEventsStatsResponse:
+    type: object
+    required:
+    - total_listeners
+    - healthy_listeners
+    - total_events_processed
+    - total_errors
+    - listeners
+    properties:
+      healthy_listeners:
+        description: Number of healthy payment event listeners
+        type: integer
+        example: 3
+      listeners:
+        description: Per-chain listener statistics
+        type: object
+        additionalProperties:
+          $ref: '#/definitions/paymentEventListenerStats'
+        example:
+          chain_1:
+            chain_id: 1
+            last_processed_block: 18600000
+            payment_address: 0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3
+            total_errors: 1
+            total_events: 856
+      total_errors:
+        description: Total number of errors across all listeners
+        type: integer
+        example: 2
+      total_events_processed:
+        description: Total number of payment events processed across all chains
+        type: integer
+        format: int64
+        example: 1245
+      total_listeners:
+        description: Total number of payment event listeners
+        type: integer
+        example: 3
   performanceMetrics:
     type: object
     properties:

@@ -10,15 +10,15 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
-// QueueMonitor provides monitoring and metrics for queue operations
-type QueueMonitor struct {
+// Monitor provides monitoring and metrics for queue operations
+type Monitor struct {
 	processor BatchProcessor
-	metrics   *QueueMetrics
+	metrics   *Metrics
 	mutex     sync.RWMutex
 }
 
-// QueueMetrics holds queue operation statistics
-type QueueMetrics struct {
+// Metrics holds queue operation statistics
+type Metrics struct {
 	TotalJobsPublished    int64            `json:"total_jobs_published"`
 	TotalJobsProcessed    int64            `json:"total_jobs_processed"`
 	TotalJobsFailed       int64            `json:"total_jobs_failed"`
@@ -31,11 +31,11 @@ type QueueMetrics struct {
 	LastAlertTime         time.Time        `json:"last_alert_time,omitempty"`
 }
 
-// NewQueueMonitor creates a new queue monitor
-func NewQueueMonitor(processor BatchProcessor) *QueueMonitor {
-	return &QueueMonitor{
+// NewMonitor creates a new queue monitor
+func NewMonitor(processor BatchProcessor) *Monitor {
+	return &Monitor{
 		processor: processor,
-		metrics: &QueueMetrics{
+		metrics: &Metrics{
 			LastUpdated:      time.Now(),
 			ProcessorType:    "unknown",
 			ConnectionStatus: "unknown",
@@ -44,7 +44,7 @@ func NewQueueMonitor(processor BatchProcessor) *QueueMonitor {
 }
 
 // GetMetrics returns current queue metrics
-func (m *QueueMonitor) GetMetrics() *QueueMetrics {
+func (m *Monitor) GetMetrics() *Metrics {
 	// Update metrics from processor
 	stats := m.processor.GetQueueStats()
 
@@ -80,12 +80,12 @@ func (m *QueueMonitor) GetMetrics() *QueueMetrics {
 }
 
 // GetDetailedStats returns detailed statistics for all queues
-func (m *QueueMonitor) GetDetailedStats() map[string]QueueStats {
+func (m *Monitor) GetDetailedStats() map[string]Stats {
 	return m.processor.GetQueueStats()
 }
 
 // HealthCheck performs a health check on the queue system
-func (m *QueueMonitor) HealthCheck(ctx context.Context) error {
+func (m *Monitor) HealthCheck(ctx context.Context) error {
 	// Create a test job to verify queue is working
 	testJob := TransferJob{
 		ID:           "health-check-" + time.Now().Format("20060102150405"),
@@ -112,7 +112,7 @@ func (m *QueueMonitor) HealthCheck(ctx context.Context) error {
 }
 
 // ExportMetrics exports metrics in JSON format for external monitoring systems
-func (m *QueueMonitor) ExportMetrics() ([]byte, error) {
+func (m *Monitor) ExportMetrics() ([]byte, error) {
 	metrics := m.GetMetrics()
 	detailedStats := m.GetDetailedStats()
 
@@ -126,7 +126,7 @@ func (m *QueueMonitor) ExportMetrics() ([]byte, error) {
 }
 
 // StartPeriodicHealthCheck starts a background goroutine that performs periodic health checks
-func (m *QueueMonitor) StartPeriodicHealthCheck(ctx context.Context, interval time.Duration) {
+func (m *Monitor) StartPeriodicHealthCheck(ctx context.Context, interval time.Duration) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
@@ -169,7 +169,7 @@ type Alert struct {
 }
 
 // sendAlert sends an alert to the monitoring system
-func (m *QueueMonitor) sendAlert(ctx context.Context, alertType AlertType, message string) {
+func (m *Monitor) sendAlert(_ context.Context, alertType AlertType, message string) {
 	alert := Alert{
 		Type:      alertType,
 		Message:   message,
@@ -196,7 +196,7 @@ func (m *QueueMonitor) sendAlert(ctx context.Context, alertType AlertType, messa
 }
 
 // getAlertSeverity returns the severity level for an alert type
-func (m *QueueMonitor) getAlertSeverity(alertType AlertType) string {
+func (m *Monitor) getAlertSeverity(alertType AlertType) string {
 	switch alertType {
 	case AlertTypeHealthCheckFailure:
 		return "critical"
@@ -212,7 +212,7 @@ func (m *QueueMonitor) getAlertSeverity(alertType AlertType) string {
 }
 
 // incrementAlertCounter increments the alert counter for metrics
-func (m *QueueMonitor) incrementAlertCounter(alertType AlertType) {
+func (m *Monitor) incrementAlertCounter(alertType AlertType) {
 	m.mutex.Lock()
 	defer m.mutex.Unlock()
 
@@ -226,7 +226,7 @@ func (m *QueueMonitor) incrementAlertCounter(alertType AlertType) {
 }
 
 // CheckQueueBacklog monitors queue depth and triggers alerts if needed
-func (m *QueueMonitor) CheckQueueBacklog(ctx context.Context) {
+func (m *Monitor) CheckQueueBacklog(ctx context.Context) {
 	const maxQueueDepth = 1000 // configurable threshold
 
 	stats := m.processor.GetQueueStats()
@@ -247,7 +247,7 @@ func (m *QueueMonitor) CheckQueueBacklog(ctx context.Context) {
 }
 
 // CheckProcessingDelay monitors processing latency and triggers alerts if needed
-func (m *QueueMonitor) CheckProcessingDelay(ctx context.Context) {
+func (m *Monitor) CheckProcessingDelay(ctx context.Context) {
 	const maxLatency = 5 * time.Minute // configurable threshold
 
 	stats := m.processor.GetQueueStats()

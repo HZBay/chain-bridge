@@ -11,7 +11,7 @@ import (
 
 // QueueMetricsRoute creates the route for getting queue metrics
 func GetQueueMetricsRoute(s *api.Server) *echo.Route {
-	handler := NewHandler(s.QueueMonitor, s.BatchOptimizer)
+	handler := NewHandler(s.QueueMonitor, s.BatchOptimizer, s.PaymentEventService)
 	return s.Router.Management.GET("/monitoring/queue/metrics", handler.GetQueueMetrics)
 }
 

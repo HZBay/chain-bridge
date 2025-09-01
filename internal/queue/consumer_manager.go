@@ -471,11 +471,11 @@ func (cm *ConsumerManager) getEnabledTokensForChain(ctx context.Context, chainID
 }
 
 // GetQueueStats returns queue statistics from all chain consumers
-func (cm *ConsumerManager) GetQueueStats() map[string]QueueStats {
+func (cm *ConsumerManager) GetQueueStats() map[string]Stats {
 	cm.consumersMutex.RLock()
 	defer cm.consumersMutex.RUnlock()
 
-	allStats := make(map[string]QueueStats)
+	allStats := make(map[string]Stats)
 
 	for chainID, chainConsumer := range cm.consumers {
 		chainStats := chainConsumer.Consumer.GetQueueStats()

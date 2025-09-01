@@ -55,7 +55,7 @@ type Server struct {
 	Metrics             *metrics.Service
 	AccountService      account.Service
 	BatchProcessor      queue.BatchProcessor
-	QueueMonitor        *queue.QueueMonitor
+	QueueMonitor        *queue.Monitor
 	BatchOptimizer      *queue.BatchOptimizer
 	ChainsService       chains.Service
 	TokensService       tokens.Service
@@ -224,7 +224,7 @@ func (s *Server) InitBatchProcessor() error {
 	}
 
 	// Initialize queue monitor
-	s.QueueMonitor = queue.NewQueueMonitor(s.BatchProcessor)
+	s.QueueMonitor = queue.NewMonitor(s.BatchProcessor)
 
 	log.Info().
 		Bool("rabbitmq_enabled", s.Config.RabbitMQ.Enabled).

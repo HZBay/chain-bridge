@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math"
 	"sync"
 	"time"
 
@@ -314,6 +315,82 @@ func (m *PaymentEventManager) IsHealthy() bool {
 	}
 
 	return len(m.listeners) > 0 // At least one listener should be running
+}
+
+// GetGlobalStats returns global statistics in the format expected by the API
+func (m *PaymentEventManager) GetGlobalStats() GlobalStats {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	totalEvents := int64(0)
+	totalErrors := int64(0)
+	healthyCount := int64(0)
+	totalListeners := int64(len(m.listeners))
+
+	for _, listener := range m.listeners {
+		stats := listener.GetStats()
+		if events, ok := stats["total_events"].(uint64); ok {
+			if events <= math.MaxInt64 {
+				totalEvents += int64(events)
+			}
+		}
+		if errors, ok := stats["total_errors"].(uint64); ok {
+			if errors <= math.MaxInt64 {
+				totalErrors += int64(errors)
+			}
+		}
+		if listener.IsHealthy() {
+			healthyCount++
+		}
+	}
+
+	return GlobalStats{
+		TotalListeners:       totalListeners,
+		HealthyListeners:     healthyCount,
+		TotalEventsProcessed: totalEvents,
+		TotalErrors:          totalErrors,
+	}
+}
+
+// GetAllListenerStats returns statistics for all listeners in API format
+func (m *PaymentEventManager) GetAllListenerStats() map[string]interface{} {
+	m.mutex.RLock()
+	defer m.mutex.RUnlock()
+
+	result := make(map[string]interface{})
+
+	for chainID, listener := range m.listeners {
+		stats := listener.GetStats()
+		chainKey := fmt.Sprintf("chain_%d", chainID)
+
+		// Convert stats to API format
+		apiStats := map[string]interface{}{
+			"chain_id":             chainID,
+			"payment_address":      stats["payment_address"],
+			"last_processed_block": stats["last_processed_block"],
+			"total_events":         stats["total_events"],
+			"total_errors":         stats["total_errors"],
+		}
+
+		// Add status
+		if listener.IsHealthy() {
+			apiStats["status"] = "running"
+		} else {
+			apiStats["status"] = "error"
+		}
+
+		// Add optional fields if available
+		if lastEventTime, ok := stats["last_event_time"].(time.Time); ok && !lastEventTime.IsZero() {
+			apiStats["last_event_time"] = lastEventTime.Format(time.RFC3339)
+		}
+
+		// Add processing latency (mock value for now)
+		apiStats["processing_latency_ms"] = 150
+
+		result[chainKey] = apiStats
+	}
+
+	return result
 }
 
 // LoadConfigFromDatabase loads payment configuration from chains table in database

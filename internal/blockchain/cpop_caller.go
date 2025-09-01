@@ -3,6 +3,7 @@ package blockchain
 import (
 	"context"
 	"fmt"
+	"math"
 	"math/big"
 	"time"
 
@@ -229,7 +230,15 @@ func (c *CPOPBatchCaller) waitForConfirmation(ctx context.Context, txHash common
 // calculateEfficiency calculates gas efficiency percentage
 func (c *CPOPBatchCaller) calculateEfficiency(operationCount int, actualGasUsed uint64) float64 {
 	// Estimate gas cost for individual operations
-	estimatedSingleOpGas := uint64(operationCount) * 21000 // Basic transfer gas * count
+	if operationCount <= 0 {
+		log.Warn().Int("operation_count", operationCount).Msg("Invalid operation count for efficiency calculation")
+		return 0.0
+	}
+	if operationCount > math.MaxUint64/21000 {
+		log.Warn().Int("operation_count", operationCount).Msg("Operation count too large for efficiency calculation")
+		return 0.0
+	}
+	estimatedSingleOpGas := uint64(operationCount) * uint64(21000) // Basic transfer gas * count
 
 	if estimatedSingleOpGas <= actualGasUsed {
 		return 0.0
@@ -248,7 +257,13 @@ func (c *CPOPBatchCaller) calculateEfficiency(operationCount int, actualGasUsed 
 
 // calculateGasSaved calculates the amount of gas saved
 func (c *CPOPBatchCaller) calculateGasSaved(operationCount int, actualGasUsed uint64) uint64 {
-	estimatedSingleOpGas := uint64(operationCount) * 21000
+	if operationCount <= 0 {
+		return 0
+	}
+	if operationCount > math.MaxUint64/21000 {
+		return 0
+	}
+	estimatedSingleOpGas := uint64(operationCount) * uint64(21000)
 	if estimatedSingleOpGas <= actualGasUsed {
 		return 0
 	}

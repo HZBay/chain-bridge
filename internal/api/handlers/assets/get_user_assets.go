@@ -5,7 +5,6 @@ import (
 
 	"github.com/hzbay/chain-bridge/internal/api"
 	"github.com/hzbay/chain-bridge/internal/services/assets"
-	"github.com/hzbay/chain-bridge/internal/types"
 	"github.com/hzbay/chain-bridge/internal/types/cpop"
 	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/labstack/echo/v4"
@@ -46,7 +45,7 @@ func (h *GetUserAssetsHandler) Handle(c echo.Context) error {
 	log.Info().Str("user_id", params.UserID).Msg("Getting user assets")
 
 	// Call assets service to get user assets
-	assetsData, batchInfo, err := h.assetsService.GetUserAssets(ctx, params.UserID)
+	assetsData, _, err := h.assetsService.GetUserAssets(ctx, params.UserID)
 	if err != nil {
 		log.Error().Err(err).Str("user_id", params.UserID).Msg("Failed to get user assets")
 		return err
@@ -58,11 +57,6 @@ func (h *GetUserAssetsHandler) Handle(c echo.Context) error {
 		Int("asset_count", len(assetsData.Assets)).
 		Msg("User assets retrieved successfully")
 
-	// Build response matching API specification
-	response := &types.UserAssetsCompleteResponse{
-		Data:      assetsData,
-		BatchInfo: batchInfo,
-	}
-
-	return util.ValidateAndReturn(c, http.StatusOK, response)
+	// Return assets data directly without batch info wrapper
+	return util.ValidateAndReturn(c, http.StatusOK, assetsData)
 }

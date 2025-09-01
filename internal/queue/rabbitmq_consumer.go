@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math/big"
 	"strconv"
@@ -183,7 +184,11 @@ func (c *RabbitMQBatchConsumer) validateAndSeparateByBalance(ctx context.Context
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to begin read transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			log.Debug().Err(err).Msg("Transaction rollback error (expected if committed)")
+		}
+	}()
 
 	for _, msg := range messages {
 		job := msg.Job
@@ -245,13 +250,13 @@ func (c *RabbitMQBatchConsumer) validateBurnBalance(tx *sql.Tx, job AssetAdjustJ
 
 	var balanceStr string
 	err = tx.QueryRow(query, userUUID, job.ChainID, job.TokenID).Scan(&balanceStr)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, fmt.Errorf("failed to query user balance: %w", err)
 	}
 
 	// If no balance record exists, balance is 0
 	var balance decimal.Decimal
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		balance = decimal.Zero
 	} else {
 		balance, err = decimal.NewFromString(balanceStr)
@@ -286,13 +291,13 @@ func (c *RabbitMQBatchConsumer) validateTransferBalance(tx *sql.Tx, job Transfer
 
 	var balanceStr string
 	err = tx.QueryRow(query, fromUserUUID, job.ChainID, job.TokenID).Scan(&balanceStr)
-	if err != nil && err != sql.ErrNoRows {
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, fmt.Errorf("failed to query user balance: %w", err)
 	}
 
 	// If no balance record exists, balance is 0
 	var balance decimal.Decimal
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		balance = decimal.Zero
 	} else {
 		balance, err = decimal.NewFromString(balanceStr)
@@ -319,7 +324,11 @@ func (c *RabbitMQBatchConsumer) handleInsufficientBalanceMessages(ctx context.Co
 		c.nackAllMessages(messages)
 		return
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			log.Debug().Err(err).Msg("Transaction rollback error (expected if committed)")
+		}
+	}()
 
 	for _, msg := range messages {
 		job := msg.Job
@@ -442,7 +451,11 @@ func (c *RabbitMQBatchConsumer) updateTransactionsToBatching(ctx context.Context
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			log.Debug().Err(err).Msg("Transaction rollback error (expected if committed)")
+		}
+	}()
 
 	// 1. Create batch record in 'preparing' status
 	err = c.createPreparingBatchRecord(tx, batchID, messages)
@@ -759,7 +772,11 @@ func (c *RabbitMQBatchConsumer) updateBatchToSubmitted(ctx context.Context, batc
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			log.Debug().Err(err).Msg("Transaction rollback error (expected if committed)")
+		}
+	}()
 
 	// Determine CPOP operation type based on the batch group
 	// We need to get the batch type to determine the correct operation type
@@ -846,7 +863,7 @@ func (c *RabbitMQBatchConsumer) updateBatchToSubmitted(ctx context.Context, batc
 func (c *RabbitMQBatchConsumer) completeSuccessfulBatch(
 	ctx context.Context,
 	messages []*MessageWrapper,
-	group BatchGroup,
+	_ BatchGroup,
 	batchID uuid.UUID,
 	result *blockchain.BatchResult,
 	processingTime time.Duration,
@@ -859,7 +876,11 @@ func (c *RabbitMQBatchConsumer) completeSuccessfulBatch(
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			log.Debug().Err(err).Msg("Transaction rollback error (expected if committed)")
+		}
+	}()
 
 	// Update batch to confirmed status
 	err = c.updateBatchToConfirmed(tx, batchID, result, processingTime)
@@ -907,7 +928,7 @@ func (c *RabbitMQBatchConsumer) completeSuccessfulBatch(
 }
 
 // updateBatchToConfirmed updates batch status to confirmed
-func (c *RabbitMQBatchConsumer) updateBatchToConfirmed(tx *sql.Tx, batchID uuid.UUID, result *blockchain.BatchResult, processingTime time.Duration) error {
+func (c *RabbitMQBatchConsumer) updateBatchToConfirmed(tx *sql.Tx, batchID uuid.UUID, result *blockchain.BatchResult, _ time.Duration) error {
 	query := `
 		UPDATE batches 
 		SET 
@@ -939,7 +960,7 @@ func (c *RabbitMQBatchConsumer) updateBatchToConfirmed(tx *sql.Tx, batchID uuid.
 }
 
 // updateTransactionsToConfirmed updates transactions status to confirmed
-func (c *RabbitMQBatchConsumer) updateTransactionsToConfirmed(tx *sql.Tx, batchID uuid.UUID, result *blockchain.BatchResult) error {
+func (c *RabbitMQBatchConsumer) updateTransactionsToConfirmed(tx *sql.Tx, batchID uuid.UUID, _ *blockchain.BatchResult) error {
 	// First, get all transactions that will be updated for notifications
 	getQuery := `
 		SELECT user_id, amount, business_type, reason_type, related_user_id, transfer_direction, token_id, chain_id
@@ -1188,7 +1209,11 @@ func (c *RabbitMQBatchConsumer) handleBatchFailure(ctx context.Context, messages
 			c.nackAllMessages(messages)
 			return
 		}
-		defer tx.Rollback()
+		defer func() {
+			if err := tx.Rollback(); err != nil {
+				log.Debug().Err(err).Msg("Transaction rollback error (expected if committed)")
+			}
+		}()
 
 		// Update batch status to failed
 		batchQuery := `UPDATE batches SET status = 'failed' WHERE batch_id = $1`
@@ -1530,7 +1555,7 @@ func (c *RabbitMQBatchConsumer) getUserAAAddress(ctx context.Context, userID str
 	var aaAddress string
 	err = c.db.QueryRowContext(ctx, query, userUUID, chainID).Scan(&aaAddress)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return common.Address{}, fmt.Errorf("no AA wallet found for user %s on chain %d", userID, chainID)
 		}
 		return common.Address{}, fmt.Errorf("failed to query AA address: %w", err)

@@ -101,8 +101,8 @@ func (n NotificationJob) GetJobType() JobType     { return n.JobType }
 func (n NotificationJob) GetPriority() Priority   { return n.Priority }
 func (n NotificationJob) GetCreatedAt() time.Time { return n.CreatedAt }
 
-// QueueStats provides statistics about queue performance
-type QueueStats struct {
+// Stats provides statistics about queue performance
+type Stats struct {
 	QueueName       string        `json:"queue_name"`
 	PendingCount    int           `json:"pending_count"`
 	ProcessingCount int           `json:"processing_count"`
@@ -124,7 +124,7 @@ type BatchProcessor interface {
 	StopBatchConsumer(ctx context.Context) error
 
 	// Monitoring
-	GetQueueStats() map[string]QueueStats
+	GetQueueStats() map[string]Stats
 	IsHealthy() bool
 
 	// Close resources

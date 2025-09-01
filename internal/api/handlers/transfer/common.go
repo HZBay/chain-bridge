@@ -52,14 +52,14 @@ const (
 	MaxLimit     = 100
 )
 
-// TransferValidationError represents validation errors for transfer operations
-type TransferValidationError struct {
+// ValidationError represents validation errors for transfer operations
+type ValidationError struct {
 	Field   string `json:"field"`
 	Message string `json:"message"`
 	Code    string `json:"code"`
 }
 
 // Error implements the error interface
-func (e *TransferValidationError) Error() string {
+func (e *ValidationError) Error() string {
 	return e.Message
 }

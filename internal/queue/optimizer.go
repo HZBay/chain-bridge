@@ -11,7 +11,7 @@ import (
 
 // BatchOptimizer optimizes batch processing parameters for maximum efficiency
 type BatchOptimizer struct {
-	monitor           *QueueMonitor
+	monitor           *Monitor
 	chainsService     chains.Service
 	currentBatchSize  int
 	optimalBatchSize  int
@@ -42,7 +42,7 @@ type OptimizationRecommendation struct {
 }
 
 // NewBatchOptimizer creates a new batch optimizer
-func NewBatchOptimizer(monitor *QueueMonitor, chainsService chains.Service) *BatchOptimizer {
+func NewBatchOptimizer(monitor *Monitor, chainsService chains.Service) *BatchOptimizer {
 	return &BatchOptimizer{
 		monitor:          monitor,
 		chainsService:    chainsService,
@@ -253,11 +253,11 @@ func (o *BatchOptimizer) generateRecommendationReason(currentSize, optimalSize i
 
 	if improvement > 10 {
 		return "Significant efficiency improvement possible with recommended batch size"
-	} else if improvement > 5 {
-		return "Moderate efficiency improvement possible with recommended batch size"
-	} else {
-		return "Minor efficiency improvement possible with recommended batch size"
 	}
+	if improvement > 5 {
+		return "Moderate efficiency improvement possible with recommended batch size"
+	}
+	return "Minor efficiency improvement possible with recommended batch size"
 }
 
 // StartAdaptiveOptimization begins continuous optimization based on real-time performance

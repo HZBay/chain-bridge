@@ -12,7 +12,7 @@ import (
 
 // BatchOptimizationRoute creates the route for getting batch optimization recommendations
 func GetBatchOptimizationRoute(s *api.Server) *echo.Route {
-	handler := NewHandler(s.QueueMonitor, s.BatchOptimizer)
+	handler := NewHandler(s.QueueMonitor, s.BatchOptimizer, s.PaymentEventService)
 	return s.Router.Management.GET("/monitoring/optimization/:chain_id/:token_id", handler.GetOptimizationRecommendation)
 }
 

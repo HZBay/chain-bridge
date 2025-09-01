@@ -190,3 +190,35 @@ func (s *PaymentEventService) GetListener(chainID int64) (*PaymentEventListener,
 
 	return s.eventManager.GetListener(chainID)
 }
+
+// GlobalStats contains global statistics for all payment event listeners
+type GlobalStats struct {
+	TotalListeners       int64
+	HealthyListeners     int64
+	TotalEventsProcessed int64
+	TotalErrors          int64
+}
+
+// GetGlobalStats returns global statistics for all payment event listeners
+func (s *PaymentEventService) GetGlobalStats() GlobalStats {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	if !s.started || s.eventManager == nil {
+		return GlobalStats{}
+	}
+
+	return s.eventManager.GetGlobalStats()
+}
+
+// GetAllListenerStats returns statistics for all individual listeners
+func (s *PaymentEventService) GetAllListenerStats() map[string]interface{} {
+	s.mutex.RLock()
+	defer s.mutex.RUnlock()
+
+	if !s.started || s.eventManager == nil {
+		return make(map[string]interface{})
+	}
+
+	return s.eventManager.GetAllListenerStats()
+}

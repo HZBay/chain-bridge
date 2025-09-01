@@ -13,7 +13,7 @@ type Handler struct {
 }
 
 // NewHandler creates a new transfer handler
-// Deprecated: Use NewTransferAssetsHandler or NewGetUserTransactionsHandler
+// Deprecated: Use NewAssetsHandler or NewGetUserTransactionsHandler
 func NewHandler(transferService transfer.Service) *Handler {
 	return &Handler{
 		transferService: transferService,
@@ -21,10 +21,10 @@ func NewHandler(transferService transfer.Service) *Handler {
 }
 
 // TransferAssets handles POST /transfer requests
-// Deprecated: Use TransferAssetsHandler.Handle instead
+// Deprecated: Use AssetsHandler.Handle instead
 func (h *Handler) TransferAssets(c echo.Context) error {
 	// Delegate to the new handler
-	handler := NewTransferAssetsHandler(h.transferService)
+	handler := NewAssetsHandler(h.transferService)
 	return handler.Handle(c)
 }
 

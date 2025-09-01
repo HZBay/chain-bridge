@@ -218,6 +218,125 @@ definitions:
         description: Number of samples used for this analysis
         example: 156
 
+  # Payment events monitoring definitions
+  paymentEventsStatsResponse:
+    type: object
+    required:
+      - total_listeners
+      - healthy_listeners
+      - total_events_processed
+      - total_errors
+      - listeners
+    properties:
+      total_listeners:
+        type: integer
+        description: Total number of payment event listeners
+        example: 3
+      healthy_listeners:
+        type: integer
+        description: Number of healthy payment event listeners
+        example: 3
+      total_events_processed:
+        type: integer
+        format: int64
+        description: Total number of payment events processed across all chains
+        example: 1245
+      total_errors:
+        type: integer
+        description: Total number of errors across all listeners
+        example: 2
+      listeners:
+        type: object
+        description: Per-chain listener statistics
+        additionalProperties:
+          $ref: '#/definitions/paymentEventListenerStats'
+        example:
+          chain_1:
+            chain_id: 1
+            payment_address: "0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3"
+            last_processed_block: 18600000
+            total_events: 856
+            total_errors: 1
+
+  paymentEventListenerStats:
+    type: object
+    required:
+      - chain_id
+      - payment_address
+      - last_processed_block
+      - total_events
+      - total_errors
+    properties:
+      chain_id:
+        type: integer
+        format: int64
+        description: The blockchain network ID
+        example: 1
+      payment_address:
+        type: string
+        description: Contract address being monitored for payment events
+        example: "0x742d35Cc6634C0532925a3b8D238b45D2F78d8F3"
+      last_processed_block:
+        type: integer
+        format: int64
+        description: Last processed block number
+        example: 18600000
+      total_events:
+        type: integer
+        format: int64
+        description: Total number of payment events processed by this listener
+        example: 856
+      total_errors:
+        type: integer
+        description: Total number of errors for this listener
+        example: 1
+      status:
+        type: string
+        description: Current status of the listener
+        enum:
+          - running
+          - stopped
+          - error
+        example: running
+      last_event_time:
+        type: string
+        format: date-time
+        description: Timestamp of the last processed event
+      processing_latency_ms:
+        type: integer
+        description: Average processing latency in milliseconds
+        example: 150
+
+  paymentEventsReloadResponse:
+    type: object
+    required:
+      - success
+      - message
+      - reloaded_listeners
+    properties:
+      success:
+        type: boolean
+        description: Whether the reload operation was successful
+        example: true
+      message:
+        type: string
+        description: Status message about the reload operation
+        example: "Payment events configuration reloaded successfully"
+      reloaded_listeners:
+        type: integer
+        description: Number of listeners that were reloaded
+        example: 3
+      errors:
+        type: array
+        description: Any errors that occurred during reload
+        items:
+          type: string
+        example: []
+      timestamp:
+        type: string
+        format: date-time
+        description: Timestamp when the reload completed
+
   optimizationRecommendation:
     type: object
     required:

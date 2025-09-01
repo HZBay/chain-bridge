@@ -3,9 +3,7 @@ package queue
 import (
 	"context"
 	"database/sql"
-	"sync"
 
-	"github.com/hzbay/chain-bridge/internal/blockchain"
 	"github.com/hzbay/chain-bridge/internal/config"
 	"github.com/rs/zerolog/log"
 )
@@ -15,12 +13,10 @@ type RabbitMQProcessor struct {
 	client         *RabbitMQClient
 	db             *sql.DB
 	batchOptimizer *BatchOptimizer
-	cpopCallers    map[int64]*blockchain.CPOPBatchCaller // chainID -> caller
 
 	// Consumer management
 	consumerManager *ConsumerManager
 	stopChan        chan struct{}
-	processingMutex sync.RWMutex
 
 	config config.Server
 }
@@ -109,11 +105,11 @@ func (r *RabbitMQProcessor) StopBatchConsumer(ctx context.Context) error {
 }
 
 // GetQueueStats returns queue statistics from all per-chain consumers
-func (r *RabbitMQProcessor) GetQueueStats() map[string]QueueStats {
+func (r *RabbitMQProcessor) GetQueueStats() map[string]Stats {
 	if r.consumerManager != nil {
 		return r.consumerManager.GetQueueStats()
 	}
-	return make(map[string]QueueStats)
+	return make(map[string]Stats)
 }
 
 // IsHealthy checks if the RabbitMQ client and consumer manager are healthy

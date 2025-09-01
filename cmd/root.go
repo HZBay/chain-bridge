@@ -67,7 +67,7 @@ func newRabbitMQStatusCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "status",
 		Short: "Check RabbitMQ connection and queue status",
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(_ *cobra.Command, _ []string) {
 			fmt.Println("🔍 Checking RabbitMQ status...")
 
 			cfg := config.DefaultServiceConfigFromEnv()
@@ -108,7 +108,7 @@ func newRabbitMQFixCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:   "fix",
 		Short: "Fix common RabbitMQ issues",
-		Run: func(cmd *cobra.Command, args []string) {
+		Run: func(_ *cobra.Command, _ []string) {
 			fmt.Println("🔧 Fixing RabbitMQ issues...")
 
 			cfg := config.DefaultServiceConfigFromEnv()

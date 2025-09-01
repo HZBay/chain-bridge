@@ -228,7 +228,7 @@ func (c *RabbitMQClient) PublishMessage(ctx context.Context, queueName string, m
 }
 
 // ConsumeMessages consumes messages from the specified queue
-func (c *RabbitMQClient) ConsumeMessages(queueName string, handler func([]byte) error) (<-chan amqp.Delivery, error) {
+func (c *RabbitMQClient) ConsumeMessages(queueName string, _ func([]byte) error) (<-chan amqp.Delivery, error) {
 	if !c.healthy {
 		return nil, fmt.Errorf("RabbitMQ client is not healthy")
 	}
@@ -269,7 +269,15 @@ func (c *RabbitMQClient) GetQueueInfo(queueName string) (int, error) {
 		return 0, fmt.Errorf("RabbitMQ client is not healthy")
 	}
 
-	queue, err := c.channel.QueueInspect(queueName)
+	// Use QueueDeclare with Passive: true instead of deprecated QueueInspect
+	queue, err := c.channel.QueueDeclarePassive(
+		queueName, // name
+		true,      // durable
+		false,     // delete when unused
+		false,     // exclusive
+		false,     // no-wait
+		nil,       // arguments
+	)
 	if err != nil {
 		return 0, fmt.Errorf("failed to inspect queue %s: %w", queueName, err)
 	}

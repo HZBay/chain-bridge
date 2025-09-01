@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"sync"
 	"time"
@@ -307,33 +308,46 @@ func (s *service) GetUserTransactions(ctx context.Context, userID string, params
 		models.TransactionWhere.UserID.EQ(userID),
 		qm.Load(models.TransactionRels.Token),
 		qm.Load(models.TransactionRels.Chain),
-		qm.OrderBy(models.TransactionColumns.CreatedAt + " DESC"),
 	}
 
-	// Apply filters
+	// Build separate query mods for counting vs selection
+	countQueryMods := []qm.QueryMod{
+		models.TransactionWhere.UserID.EQ(userID),
+	}
+
+	// Apply filters to both query sets
 	if params.ChainID != nil {
 		queryMods = append(queryMods, models.TransactionWhere.ChainID.EQ(*params.ChainID))
+		countQueryMods = append(countQueryMods, models.TransactionWhere.ChainID.EQ(*params.ChainID))
 	}
 	if params.TokenSymbol != nil {
 		// Join with supported_tokens to filter by symbol
 		queryMods = append(queryMods, qm.InnerJoin("supported_tokens st ON st.id = transactions.token_id"))
 		queryMods = append(queryMods, qm.Where("st.symbol = ?", *params.TokenSymbol))
+		// For count query, use subquery to avoid GROUP BY issues
+		countQueryMods = append(countQueryMods, qm.Where("transactions.token_id IN (SELECT id FROM supported_tokens WHERE symbol = ?)", *params.TokenSymbol))
 	}
 	if params.TxType != nil {
 		queryMods = append(queryMods, models.TransactionWhere.TXType.EQ(*params.TxType))
+		countQueryMods = append(countQueryMods, models.TransactionWhere.TXType.EQ(*params.TxType))
 	}
 	if params.StartDate != nil {
 		queryMods = append(queryMods, qm.Where("transactions.created_at >= ?", *params.StartDate))
+		countQueryMods = append(countQueryMods, qm.Where("transactions.created_at >= ?", *params.StartDate))
 	}
 	if params.EndDate != nil {
 		queryMods = append(queryMods, qm.Where("transactions.created_at <= ?", *params.EndDate))
+		countQueryMods = append(countQueryMods, qm.Where("transactions.created_at <= ?", *params.EndDate))
 	}
 
-	// Get total count (without pagination)
-	totalCount, err := models.Transactions(queryMods...).Count(ctx, s.db)
+	// Get total count using clean count query without JOINs
+	totalCount, err := models.Transactions(countQueryMods...).Count(ctx, s.db)
 	if err != nil {
 		return nil, fmt.Errorf("failed to count transactions: %w", err)
 	}
+
+	// Add ORDER BY for main query only
+	queryMods = append(queryMods, qm.OrderBy(models.TransactionColumns.CreatedAt+" DESC"))
 
 	// Apply pagination
 	offset := (params.Page - 1) * params.Limit
@@ -350,8 +364,11 @@ func (s *service) GetUserTransactions(ctx context.Context, userID string, params
 	var totalIncoming, totalOutgoing, totalGasSaved float64
 
 	for i, tx := range transactions {
-		// Parse amount as decimal for calculations
-		amount, _ := tx.Amount.Float64()
+		// Parse amount as decimal for calculations - safely handle null decimals
+		var amount float64
+		if tx.Amount.Big != nil {
+			amount, _ = tx.Amount.Float64()
+		}
 
 		if amount > 0 {
 			totalIncoming += amount
@@ -359,24 +376,42 @@ func (s *service) GetUserTransactions(ctx context.Context, userID string, params
 			totalOutgoing += -amount // Convert negative to positive
 		}
 
-		// Calculate gas saved if available
-		if val, ok := tx.GasSavedPercentage.Float64(); ok {
-			// Mock calculation - in real implementation would depend on tx value
-			gasSaved := amount * val / 100 * 0.001 // rough estimate
-			totalGasSaved += gasSaved
+		// Calculate gas saved if available - safely handle null decimals
+		if tx.GasSavedPercentage.Big != nil {
+			if val, ok := tx.GasSavedPercentage.Float64(); ok {
+				// Mock calculation - in real implementation would depend on tx value
+				gasSaved := amount * val / 100 * 0.001 // rough estimate
+				totalGasSaved += gasSaved
+			}
 		}
 
-		// Build transaction info
-		amountStr := tx.Amount.String()
-		txInfo := &types.TransactionInfo{
-			TxID:    &tx.TXID,
-			ChainID: &tx.ChainID,
-			Amount:  &amountStr,
-			TxType:  &tx.TXType,
+		// Build transaction info - safely handle null decimals
+		var amountStr string
+		if tx.Amount.Big != nil {
+			amountStr = tx.Amount.String()
+		} else {
+			amountStr = "0.0"
 		}
-
+		// Set required fields with defaults if needed
+		status := "pending" // Default status
 		if tx.Status.Valid {
-			txInfo.Status = &tx.Status.String
+			status = tx.Status.String
+		}
+
+		// Get token symbol - this should always be available from the relationship
+		tokenSymbol := "UNKNOWN" // Default token symbol
+		if tx.R != nil && tx.R.Token != nil {
+			tokenSymbol = tx.R.Token.Symbol
+		}
+
+		txInfo := &types.TransactionInfo{
+			TxID:         &tx.TXID,
+			ChainID:      &tx.ChainID,
+			Amount:       &amountStr,
+			TxType:       &tx.TXType,
+			BusinessType: &tx.BusinessType,
+			Status:       &status,
+			TokenSymbol:  &tokenSymbol,
 		}
 		if tx.ReasonType != "" {
 			txInfo.ReasonType = tx.ReasonType
@@ -408,8 +443,10 @@ func (s *service) GetUserTransactions(ctx context.Context, userID string, params
 		if tx.IsBatchOperation.Valid {
 			txInfo.IsBatchOperation = &tx.IsBatchOperation.Bool
 		}
-		if val, ok := tx.GasSavedPercentage.Float64(); ok {
-			txInfo.GasSavedPercentage = float32(val)
+		if tx.GasSavedPercentage.Big != nil {
+			if val, ok := tx.GasSavedPercentage.Float64(); ok {
+				txInfo.GasSavedPercentage = float32(val)
+			}
 		}
 		if tx.ConfirmedAt.Valid {
 			confirmedAt := strfmt.DateTime(tx.ConfirmedAt.Time)
@@ -419,12 +456,6 @@ func (s *service) GetUserTransactions(ctx context.Context, userID string, params
 		// Add chain name if loaded
 		if tx.R != nil && tx.R.Chain != nil {
 			txInfo.ChainName = tx.R.Chain.Name
-		}
-
-		// Add token symbol if loaded
-		if tx.R != nil && tx.R.Token != nil {
-			tokenSymbol := tx.R.Token.Symbol
-			txInfo.TokenSymbol = &tokenSymbol
 		}
 
 		transactionInfos[i] = txInfo
@@ -508,10 +539,24 @@ func (s *service) getTokenIDBySymbol(chainID int64, symbol string) int {
 
 func (s *service) getCurrentBatchSize(chainID int64, tokenID int) int32 {
 	if s.batchOptimizer != nil {
-		return int32(s.batchOptimizer.GetOptimalBatchSize(chainID, tokenID))
+		optimalSize := s.batchOptimizer.GetOptimalBatchSize(chainID, tokenID)
+		if optimalSize <= 0 {
+			return 25 // Default fallback
+		}
+		if optimalSize <= math.MaxInt32 {
+			return int32(optimalSize)
+		}
+		return math.MaxInt32
 	}
 	// Fallback to optimal batch size from chain config
-	return int32(s.getOptimalBatchSize(chainID, tokenID))
+	optimalSize := s.getOptimalBatchSize(chainID, tokenID)
+	if optimalSize <= 0 {
+		return 25 // Default fallback
+	}
+	if optimalSize <= math.MaxInt32 {
+		return int32(optimalSize)
+	}
+	return math.MaxInt32
 }
 
 func (s *service) getOptimalBatchSize(chainID int64, tokenID int) int {

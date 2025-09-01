@@ -12,7 +12,7 @@ import (
 
 // QueueHealthRoute creates the route for queue health check
 func GetQueueHealthRoute(s *api.Server) *echo.Route {
-	handler := NewHandler(s.QueueMonitor, s.BatchOptimizer)
+	handler := NewHandler(s.QueueMonitor, s.BatchOptimizer, s.PaymentEventService)
 	return s.Router.Management.GET("/monitoring/queue/health", handler.CheckQueueHealth)
 }
 

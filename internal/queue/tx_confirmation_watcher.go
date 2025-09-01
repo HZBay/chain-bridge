@@ -3,6 +3,7 @@ package queue
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"fmt"
 	"math/big"
 	"sync"
@@ -102,7 +103,7 @@ func (w *TxConfirmationWatcher) Start(ctx context.Context) error {
 }
 
 // Stop stops the confirmation watcher
-func (w *TxConfirmationWatcher) Stop(ctx context.Context) error {
+func (w *TxConfirmationWatcher) Stop(_ context.Context) error {
 	log.Info().Msg("Stopping transaction confirmation watcher")
 
 	// Signal stop
@@ -379,7 +380,11 @@ func (w *TxConfirmationWatcher) confirmBatch(ctx context.Context, batch PendingB
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			log.Debug().Err(err).Msg("Transaction rollback error (expected if committed)")
+		}
+	}()
 
 	// Update batch status to confirmed
 	err = w.updateBatchToConfirmed(tx, batch.BatchID)
@@ -582,7 +587,11 @@ func (w *TxConfirmationWatcher) markBatchAsFailed(ctx context.Context, batch Pen
 		log.Error().Err(err).Msg("Failed to begin transaction for batch failure")
 		return
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			log.Debug().Err(err).Msg("Transaction rollback error (expected if committed)")
+		}
+	}()
 
 	// Update batch status to failed
 	batchQuery := `
@@ -755,7 +764,7 @@ func (w *TxConfirmationWatcher) checkTransactionConfirmation(
 	// 1. Get transaction receipt
 	receipt, err := client.TransactionReceipt(ctx, hash)
 	if err != nil {
-		if err == ethereum.NotFound {
+		if errors.Is(err, ethereum.NotFound) {
 			// Transaction not yet mined, return unconfirmed status
 			log.Debug().
 				Str("tx_hash", txHash).

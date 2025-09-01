@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"math"
 	"strconv"
 	"sync"
 	"time"
@@ -123,7 +124,6 @@ func (s *service) AdjustAssets(ctx context.Context, req *types.AssetAdjustReques
 
 	// 2. Process each adjustment
 	var adjustJobs []queue.AssetAdjustJob
-	var transactionRecords []*models.Transaction
 
 	tx, err := s.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -187,8 +187,6 @@ func (s *service) AdjustAssets(ctx context.Context, req *types.AssetAdjustReques
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to insert transaction for user %s: %w", *adjustment.UserID, err)
 		}
-
-		transactionRecords = append(transactionRecords, transaction)
 
 		// Create asset adjust job
 		adjustJob := queue.AssetAdjustJob{
@@ -314,10 +312,24 @@ func (s *service) getTokenIDBySymbol(chainID int64, symbol string) int {
 
 func (s *service) getCurrentBatchSize(chainID int64, tokenID int) int32 {
 	if s.batchOptimizer != nil {
-		return int32(s.batchOptimizer.GetOptimalBatchSize(chainID, tokenID))
+		optimalSize := s.batchOptimizer.GetOptimalBatchSize(chainID, tokenID)
+		if optimalSize <= 0 {
+			return 25 // Default fallback
+		}
+		if optimalSize <= math.MaxInt32 {
+			return int32(optimalSize)
+		}
+		return math.MaxInt32
 	}
 	// Fallback to optimal batch size from chain config
-	return int32(s.getOptimalBatchSize(chainID, tokenID))
+	optimalSize := s.getOptimalBatchSize(chainID, tokenID)
+	if optimalSize <= 0 {
+		return 25 // Default fallback
+	}
+	if optimalSize <= math.MaxInt32 {
+		return int32(optimalSize)
+	}
+	return math.MaxInt32
 }
 
 func (s *service) getOptimalBatchSize(chainID int64, tokenID int) int {
@@ -590,20 +602,16 @@ func (s *service) estimateNextBatch(pendingCount int64) string {
 
 	if pendingCount < 5 {
 		return "15-30 minutes"
-	} else if pendingCount < 15 {
-		return "5-15 minutes"
-	} else {
-		return "2-5 minutes"
 	}
+	if pendingCount < 15 {
+		return "5-15 minutes"
+	}
+	return "2-5 minutes"
 }
 
 // Helper functions for creating pointers
 func strPtr(s string) *string {
 	return &s
-}
-
-func int64Ptr(i int64) *int64 {
-	return &i
 }
 
 func float32Ptr(f float32) *float32 {

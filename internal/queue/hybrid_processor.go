@@ -133,7 +133,7 @@ func (h *HybridBatchProcessor) selectProcessor() (BatchProcessor, string) {
 }
 
 // updateMetrics updates RabbitMQ processor performance metrics
-func (h *HybridBatchProcessor) updateMetrics(processorType string, success bool, latency time.Duration) {
+func (h *HybridBatchProcessor) updateMetrics(_ string, success bool, latency time.Duration) {
 	// Only track RabbitMQ metrics now
 	metrics := h.rabbitmqStats
 
@@ -187,8 +187,8 @@ func (h *HybridBatchProcessor) StopBatchConsumer(ctx context.Context) error {
 }
 
 // GetQueueStats returns RabbitMQ queue statistics
-func (h *HybridBatchProcessor) GetQueueStats() map[string]QueueStats {
-	result := make(map[string]QueueStats)
+func (h *HybridBatchProcessor) GetQueueStats() map[string]Stats {
+	result := make(map[string]Stats)
 
 	// Get RabbitMQ stats
 	if h.rabbitmqProcessor != nil {

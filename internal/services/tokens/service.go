@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"sync"
 	"time"
@@ -93,7 +94,7 @@ func New(db *sql.DB) Service {
 func (s *serviceImpl) GetToken(ctx context.Context, tokenID int) (*TokenConfig, error) {
 	token, err := models.FindSupportedToken(ctx, s.db, tokenID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, fmt.Errorf("token with ID %d not found", tokenID)
 		}
 		return nil, fmt.Errorf("failed to get token: %w", err)
@@ -209,7 +210,7 @@ func (s *serviceImpl) CreateToken(ctx context.Context, request *CreateTokenReque
 func (s *serviceImpl) UpdateToken(ctx context.Context, tokenID int, request *UpdateTokenRequest) error {
 	token, err := models.FindSupportedToken(ctx, s.db, tokenID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("token with ID %d not found", tokenID)
 		}
 		return fmt.Errorf("failed to find token: %w", err)
@@ -267,7 +268,7 @@ func (s *serviceImpl) DeleteToken(ctx context.Context, tokenID int) error {
 
 	token, err := models.FindSupportedToken(ctx, s.db, tokenID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("token with ID %d not found", tokenID)
 		}
 		return fmt.Errorf("failed to find token: %w", err)
@@ -287,7 +288,7 @@ func (s *serviceImpl) DeleteToken(ctx context.Context, tokenID int) error {
 func (s *serviceImpl) ToggleTokenStatus(ctx context.Context, tokenID int, enabled bool) error {
 	token, err := models.FindSupportedToken(ctx, s.db, tokenID)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return fmt.Errorf("token with ID %d not found", tokenID)
 		}
 		return fmt.Errorf("failed to find token: %w", err)
@@ -306,7 +307,7 @@ func (s *serviceImpl) ToggleTokenStatus(ctx context.Context, tokenID int, enable
 }
 
 // RefreshCache clears the token cache
-func (s *serviceImpl) RefreshCache(ctx context.Context) error {
+func (s *serviceImpl) RefreshCache(_ context.Context) error {
 	s.invalidateCache()
 	log.Info().Msg("Token cache refreshed")
 	return nil

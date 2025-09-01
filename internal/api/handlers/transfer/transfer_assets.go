@@ -10,28 +10,28 @@ import (
 	"github.com/labstack/echo/v4"
 )
 
-// TransferAssetsHandler handles POST /transfer requests
-type TransferAssetsHandler struct {
+// AssetsHandler handles POST /transfer requests
+type AssetsHandler struct {
 	transferService transfer.Service
 }
 
-// NewTransferAssetsHandler creates a new transfer assets handler
-func NewTransferAssetsHandler(transferService transfer.Service) *TransferAssetsHandler {
-	return &TransferAssetsHandler{
+// NewAssetsHandler creates a new transfer assets handler
+func NewAssetsHandler(transferService transfer.Service) *AssetsHandler {
+	return &AssetsHandler{
 		transferService: transferService,
 	}
 }
 
 // PostTransferAssetsRoute creates the route for asset transfers
 func PostTransferAssetsRoute(s *api.Server) *echo.Route {
-	handler := NewTransferAssetsHandler(
+	handler := NewAssetsHandler(
 		transfer.NewService(s.DB, s.BatchProcessor, s.BatchOptimizer),
 	)
 	return s.Router.APIV1Assets.POST("/transfer", handler.Handle)
 }
 
 // Handle processes asset transfer requests
-func (h *TransferAssetsHandler) Handle(c echo.Context) error {
+func (h *AssetsHandler) Handle(c echo.Context) error {
 	ctx := c.Request().Context()
 	log := util.LogFromContext(ctx)
 

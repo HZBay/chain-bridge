@@ -77,6 +77,10 @@ definitions:
     $ref: "../definitions/monitoring.yml#/definitions/optimizationRecommendationResponse"
   userOptimizationRecommendationResponse:
     $ref: "../definitions/monitoring.yml#/definitions/userOptimizationRecommendationResponse"
+  paymentEventsStatsResponse:
+    $ref: "../definitions/monitoring.yml#/definitions/paymentEventsStatsResponse"
+  paymentEventsReloadResponse:
+    $ref: "../definitions/monitoring.yml#/definitions/paymentEventsReloadResponse"
   # Assets definitions
   assetAdjustResponse:
     $ref: "../definitions/assets.yml#/definitions/AssetAdjustResponse"

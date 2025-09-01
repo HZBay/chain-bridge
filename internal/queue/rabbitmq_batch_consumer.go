@@ -447,8 +447,8 @@ func getMapKeys(m map[string]interface{}) []string {
 }
 
 // GetQueueStats returns queue statistics for this chain
-func (c *RabbitMQBatchConsumer) GetQueueStats() map[string]QueueStats {
-	stats := make(map[string]QueueStats)
+func (c *RabbitMQBatchConsumer) GetQueueStats() map[string]Stats {
+	stats := make(map[string]Stats)
 
 	for _, queueName := range c.queueNames {
 		messageCount, err := c.client.GetQueueInfo(queueName)
@@ -461,7 +461,7 @@ func (c *RabbitMQBatchConsumer) GetQueueStats() map[string]QueueStats {
 			continue
 		}
 
-		stats[queueName] = QueueStats{
+		stats[queueName] = Stats{
 			QueueName:       queueName,
 			PendingCount:    messageCount,
 			ProcessingCount: 0,
@@ -557,23 +557,6 @@ func (c *RabbitMQBatchConsumer) nackAllMessages(messages []*MessageWrapper) {
 				Err(err).
 				Msg("Failed to NACK message")
 		}
-	}
-}
-
-// safeAckMessage safely acknowledges a single message
-func (c *RabbitMQBatchConsumer) safeAckMessage(delivery amqp.Delivery) {
-	if c.client == nil || !c.client.IsHealthy() {
-		log.Warn().
-			Int64("chain_id", c.chainID).
-			Msg("Skipping ACK - RabbitMQ client not healthy")
-		return
-	}
-
-	if err := delivery.Ack(false); err != nil {
-		log.Error().
-			Int64("chain_id", c.chainID).
-			Err(err).
-			Msg("Failed to ACK message")
 	}
 }
 
@@ -704,7 +687,11 @@ func (c *RabbitMQBatchConsumer) handleBatchFailureDuringShutdown(ctx context.Con
 			// During shutdown, don't NACK - just log the failure
 			return
 		}
-		defer tx.Rollback()
+		defer func() {
+			if err := tx.Rollback(); err != nil {
+				log.Debug().Err(err).Msg("Transaction rollback error (expected if committed)")
+			}
+		}()
 
 		// Update batch status to failed
 		batchQuery := `UPDATE batches SET status = 'failed' WHERE batch_id = $1`

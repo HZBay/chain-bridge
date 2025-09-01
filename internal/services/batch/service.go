@@ -23,11 +23,11 @@ type Service interface {
 type service struct {
 	db             *sql.DB
 	batchProcessor queue.BatchProcessor
-	queueMonitor   *queue.QueueMonitor
+	queueMonitor   *queue.Monitor
 }
 
 // NewService creates a new batch service
-func NewService(db *sql.DB, batchProcessor queue.BatchProcessor, queueMonitor *queue.QueueMonitor) Service {
+func NewService(db *sql.DB, batchProcessor queue.BatchProcessor, queueMonitor *queue.Monitor) Service {
 	return &service{
 		db:             db,
 		batchProcessor: batchProcessor,
@@ -53,7 +53,7 @@ func (s *service) GetBatchStatus(ctx context.Context, batchID string) (*types.Ba
 	}
 
 	// 2. Get current queue metrics if monitor is available
-	var currentQueueDepth int64 = 0
+	var currentQueueDepth int64
 	if s.queueMonitor != nil {
 		queueStats := s.queueMonitor.GetDetailedStats()
 		// Check for any queue related to this batch's chain and token
