@@ -23,7 +23,7 @@ func getUserAccountHandler(s *api.Server) echo.HandlerFunc {
 
 		// Parse and validate parameters
 		params := cpop.NewGetUserAccountParams()
-		if err := params.BindRequest(c.Request(), nil); err != nil {
+		if err := util.BindAndValidatePathParams(c, &params); err != nil {
 			log.Debug().Err(err).Msg("Failed to bind request parameters")
 			return err
 		}

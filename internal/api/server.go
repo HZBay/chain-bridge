@@ -206,10 +206,9 @@ func (s *Server) InitTokensService() error {
 
 func (s *Server) InitBatchProcessor() error {
 	var err error
-	s.BatchProcessor, err = queue.NewBatchProcessor(s.Config)
-	if err != nil {
-		return fmt.Errorf("failed to create batch processor: %w", err)
-	}
+
+	// Initialize batch optimizer with chains service
+	s.BatchOptimizer = queue.NewBatchOptimizer(s.QueueMonitor, s.ChainsService)
 
 	// Initialize RabbitMQ client for payment event service
 	if s.Config.RabbitMQ.Enabled {
@@ -217,13 +216,15 @@ func (s *Server) InitBatchProcessor() error {
 		if err != nil {
 			return fmt.Errorf("failed to create RabbitMQ client: %w", err)
 		}
+
+		s.BatchProcessor, err = queue.NewBatchProcessor(s.RabbitMQClient, s.DB, s.BatchOptimizer, s.Config)
+		if err != nil {
+			return fmt.Errorf("failed to create batch processor: %w", err)
+		}
 	}
 
 	// Initialize queue monitor
 	s.QueueMonitor = queue.NewQueueMonitor(s.BatchProcessor)
-
-	// Initialize batch optimizer with chains service
-	s.BatchOptimizer = queue.NewBatchOptimizer(s.QueueMonitor, s.ChainsService)
 
 	log.Info().
 		Bool("rabbitmq_enabled", s.Config.RabbitMQ.Enabled).
@@ -364,6 +365,14 @@ func (s *Server) Start() error {
 		}
 	}
 
+	if s.BatchProcessor != nil && s.Config.RabbitMQ.Enabled {
+		if err := s.BatchProcessor.StartBatchConsumer(context.Background()); err != nil {
+			log.Error().Err(err).Msg("Failed to start batch processor")
+		} else {
+			log.Info().Msg("Batch processor started")
+		}
+	}
+
 	return s.Echo.Start(s.Config.Echo.ListenAddress)
 }
 
@@ -371,6 +380,15 @@ func (s *Server) Shutdown(ctx context.Context) []error {
 	log.Warn().Msg("Shutting down server")
 
 	var errs []error
+
+	if s.BatchProcessor != nil {
+		if err := s.BatchProcessor.Close(); err != nil {
+			log.Error().Err(err).Msg("Failed to close batch processor")
+			errs = append(errs, err)
+		} else {
+			log.Info().Msg("Batch processor closed")
+		}
+	}
 
 	// Stop payment event service first
 	if s.PaymentEventService != nil && s.PaymentEventService.IsStarted() {

@@ -3,9 +3,12 @@ package account
 
 import (
 	"net/http"
+	"regexp"
+	"strings"
 
 	"github.com/hzbay/chain-bridge/internal/api"
-	"github.com/hzbay/chain-bridge/internal/types/cpop"
+	"github.com/hzbay/chain-bridge/internal/api/httperrors"
+	"github.com/hzbay/chain-bridge/internal/types"
 	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/labstack/echo/v4"
 )
@@ -21,29 +24,80 @@ func createUserAccountHandler(s *api.Server) echo.HandlerFunc {
 		ctx := c.Request().Context()
 		log := util.LogFromContext(ctx)
 
-		// Parse and validate parameters
-		params := cpop.NewCreateUserAccountParams()
-		if err := params.BindRequest(c.Request(), nil); err != nil {
-			log.Debug().Err(err).Msg("Failed to bind request parameters")
+		// Parse path parameter
+		userID := c.Param("user_id")
+		if userID == "" {
+			log.Debug().Msg("Missing user_id parameter")
+			return echo.NewHTTPError(http.StatusBadRequest, "User ID is required")
+		}
+
+		// Parse request body
+		var request types.CreateAccountRequest
+		if err := util.BindAndValidateBody(c, &request); err != nil {
+			log.Debug().Err(err).Msg("Failed to bind request body")
 			return err
 		}
 
-		// Validate request body
-		if params.Request == nil {
-			log.Debug().Msg("Missing request body")
-			return echo.NewHTTPError(http.StatusBadRequest, "Request body is required")
+		// Validate owner address format if provided
+		if request.OwnerAddress != "" {
+			if !isValidEthereumAddress(request.OwnerAddress) {
+				log.Debug().Str("owner_address", request.OwnerAddress).Msg("Invalid owner address format")
+				return httperrors.NewHTTPErrorWithDetail(
+					http.StatusBadRequest,
+					"validation_error",
+					"Invalid Request Parameters",
+					"owner_address must be a valid Ethereum address (42 characters starting with 0x)",
+				)
+			}
 		}
 
 		// Call account service to create account
-		response, err := s.AccountService.CreateAccount(ctx, params.UserID, params.Request)
+		response, err := s.AccountService.CreateAccount(ctx, userID, &request)
 		if err != nil {
 			log.Error().Err(err).
-				Str("user_id", params.UserID).
-				Interface("request", params.Request).
+				Str("user_id", userID).
+				Interface("request", request).
 				Msg("Failed to create account")
-			return err
+
+			// Handle specific business errors with appropriate HTTP status codes
+			errorMsg := err.Error()
+			if strings.Contains(errorMsg, "not supported") {
+				return httperrors.NewHTTPErrorWithDetail(
+					http.StatusUnprocessableEntity, // 422
+					"chain_not_supported",
+					"Chain Not Supported",
+					errorMsg,
+				)
+			}
+			if strings.Contains(errorMsg, "already exists") {
+				return httperrors.NewHTTPErrorWithDetail(
+					http.StatusConflict, // 409
+					"account_already_exists",
+					"Account Already Exists",
+					errorMsg,
+				)
+			}
+
+			// Default to 500 for other errors
+			return httperrors.NewHTTPErrorWithDetail(
+				http.StatusInternalServerError,
+				"internal_error",
+				"Internal Server Error",
+				errorMsg,
+			)
 		}
 
 		return util.ValidateAndReturn(c, http.StatusOK, response)
 	}
+}
+
+// isValidEthereumAddress validates if a string is a valid Ethereum address
+func isValidEthereumAddress(address string) bool {
+	// Must start with 0x and be exactly 42 characters
+	if len(address) != 42 || !strings.HasPrefix(address, "0x") {
+		return false
+	}
+	// Must contain only hexadecimal characters after 0x
+	matched, _ := regexp.MatchString("^0x[a-fA-F0-9]{40}$", address)
+	return matched
 }

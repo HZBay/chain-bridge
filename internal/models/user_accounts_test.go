@@ -537,7 +537,7 @@ func testUserAccountsSelect(t *testing.T) {
 }
 
 var (
-	userAccountDBTypes = map[string]string{`ID`: `integer`, `UserID`: `uuid`, `ChainID`: `bigint`, `AaAddress`: `character`, `Owner`: `character`, `IsDeployed`: `boolean`, `DeploymentTXHash`: `character`, `MasterSigner`: `character`, `CreatedAt`: `timestamp with time zone`}
+	userAccountDBTypes = map[string]string{`ID`: `integer`, `UserID`: `text`, `ChainID`: `bigint`, `AaAddress`: `character`, `Owner`: `character`, `IsDeployed`: `boolean`, `DeploymentTXHash`: `character`, `MasterSigner`: `character`, `CreatedAt`: `timestamp with time zone`}
 	_                  = bytes.MinRead
 )
 

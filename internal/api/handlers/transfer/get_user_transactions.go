@@ -38,7 +38,7 @@ func (h *GetUserTransactionsHandler) Handle(c echo.Context) error {
 
 	// Parse and validate parameters
 	params := cpop.NewGetUserTransactionsParams()
-	if err := params.BindRequest(c.Request(), nil); err != nil {
+	if err := util.BindAndValidatePathParams(c, &params); err != nil {
 		log.Debug().Err(err).Msg("Failed to bind request parameters")
 		return err
 	}

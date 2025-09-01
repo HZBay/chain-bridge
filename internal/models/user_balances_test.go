@@ -646,7 +646,7 @@ func testUserBalancesSelect(t *testing.T) {
 }
 
 var (
-	userBalanceDBTypes = map[string]string{`ID`: `integer`, `UserID`: `uuid`, `ChainID`: `bigint`, `TokenID`: `integer`, `ConfirmedBalance`: `numeric`, `PendingBalance`: `numeric`, `LockedBalance`: `numeric`, `LastSyncTime`: `timestamp with time zone`, `LastChangeTime`: `timestamp with time zone`, `CreatedAt`: `timestamp with time zone`, `UpdatedAt`: `timestamp with time zone`}
+	userBalanceDBTypes = map[string]string{`ID`: `integer`, `UserID`: `text`, `ChainID`: `bigint`, `TokenID`: `integer`, `ConfirmedBalance`: `numeric`, `PendingBalance`: `numeric`, `LockedBalance`: `numeric`, `LastSyncTime`: `timestamp with time zone`, `LastChangeTime`: `timestamp with time zone`, `CreatedAt`: `timestamp with time zone`, `UpdatedAt`: `timestamp with time zone`}
 	_                  = bytes.MinRead
 )
 

@@ -3,9 +3,11 @@ package account
 
 import (
 	"net/http"
+	"strings"
 
 	"github.com/hzbay/chain-bridge/internal/api"
-	"github.com/hzbay/chain-bridge/internal/types/cpop"
+	"github.com/hzbay/chain-bridge/internal/api/httperrors"
+	"github.com/hzbay/chain-bridge/internal/types"
 	"github.com/hzbay/chain-bridge/internal/util"
 	"github.com/labstack/echo/v4"
 )
@@ -21,27 +23,62 @@ func deployUserAccountHandler(s *api.Server) echo.HandlerFunc {
 		ctx := c.Request().Context()
 		log := util.LogFromContext(ctx)
 
-		// Parse and validate parameters
-		params := cpop.NewDeployUserAccountParams()
-		if err := params.BindRequest(c.Request(), nil); err != nil {
-			log.Debug().Err(err).Msg("Failed to bind request parameters")
-			return err
+		// Parse path parameter
+		userID := c.Param("user_id")
+		if userID == "" {
+			log.Debug().Msg("Missing user_id parameter")
+			return echo.NewHTTPError(http.StatusBadRequest, "User ID is required")
 		}
 
-		// Validate request body
-		if params.Request == nil {
-			log.Debug().Msg("Missing request body")
-			return echo.NewHTTPError(http.StatusBadRequest, "Request body is required")
+		// Parse request body
+		var request types.DeployAccountRequest
+		if err := util.BindAndValidateBody(c, &request); err != nil {
+			log.Debug().Err(err).Msg("Failed to bind request body")
+			return err
 		}
 
 		// Call account service to deploy account
-		response, err := s.AccountService.DeployAccount(ctx, params.UserID, params.Request)
+		response, err := s.AccountService.DeployAccount(ctx, userID, &request)
 		if err != nil {
 			log.Error().Err(err).
-				Str("user_id", params.UserID).
-				Interface("request", params.Request).
+				Str("user_id", userID).
+				Interface("request", request).
 				Msg("Failed to deploy account")
-			return err
+
+			// Handle specific business errors with appropriate HTTP status codes
+			errorMsg := err.Error()
+			if strings.Contains(errorMsg, "not supported") {
+				return httperrors.NewHTTPErrorWithDetail(
+					http.StatusUnprocessableEntity, // 422
+					"chain_not_supported",
+					"Chain Not Supported",
+					errorMsg,
+				)
+			}
+			if strings.Contains(errorMsg, "not found") {
+				return httperrors.NewHTTPErrorWithDetail(
+					http.StatusNotFound, // 404
+					"account_not_found",
+					"Account Not Found",
+					errorMsg,
+				)
+			}
+			if strings.Contains(errorMsg, "already deployed") {
+				return httperrors.NewHTTPErrorWithDetail(
+					http.StatusConflict, // 409
+					"account_already_deployed",
+					"Account Already Deployed",
+					errorMsg,
+				)
+			}
+
+			// Default to 500 for other errors
+			return httperrors.NewHTTPErrorWithDetail(
+				http.StatusInternalServerError,
+				"internal_error",
+				"Internal Server Error",
+				errorMsg,
+			)
 		}
 
 		return util.ValidateAndReturn(c, http.StatusOK, response)

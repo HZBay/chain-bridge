@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"errors"
 	"fmt"
+	"strconv"
 	"sync"
 	"time"
 
@@ -16,7 +17,6 @@ import (
 	"github.com/hzbay/chain-bridge/internal/types"
 	"github.com/rs/zerolog/log"
 	"github.com/volatiletech/null/v8"
-	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 	sqltypes "github.com/volatiletech/sqlboiler/v4/types"
 )
@@ -72,6 +72,11 @@ func (s *service) TransferAssets(ctx context.Context, req *types.TransferRequest
 		Msg("Processing transfer request")
 
 	// Request validation is handled at handler layer
+
+	// Validate amount format before processing
+	if _, err := strconv.ParseFloat(*req.Amount, 64); err != nil {
+		return nil, nil, fmt.Errorf("invalid amount format: %s", *req.Amount)
+	}
 
 	// 1. 幂等性检查 - 检查 OperationID 是否已经存在
 	mainOperationID := uuid.MustParse(*req.OperationID)
@@ -160,11 +165,56 @@ func (s *service) TransferAssets(ctx context.Context, req *types.TransferRequest
 		}
 	}()
 
-	if err := outgoingTx.Insert(ctx, tx, boil.Infer()); err != nil {
+	// Use raw SQL to avoid decimal encoding issues
+	insertQuery := `
+		INSERT INTO transactions (
+			tx_id, operation_id, user_id, chain_id, tx_type, business_type, 
+			related_user_id, transfer_direction, token_id, amount, status, 
+			is_batch_operation, reason_type, reason_detail, created_at
+		) VALUES (
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10::numeric, $11, $12, $13, $14, NOW()
+		)`
+
+	// Insert outgoing transaction
+	outgoingAmount := fmt.Sprintf("-%s", *req.Amount)
+	_, err = tx.ExecContext(ctx, insertQuery,
+		outgoingTx.TXID,
+		outgoingTx.OperationID.String,
+		outgoingTx.UserID,
+		outgoingTx.ChainID,
+		outgoingTx.TXType,
+		outgoingTx.BusinessType,
+		outgoingTx.RelatedUserID.String,
+		outgoingTx.TransferDirection.String,
+		outgoingTx.TokenID,
+		outgoingAmount,
+		outgoingTx.Status.String,
+		outgoingTx.IsBatchOperation.Bool,
+		outgoingTx.ReasonType,
+		outgoingTx.ReasonDetail.String,
+	)
+	if err != nil {
 		return nil, nil, fmt.Errorf("failed to insert outgoing transaction: %w", err)
 	}
 
-	if err := incomingTx.Insert(ctx, tx, boil.Infer()); err != nil {
+	// Insert incoming transaction
+	_, err = tx.ExecContext(ctx, insertQuery,
+		incomingTx.TXID,
+		incomingTx.OperationID.String,
+		incomingTx.UserID,
+		incomingTx.ChainID,
+		incomingTx.TXType,
+		incomingTx.BusinessType,
+		incomingTx.RelatedUserID.String,
+		incomingTx.TransferDirection.String,
+		incomingTx.TokenID,
+		*req.Amount,
+		incomingTx.Status.String,
+		incomingTx.IsBatchOperation.Bool,
+		incomingTx.ReasonType,
+		incomingTx.ReasonDetail.String,
+	)
+	if err != nil {
 		return nil, nil, fmt.Errorf("failed to insert incoming transaction: %w", err)
 	}
 
@@ -175,6 +225,7 @@ func (s *service) TransferAssets(ctx context.Context, req *types.TransferRequest
 	// 6. Create transfer job and publish to queue
 	transferJob := queue.TransferJob{
 		ID:            operationID.String(),
+		JobType:       queue.JobTypeTransfer,
 		TransactionID: operationID, // Use operation ID as the main transaction ID
 		ChainID:       *req.ChainID,
 		TokenID:       s.getTokenIDBySymbol(*req.ChainID, *req.TokenSymbol),
