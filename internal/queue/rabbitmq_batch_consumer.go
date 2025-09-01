@@ -1,3 +1,16 @@
+// Package queue provides RabbitMQ batch consumer implementation for chain-specific message processing.
+// This file is organized into logical sections for better maintainability:
+//
+// 1. TYPES AND STRUCTS - Data structures and type definitions
+// 2. CONSTRUCTOR AND CONFIGURATION - Creation and configuration management
+// 3. LIFECYCLE MANAGEMENT - Start/Stop operations
+// 4. CONSUMER WORKERS - Message consumption from queues
+// 5. MESSAGE HANDLING - Individual message processing and parsing
+// 6. MESSAGE AGGREGATION - Batching and aggregation logic
+// 7. MESSAGE ACKNOWLEDGMENT - ACK/NACK operations
+// 8. STATUS AND MONITORING - Health checks and statistics
+// 9. SHUTDOWN PROCESSING - Graceful shutdown handling
+// 10. SHUTDOWN BATCH PROCESSING - Special processing during shutdown
 package queue
 
 import (
@@ -14,7 +27,13 @@ import (
 	"github.com/rs/zerolog/log"
 
 	"github.com/hzbay/chain-bridge/internal/blockchain"
+	"github.com/hzbay/chain-bridge/internal/models"
+	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 )
+
+// ============================================================================
+// TYPES AND STRUCTS
+// ============================================================================
 
 // MessageWrapper wraps amqp.Delivery with parsed job data
 type MessageWrapper struct {
@@ -23,41 +42,7 @@ type MessageWrapper struct {
 	ReceivedAt time.Time
 }
 
-// NewRabbitMQBatchConsumerForChain creates a new batch consumer specifically for a single chain
-func NewRabbitMQBatchConsumerForChain(
-	client *RabbitMQClient,
-	db *sql.DB,
-	optimizer *BatchOptimizer,
-	cpopCallers map[int64]*blockchain.CPOPBatchCaller,
-	confirmationWatcher *TxConfirmationWatcher,
-	batchProcessor BatchProcessor,
-	chainID int64,
-	queueNames []string,
-	workerCount int,
-) *RabbitMQBatchConsumer {
-	return &RabbitMQBatchConsumer{
-		client:              client,
-		db:                  db,
-		batchOptimizer:      optimizer,
-		cpopCallers:         cpopCallers,
-		confirmationWatcher: confirmationWatcher,
-		batchProcessor:      batchProcessor,
-
-		// Chain-specific configuration
-		chainID:    chainID,
-		queueNames: queueNames,
-
-		pendingMessages: make(map[BatchGroup][]*MessageWrapper),
-		stopChan:        make(chan struct{}),
-
-		// Configuration optimized for single-chain processing
-		maxBatchSize:  3,                // Maximum batch size
-		maxWaitTime:   15 * time.Second, // Maximum wait time
-		consumerCount: workerCount,      // Configurable workers per chain
-	}
-}
-
-// RabbitMQBatchConsumer now supports chain-specific processing
+// RabbitMQBatchConsumer supports chain-specific processing
 type RabbitMQBatchConsumer struct {
 	client              *RabbitMQClient
 	db                  *sql.DB
@@ -78,16 +63,179 @@ type RabbitMQBatchConsumer struct {
 	stopChan chan struct{}
 	workerWg sync.WaitGroup
 
-	// Configuration
-	maxBatchSize  int
-	maxWaitTime   time.Duration
-	consumerCount int
+	// Batch Configuration (loaded from database)
+	maxBatchSize     int           // Working batch size for processing
+	minBatchSize     int           // Minimum batch size allowed
+	optimalBatchSize int           // Optimal batch size from database
+	maxWaitTime      time.Duration // Maximum wait time before processing batch
+	consumerCount    int           // Number of consumer workers for this chain
 
 	// Metrics
 	processedCount int64
 	errorCount     int64
 	startedAt      time.Time
 }
+
+// ============================================================================
+// CONSTRUCTOR AND CONFIGURATION
+// ============================================================================
+
+// NewRabbitMQBatchConsumerForChain creates a new batch consumer specifically for a single chain
+func NewRabbitMQBatchConsumerForChain(
+	client *RabbitMQClient,
+	db *sql.DB,
+	optimizer *BatchOptimizer,
+	cpopCallers map[int64]*blockchain.CPOPBatchCaller,
+	confirmationWatcher *TxConfirmationWatcher,
+	batchProcessor BatchProcessor,
+	chainID int64,
+	queueNames []string,
+	workerCount int, // This will be used as fallback if database value is not available
+) *RabbitMQBatchConsumer {
+	// Create consumer first
+	consumer := &RabbitMQBatchConsumer{
+		client:              client,
+		db:                  db,
+		batchOptimizer:      optimizer,
+		cpopCallers:         cpopCallers,
+		confirmationWatcher: confirmationWatcher,
+		batchProcessor:      batchProcessor,
+		chainID:             chainID,
+		queueNames:          queueNames,
+		pendingMessages:     make(map[BatchGroup][]*MessageWrapper),
+		stopChan:            make(chan struct{}),
+	}
+
+	// Load batch configuration from database using member function
+	err := consumer.loadChainBatchConfig()
+	if err != nil {
+		log.Warn().Err(err).
+			Int64("chain_id", chainID).
+			Msg("Failed to load batch config from database, using defaults")
+		// Set fallback defaults if database load fails
+		consumer.maxBatchSize = 25
+		consumer.minBatchSize = 10
+		consumer.optimalBatchSize = 25
+		consumer.maxWaitTime = 15 * time.Second
+		consumer.consumerCount = max(1, workerCount) // Use provided workerCount as fallback
+	}
+
+	// Ensure consumer count is at least 1
+	if consumer.consumerCount <= 0 {
+		consumer.consumerCount = max(1, workerCount) // Use provided workerCount as fallback
+	}
+
+	// Ensure batch size is reasonable
+	if consumer.maxBatchSize <= 0 {
+		consumer.maxBatchSize = 25 // Default fallback
+	}
+
+	log.Info().
+		Int64("chain_id", chainID).
+		Int("max_batch_size", consumer.maxBatchSize).
+		Int("min_batch_size", consumer.minBatchSize).
+		Int("optimal_batch_size", consumer.optimalBatchSize).
+		Dur("max_wait_time", consumer.maxWaitTime).
+		Int("consumer_count", consumer.consumerCount).
+		Msg("Creating batch consumer with database configuration")
+
+	return consumer
+}
+
+// loadChainBatchConfig loads batch configuration from database for this consumer's chain
+func (c *RabbitMQBatchConsumer) loadChainBatchConfig() error {
+	// Query the chain configuration from database
+	chain, err := models.Chains(
+		qm.Where("chain_id = ?", c.chainID),
+	).One(context.Background(), c.db)
+	if err != nil {
+		return fmt.Errorf("failed to load chain %d configuration: %w", c.chainID, err)
+	}
+
+	// Set default values first
+	c.maxBatchSize = 25              // Default working batch size
+	c.minBatchSize = 10              // Default minimum batch size
+	c.optimalBatchSize = 25          // Default optimal batch size
+	c.maxWaitTime = 15 * time.Second // Default 15 seconds
+	c.consumerCount = 1              // Default 1 consumer
+
+	// Override with database values if they exist
+	if chain.OptimalBatchSize.Valid {
+		c.optimalBatchSize = chain.OptimalBatchSize.Int
+		c.maxBatchSize = chain.OptimalBatchSize.Int // Use optimal as working size
+	}
+	if chain.MinBatchSize.Valid {
+		c.minBatchSize = chain.MinBatchSize.Int
+	}
+	if chain.MaxWaitTimeMS.Valid {
+		c.maxWaitTime = time.Duration(chain.MaxWaitTimeMS.Int) * time.Millisecond
+	}
+	if chain.ConsumerCount.Valid {
+		c.consumerCount = chain.ConsumerCount.Int
+	}
+
+	log.Debug().
+		Int64("chain_id", c.chainID).
+		Int("max_batch_size", c.maxBatchSize).
+		Int("min_batch_size", c.minBatchSize).
+		Int("optimal_batch_size", c.optimalBatchSize).
+		Dur("max_wait_time", c.maxWaitTime).
+		Int("consumer_count", c.consumerCount).
+		Msg("Loaded batch configuration from database")
+
+	return nil
+}
+
+// ReloadConfig reloads batch configuration from database
+func (c *RabbitMQBatchConsumer) ReloadConfig() error {
+	// Store old values for logging
+	oldMaxBatch := c.maxBatchSize
+	oldMinBatch := c.minBatchSize
+	oldOptimalBatch := c.optimalBatchSize
+	oldWaitTime := c.maxWaitTime
+	oldConsumerCount := c.consumerCount
+
+	// Reload configuration from database
+	err := c.loadChainBatchConfig()
+	if err != nil {
+		log.Warn().Err(err).
+			Int64("chain_id", c.chainID).
+			Msg("Failed to reload batch config from database")
+		return err
+	}
+
+	log.Info().
+		Int64("chain_id", c.chainID).
+		Int("old_max_batch", oldMaxBatch).
+		Int("new_max_batch", c.maxBatchSize).
+		Int("old_min_batch", oldMinBatch).
+		Int("new_min_batch", c.minBatchSize).
+		Int("old_optimal_batch", oldOptimalBatch).
+		Int("new_optimal_batch", c.optimalBatchSize).
+		Dur("old_wait_time", oldWaitTime).
+		Dur("new_wait_time", c.maxWaitTime).
+		Int("old_consumer_count", oldConsumerCount).
+		Int("new_consumer_count", c.consumerCount).
+		Msg("Batch configuration reloaded from database")
+
+	return nil
+}
+
+// GetBatchConfig returns current batch configuration as a map for external access
+func (c *RabbitMQBatchConsumer) GetBatchConfig() map[string]interface{} {
+	return map[string]interface{}{
+		"max_batch_size":     c.maxBatchSize,
+		"min_batch_size":     c.minBatchSize,
+		"optimal_batch_size": c.optimalBatchSize,
+		"max_wait_time_ms":   int(c.maxWaitTime.Milliseconds()),
+		"consumer_count":     c.consumerCount,
+		"chain_id":           c.chainID,
+	}
+}
+
+// ============================================================================
+// LIFECYCLE MANAGEMENT
+// ============================================================================
 
 // Start starts the chain-specific batch consumer
 func (c *RabbitMQBatchConsumer) Start(ctx context.Context) error {
@@ -152,6 +300,10 @@ func (c *RabbitMQBatchConsumer) Stop(ctx context.Context) error {
 
 	return nil
 }
+
+// ============================================================================
+// CONSUMER WORKERS
+// ============================================================================
 
 // runChainConsumerWorker runs a consumer worker that only processes this chain's queues
 func (c *RabbitMQBatchConsumer) runChainConsumerWorker(ctx context.Context, workerID int) {
@@ -263,6 +415,10 @@ func (c *RabbitMQBatchConsumer) consumeFromChainQueue(ctx context.Context, queue
 	}
 }
 
+// ============================================================================
+// MESSAGE HANDLING
+// ============================================================================
+
 // handleChainMessage handles a single message for this chain
 func (c *RabbitMQBatchConsumer) handleChainMessage(delivery amqp.Delivery) {
 	// Parse message to BatchJob
@@ -301,6 +457,68 @@ func (c *RabbitMQBatchConsumer) handleChainMessage(delivery amqp.Delivery) {
 	// Add to aggregation buffer
 	c.addToAggregationBuffer(msgWrapper)
 }
+
+// parseMessage parses a message body to BatchJob interface
+func (c *RabbitMQBatchConsumer) parseMessage(body []byte) (BatchJob, error) {
+	var rawMessage map[string]interface{}
+	if err := json.Unmarshal(body, &rawMessage); err != nil {
+		return nil, fmt.Errorf("failed to unmarshal message: %w", err)
+	}
+
+	// Log raw message for debugging
+	log.Debug().
+		Int64("chain_id", c.chainID).
+		Interface("raw_message", rawMessage).
+		Msg("Parsing message")
+
+	// Determine job type from message content
+	jobType, ok := rawMessage["job_type"].(string)
+	if !ok {
+		// Try alternative field names for backward compatibility
+		if jType, exists := rawMessage["type"]; exists {
+			if jTypeStr, isStr := jType.(string); isStr {
+				jobType = jTypeStr
+				ok = true
+			}
+		}
+	}
+
+	if !ok {
+		return nil, fmt.Errorf("missing or invalid job_type field. Available fields: %v", getMapKeys(rawMessage))
+	}
+
+	switch JobType(jobType) {
+	case JobTypeTransfer:
+		var job TransferJob
+		if err := json.Unmarshal(body, &job); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal transfer job: %w", err)
+		}
+		return job, nil
+
+	case JobTypeAssetAdjust:
+		var job AssetAdjustJob
+		if err := json.Unmarshal(body, &job); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal asset adjust job: %w", err)
+		}
+		return job, nil
+
+	default:
+		return nil, fmt.Errorf("unsupported job type for chain consumer: %s", jobType)
+	}
+}
+
+// getMapKeys returns all keys from a map for debugging
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
+}
+
+// ============================================================================
+// MESSAGE AGGREGATION
+// ============================================================================
 
 // addToAggregationBuffer adds message to aggregation buffer (optimized for single chain)
 func (c *RabbitMQBatchConsumer) addToAggregationBuffer(msgWrapper *MessageWrapper) {
@@ -388,135 +606,9 @@ func (c *RabbitMQBatchConsumer) processChainAggregatedMessages(ctx context.Conte
 	}
 }
 
-// parseMessage parses a message body to BatchJob interface
-func (c *RabbitMQBatchConsumer) parseMessage(body []byte) (BatchJob, error) {
-	var rawMessage map[string]interface{}
-	if err := json.Unmarshal(body, &rawMessage); err != nil {
-		return nil, fmt.Errorf("failed to unmarshal message: %w", err)
-	}
-
-	// Log raw message for debugging
-	log.Debug().
-		Int64("chain_id", c.chainID).
-		Interface("raw_message", rawMessage).
-		Msg("Parsing message")
-
-	// Determine job type from message content
-	jobType, ok := rawMessage["job_type"].(string)
-	if !ok {
-		// Try alternative field names for backward compatibility
-		if jType, exists := rawMessage["type"]; exists {
-			if jTypeStr, isStr := jType.(string); isStr {
-				jobType = jTypeStr
-				ok = true
-			}
-		}
-	}
-
-	if !ok {
-		return nil, fmt.Errorf("missing or invalid job_type field. Available fields: %v", getMapKeys(rawMessage))
-	}
-
-	switch JobType(jobType) {
-	case JobTypeTransfer:
-		var job TransferJob
-		if err := json.Unmarshal(body, &job); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal transfer job: %w", err)
-		}
-		return job, nil
-
-	case JobTypeAssetAdjust:
-		var job AssetAdjustJob
-		if err := json.Unmarshal(body, &job); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal asset adjust job: %w", err)
-		}
-		return job, nil
-
-	default:
-		return nil, fmt.Errorf("unsupported job type for chain consumer: %s", jobType)
-	}
-}
-
-// getMapKeys returns all keys from a map for debugging
-func getMapKeys(m map[string]interface{}) []string {
-	keys := make([]string, 0, len(m))
-	for k := range m {
-		keys = append(keys, k)
-	}
-	return keys
-}
-
-// GetQueueStats returns queue statistics for this chain
-func (c *RabbitMQBatchConsumer) GetQueueStats() map[string]Stats {
-	stats := make(map[string]Stats)
-
-	for _, queueName := range c.queueNames {
-		messageCount, err := c.client.GetQueueInfo(queueName)
-		if err != nil {
-			log.Warn().
-				Int64("chain_id", c.chainID).
-				Str("queue", queueName).
-				Err(err).
-				Msg("Failed to get queue info")
-			continue
-		}
-
-		stats[queueName] = Stats{
-			QueueName:       queueName,
-			PendingCount:    messageCount,
-			ProcessingCount: 0,
-			CompletedCount:  c.processedCount,
-			FailedCount:     c.errorCount,
-			AverageLatency:  0,
-			LastProcessedAt: time.Now(),
-		}
-	}
-
-	return stats
-}
-
-// IsHealthy checks if the chain consumer is healthy
-func (c *RabbitMQBatchConsumer) IsHealthy() bool {
-	return c.client != nil && c.client.IsHealthy()
-}
-
-// processRemainingMessages processes any remaining messages before shutdown
-func (c *RabbitMQBatchConsumer) processRemainingMessages(ctx context.Context) {
-	log.Info().
-		Int64("chain_id", c.chainID).
-		Msg("Processing remaining messages before shutdown")
-
-	c.messagesMutex.Lock()
-	allMessages := make(map[BatchGroup][]*MessageWrapper)
-	for group, messages := range c.pendingMessages {
-		if len(messages) > 0 {
-			allMessages[group] = make([]*MessageWrapper, len(messages))
-			copy(allMessages[group], messages)
-		}
-	}
-	// Clear the buffer
-	c.pendingMessages = make(map[BatchGroup][]*MessageWrapper)
-	c.messagesMutex.Unlock()
-
-	// Process all remaining batches with shutdown context
-	for group, messages := range allMessages {
-		if len(messages) > 0 {
-			log.Info().
-				Int64("chain_id", c.chainID).
-				Int("token_id", group.TokenID).
-				Str("job_type", string(group.JobType)).
-				Int("remaining_messages", len(messages)).
-				Msg("Processing remaining messages batch")
-
-			c.processBatchDuringShutdown(ctx, messages, group)
-			c.processedCount += int64(len(messages))
-		}
-	}
-
-	log.Info().
-		Int64("chain_id", c.chainID).
-		Msg("Finished processing remaining messages")
-}
+// ============================================================================
+// MESSAGE ACKNOWLEDGMENT
+// ============================================================================
 
 // ackAllMessages acknowledges all messages in a batch
 func (c *RabbitMQBatchConsumer) ackAllMessages(messages []*MessageWrapper) {
@@ -576,6 +668,89 @@ func (c *RabbitMQBatchConsumer) safeNackMessage(delivery amqp.Delivery, multiple
 			Msg("Failed to NACK message")
 	}
 }
+
+// ============================================================================
+// STATUS AND MONITORING
+// ============================================================================
+// GetQueueStats returns queue statistics for this chain
+func (c *RabbitMQBatchConsumer) GetQueueStats() map[string]Stats {
+	stats := make(map[string]Stats)
+
+	for _, queueName := range c.queueNames {
+		messageCount, err := c.client.GetQueueInfo(queueName)
+		if err != nil {
+			log.Warn().
+				Int64("chain_id", c.chainID).
+				Str("queue", queueName).
+				Err(err).
+				Msg("Failed to get queue info")
+			continue
+		}
+
+		stats[queueName] = Stats{
+			QueueName:       queueName,
+			PendingCount:    messageCount,
+			ProcessingCount: 0,
+			CompletedCount:  c.processedCount,
+			FailedCount:     c.errorCount,
+			AverageLatency:  0,
+			LastProcessedAt: time.Now(),
+		}
+	}
+
+	return stats
+}
+
+// IsHealthy checks if the chain consumer is healthy
+func (c *RabbitMQBatchConsumer) IsHealthy() bool {
+	return c.client != nil && c.client.IsHealthy()
+}
+
+// ============================================================================
+// SHUTDOWN PROCESSING
+// ============================================================================
+
+// processRemainingMessages processes any remaining messages before shutdown
+func (c *RabbitMQBatchConsumer) processRemainingMessages(ctx context.Context) {
+	log.Info().
+		Int64("chain_id", c.chainID).
+		Msg("Processing remaining messages before shutdown")
+
+	c.messagesMutex.Lock()
+	allMessages := make(map[BatchGroup][]*MessageWrapper)
+	for group, messages := range c.pendingMessages {
+		if len(messages) > 0 {
+			allMessages[group] = make([]*MessageWrapper, len(messages))
+			copy(allMessages[group], messages)
+		}
+	}
+	// Clear the buffer
+	c.pendingMessages = make(map[BatchGroup][]*MessageWrapper)
+	c.messagesMutex.Unlock()
+
+	// Process all remaining batches with shutdown context
+	for group, messages := range allMessages {
+		if len(messages) > 0 {
+			log.Info().
+				Int64("chain_id", c.chainID).
+				Int("token_id", group.TokenID).
+				Str("job_type", string(group.JobType)).
+				Int("remaining_messages", len(messages)).
+				Msg("Processing remaining messages batch")
+
+			c.processBatchDuringShutdown(ctx, messages, group)
+			c.processedCount += int64(len(messages))
+		}
+	}
+
+	log.Info().
+		Int64("chain_id", c.chainID).
+		Msg("Finished processing remaining messages")
+}
+
+// ============================================================================
+// SHUTDOWN BATCH PROCESSING
+// ============================================================================
 
 // processBatchDuringShutdown processes a batch during shutdown without NACKing on failure
 func (c *RabbitMQBatchConsumer) processBatchDuringShutdown(ctx context.Context, messages []*MessageWrapper, group BatchGroup) {

@@ -229,11 +229,6 @@ func (c *RabbitMQBatchConsumer) validateAndSeparateByBalance(ctx context.Context
 
 // validateBurnBalance validates if user has sufficient balance for burn operation
 func (c *RabbitMQBatchConsumer) validateBurnBalance(tx *sql.Tx, job AssetAdjustJob) (bool, error) {
-	userUUID, err := uuid.Parse(job.UserID)
-	if err != nil {
-		return false, fmt.Errorf("invalid user ID: %s", job.UserID)
-	}
-
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
 		return false, fmt.Errorf("invalid amount format: %s", job.Amount)
@@ -249,7 +244,7 @@ func (c *RabbitMQBatchConsumer) validateBurnBalance(tx *sql.Tx, job AssetAdjustJ
 		WHERE user_id = $1 AND chain_id = $2 AND token_id = $3`
 
 	var balanceStr string
-	err = tx.QueryRow(query, userUUID, job.ChainID, job.TokenID).Scan(&balanceStr)
+	err = tx.QueryRow(query, job.UserID, job.ChainID, job.TokenID).Scan(&balanceStr)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, fmt.Errorf("failed to query user balance: %w", err)
 	}
@@ -270,11 +265,6 @@ func (c *RabbitMQBatchConsumer) validateBurnBalance(tx *sql.Tx, job AssetAdjustJ
 
 // validateTransferBalance validates if user has sufficient balance for transfer operation
 func (c *RabbitMQBatchConsumer) validateTransferBalance(tx *sql.Tx, job TransferJob) (bool, error) {
-	fromUserUUID, err := uuid.Parse(job.FromUserID)
-	if err != nil {
-		return false, fmt.Errorf("invalid from user ID: %s", job.FromUserID)
-	}
-
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
 		return false, fmt.Errorf("invalid amount format: %s", job.Amount)
@@ -290,7 +280,7 @@ func (c *RabbitMQBatchConsumer) validateTransferBalance(tx *sql.Tx, job Transfer
 		WHERE user_id = $1 AND chain_id = $2 AND token_id = $3`
 
 	var balanceStr string
-	err = tx.QueryRow(query, fromUserUUID, job.ChainID, job.TokenID).Scan(&balanceStr)
+	err = tx.QueryRow(query, job.FromUserID, job.ChainID, job.TokenID).Scan(&balanceStr)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return false, fmt.Errorf("failed to query user balance: %w", err)
 	}
@@ -494,11 +484,6 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 
 	switch j := job.(type) {
 	case AssetAdjustJob:
-		userUUID, err := uuid.Parse(j.UserID)
-		if err != nil {
-			return fmt.Errorf("invalid user ID: %s", j.UserID)
-		}
-
 		query = `
 			INSERT INTO transactions (
 				tx_id, operation_id, user_id, chain_id, tx_type, business_type,
@@ -512,21 +497,12 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 
 		amount, _ := decimal.NewFromString(j.Amount)
 		args = []interface{}{
-			j.TransactionID, uuid.New(), userUUID, j.ChainID, j.AdjustmentType, j.BusinessType,
+			j.TransactionID, uuid.New(), j.UserID, j.ChainID, j.AdjustmentType, j.BusinessType,
 			j.TokenID, amount, "batching", batchID, true,
 			j.ReasonType, j.ReasonDetail, j.CreatedAt,
 		}
 
 	case TransferJob:
-		fromUserUUID, err := uuid.Parse(j.FromUserID)
-		if err != nil {
-			return fmt.Errorf("invalid from user ID: %s", j.FromUserID)
-		}
-		toUserUUID, err := uuid.Parse(j.ToUserID)
-		if err != nil {
-			return fmt.Errorf("invalid to user ID: %s", j.ToUserID)
-		}
-
 		query = `
 			INSERT INTO transactions (
 				tx_id, operation_id, user_id, chain_id, tx_type, business_type,
@@ -540,8 +516,8 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 
 		amount, _ := decimal.NewFromString(j.Amount)
 		args = []interface{}{
-			j.TransactionID, uuid.New(), fromUserUUID, j.ChainID, "transfer", j.BusinessType,
-			toUserUUID, "outgoing", j.TokenID, amount, "batching",
+			j.TransactionID, uuid.New(), j.FromUserID, j.ChainID, "transfer", j.BusinessType,
+			j.ToUserID, "outgoing", j.TokenID, amount, "batching",
 			batchID, true, j.ReasonType, j.ReasonDetail, j.CreatedAt,
 		}
 
@@ -1073,11 +1049,6 @@ func (c *RabbitMQBatchConsumer) finalizeUserBalances(tx *sql.Tx, jobs []BatchJob
 
 // finalizeBalanceForMint finalizes balance after successful mint
 func (c *RabbitMQBatchConsumer) finalizeBalanceForMint(tx *sql.Tx, job AssetAdjustJob) error {
-	userUUID, err := uuid.Parse(job.UserID)
-	if err != nil {
-		return fmt.Errorf("invalid user ID: %s", job.UserID)
-	}
-
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
 		return fmt.Errorf("invalid amount format: %s", job.Amount)
@@ -1098,7 +1069,7 @@ func (c *RabbitMQBatchConsumer) finalizeBalanceForMint(tx *sql.Tx, job AssetAdju
 			updated_at = $5,
 			last_change_time = $5`
 
-	_, err = tx.Exec(query, userUUID, job.ChainID, job.TokenID, amount, time.Now())
+	_, err = tx.Exec(query, job.UserID, job.ChainID, job.TokenID, amount, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to finalize balance for mint: %w", err)
 	}
@@ -1111,11 +1082,6 @@ func (c *RabbitMQBatchConsumer) finalizeBalanceForMint(tx *sql.Tx, job AssetAdju
 
 // finalizeBalanceForBurn finalizes balance after successful burn
 func (c *RabbitMQBatchConsumer) finalizeBalanceForBurn(tx *sql.Tx, job AssetAdjustJob) error {
-	userUUID, err := uuid.Parse(job.UserID)
-	if err != nil {
-		return fmt.Errorf("invalid user ID: %s", job.UserID)
-	}
-
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
 		return fmt.Errorf("invalid amount format: %s", job.Amount)
@@ -1135,7 +1101,7 @@ func (c *RabbitMQBatchConsumer) finalizeBalanceForBurn(tx *sql.Tx, job AssetAdju
 			last_change_time = $5
 		WHERE user_id = $1 AND chain_id = $2 AND token_id = $3`
 
-	_, err = tx.Exec(query, userUUID, job.ChainID, job.TokenID, amount, time.Now())
+	_, err = tx.Exec(query, job.UserID, job.ChainID, job.TokenID, amount, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to finalize balance for burn: %w", err)
 	}
@@ -1148,16 +1114,6 @@ func (c *RabbitMQBatchConsumer) finalizeBalanceForBurn(tx *sql.Tx, job AssetAdju
 
 // finalizeBalanceForTransfer finalizes balance after successful transfer
 func (c *RabbitMQBatchConsumer) finalizeBalanceForTransfer(tx *sql.Tx, job TransferJob) error {
-	fromUserUUID, err := uuid.Parse(job.FromUserID)
-	if err != nil {
-		return fmt.Errorf("invalid from user ID: %s", job.FromUserID)
-	}
-
-	toUserUUID, err := uuid.Parse(job.ToUserID)
-	if err != nil {
-		return fmt.Errorf("invalid to user ID: %s", job.ToUserID)
-	}
-
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
 		return fmt.Errorf("invalid amount format: %s", job.Amount)
@@ -1172,7 +1128,7 @@ func (c *RabbitMQBatchConsumer) finalizeBalanceForTransfer(tx *sql.Tx, job Trans
 			last_change_time = $5
 		WHERE user_id = $1 AND chain_id = $2 AND token_id = $3`
 
-	_, err = tx.Exec(senderQuery, fromUserUUID, job.ChainID, job.TokenID, amount, time.Now())
+	_, err = tx.Exec(senderQuery, job.FromUserID, job.ChainID, job.TokenID, amount, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to finalize sender balance for transfer: %w", err)
 	}
@@ -1187,7 +1143,7 @@ func (c *RabbitMQBatchConsumer) finalizeBalanceForTransfer(tx *sql.Tx, job Trans
 			updated_at = $5,
 			last_change_time = $5`
 
-	_, err = tx.Exec(receiverQuery, toUserUUID, job.ChainID, job.TokenID, amount, time.Now())
+	_, err = tx.Exec(receiverQuery, job.ToUserID, job.ChainID, job.TokenID, amount, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to finalize receiver balance for transfer: %w", err)
 	}
@@ -1341,11 +1297,6 @@ func (c *RabbitMQBatchConsumer) freezeUserBalance(tx *sql.Tx, job BatchJob) erro
 
 // freezeBalanceForBurn freezes balance for burn operation
 func (c *RabbitMQBatchConsumer) freezeBalanceForBurn(tx *sql.Tx, job AssetAdjustJob) error {
-	userUUID, err := uuid.Parse(job.UserID)
-	if err != nil {
-		return fmt.Errorf("invalid user ID: %s", job.UserID)
-	}
-
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
 		return fmt.Errorf("invalid amount format: %s", job.Amount)
@@ -1356,19 +1307,22 @@ func (c *RabbitMQBatchConsumer) freezeBalanceForBurn(tx *sql.Tx, job AssetAdjust
 		amount = amount.Abs()
 	}
 
+	now := time.Now()
+
 	// Update user_balances: move from confirmed_balance to pending_balance
+	// Only update existing records, don't insert new ones with negative confirmed_balance
 	query := `
 		INSERT INTO user_balances (user_id, chain_id, token_id, confirmed_balance, pending_balance, created_at, updated_at)
-		VALUES ($1, $2, $3, -$4, $4, $5, $5)
+		VALUES ($1, $2, $3, 0, 0, $4, $4)
 		ON CONFLICT (user_id, chain_id, token_id) 
 		DO UPDATE SET 
-			confirmed_balance = user_balances.confirmed_balance - $4,
-			pending_balance = user_balances.pending_balance + $4,
-			updated_at = $5,
-			last_change_time = $5
-		WHERE user_balances.confirmed_balance >= $4`
+			confirmed_balance = user_balances.confirmed_balance - $5,
+			pending_balance = user_balances.pending_balance + $5,
+			updated_at = $4,
+			last_change_time = $4
+		WHERE user_balances.confirmed_balance >= $5`
 
-	result, err := tx.Exec(query, userUUID, job.ChainID, job.TokenID, amount, time.Now())
+	result, err := tx.Exec(query, job.UserID, job.ChainID, job.TokenID, now, amount)
 	if err != nil {
 		return fmt.Errorf("failed to freeze balance for burn: %w", err)
 	}
@@ -1387,11 +1341,6 @@ func (c *RabbitMQBatchConsumer) freezeBalanceForBurn(tx *sql.Tx, job AssetAdjust
 
 // freezeBalanceForTransfer freezes balance for transfer operation
 func (c *RabbitMQBatchConsumer) freezeBalanceForTransfer(tx *sql.Tx, job TransferJob) error {
-	fromUserUUID, err := uuid.Parse(job.FromUserID)
-	if err != nil {
-		return fmt.Errorf("invalid from user ID: %s", job.FromUserID)
-	}
-
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
 		return fmt.Errorf("invalid amount format: %s", job.Amount)
@@ -1402,19 +1351,22 @@ func (c *RabbitMQBatchConsumer) freezeBalanceForTransfer(tx *sql.Tx, job Transfe
 		return fmt.Errorf("transfer amount cannot be negative: %s", job.Amount)
 	}
 
+	now := time.Now()
+
 	// Update user_balances: move from confirmed_balance to pending_balance for sender
+	// Only update existing records, don't insert new ones with negative confirmed_balance
 	query := `
 		INSERT INTO user_balances (user_id, chain_id, token_id, confirmed_balance, pending_balance, created_at, updated_at)
-		VALUES ($1, $2, $3, -$4, $4, $5, $5)
+		VALUES ($1, $2, $3, 0, 0, $4, $4)
 		ON CONFLICT (user_id, chain_id, token_id) 
 		DO UPDATE SET 
-			confirmed_balance = user_balances.confirmed_balance - $4,
-			pending_balance = user_balances.pending_balance + $4,
-			updated_at = $5,
-			last_change_time = $5
-		WHERE user_balances.confirmed_balance >= $4`
+			confirmed_balance = user_balances.confirmed_balance - $5,
+			pending_balance = user_balances.pending_balance + $5,
+			updated_at = $4,
+			last_change_time = $4
+		WHERE user_balances.confirmed_balance >= $5`
 
-	result, err := tx.Exec(query, fromUserUUID, job.ChainID, job.TokenID, amount, time.Now())
+	result, err := tx.Exec(query, job.FromUserID, job.ChainID, job.TokenID, now, amount)
 	if err != nil {
 		return fmt.Errorf("failed to freeze balance for transfer: %w", err)
 	}
@@ -1451,11 +1403,6 @@ func (c *RabbitMQBatchConsumer) unfreezeUserBalance(tx *sql.Tx, job BatchJob) er
 
 // unfreezeBalanceForBurn unfreezes balance when burn operation fails
 func (c *RabbitMQBatchConsumer) unfreezeBalanceForBurn(tx *sql.Tx, job AssetAdjustJob) error {
-	userUUID, err := uuid.Parse(job.UserID)
-	if err != nil {
-		return fmt.Errorf("invalid user ID: %s", job.UserID)
-	}
-
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
 		return fmt.Errorf("invalid amount format: %s", job.Amount)
@@ -1477,7 +1424,7 @@ func (c *RabbitMQBatchConsumer) unfreezeBalanceForBurn(tx *sql.Tx, job AssetAdju
 		WHERE user_id = $1 AND chain_id = $2 AND token_id = $3 
 		AND pending_balance >= $4`
 
-	result, err := tx.Exec(query, userUUID, job.ChainID, job.TokenID, amount, time.Now())
+	result, err := tx.Exec(query, job.UserID, job.ChainID, job.TokenID, amount, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to unfreeze balance for burn: %w", err)
 	}
@@ -1496,11 +1443,6 @@ func (c *RabbitMQBatchConsumer) unfreezeBalanceForBurn(tx *sql.Tx, job AssetAdju
 
 // unfreezeBalanceForTransfer unfreezes balance when transfer operation fails
 func (c *RabbitMQBatchConsumer) unfreezeBalanceForTransfer(tx *sql.Tx, job TransferJob) error {
-	fromUserUUID, err := uuid.Parse(job.FromUserID)
-	if err != nil {
-		return fmt.Errorf("invalid from user ID: %s", job.FromUserID)
-	}
-
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
 		return fmt.Errorf("invalid amount format: %s", job.Amount)
@@ -1517,7 +1459,7 @@ func (c *RabbitMQBatchConsumer) unfreezeBalanceForTransfer(tx *sql.Tx, job Trans
 		WHERE user_id = $1 AND chain_id = $2 AND token_id = $3 
 		AND pending_balance >= $4`
 
-	result, err := tx.Exec(query, fromUserUUID, job.ChainID, job.TokenID, amount, time.Now())
+	result, err := tx.Exec(query, job.FromUserID, job.ChainID, job.TokenID, amount, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to unfreeze balance for transfer: %w", err)
 	}
@@ -1540,12 +1482,6 @@ func (c *RabbitMQBatchConsumer) getUserAAAddress(ctx context.Context, userID str
 		return common.Address{}, fmt.Errorf("database connection is nil")
 	}
 
-	// Parse userID to UUID
-	userUUID, err := uuid.Parse(userID)
-	if err != nil {
-		return common.Address{}, fmt.Errorf("invalid user ID format: %s", userID)
-	}
-
 	query := `
 		SELECT aa_address 
 		FROM user_accounts 
@@ -1553,7 +1489,7 @@ func (c *RabbitMQBatchConsumer) getUserAAAddress(ctx context.Context, userID str
 		LIMIT 1`
 
 	var aaAddress string
-	err = c.db.QueryRowContext(ctx, query, userUUID, chainID).Scan(&aaAddress)
+	err := c.db.QueryRowContext(ctx, query, userID, chainID).Scan(&aaAddress)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return common.Address{}, fmt.Errorf("no AA wallet found for user %s on chain %d", userID, chainID)

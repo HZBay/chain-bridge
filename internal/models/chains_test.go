@@ -1193,7 +1193,7 @@ func testChainsSelect(t *testing.T) {
 }
 
 var (
-	chainDBTypes = map[string]string{`ChainID`: `bigint`, `Name`: `character varying`, `ShortName`: `character varying`, `RPCURL`: `character varying`, `ExplorerURL`: `character varying`, `EntryPointAddress`: `character`, `CpopTokenAddress`: `character`, `MasterAggregatorAddress`: `character`, `AccountManagerAddress`: `character`, `OptimalBatchSize`: `integer`, `MaxBatchSize`: `integer`, `MinBatchSize`: `integer`, `IsEnabled`: `boolean`, `CreatedAt`: `timestamp with time zone`, `PaymentContractAddress`: `character`, `ToeknAddress`: `character`}
+	chainDBTypes = map[string]string{`ChainID`: `bigint`, `Name`: `character varying`, `ShortName`: `character varying`, `RPCURL`: `character varying`, `ExplorerURL`: `character varying`, `EntryPointAddress`: `character`, `CpopTokenAddress`: `character`, `MasterAggregatorAddress`: `character`, `AccountManagerAddress`: `character`, `OptimalBatchSize`: `integer`, `MaxBatchSize`: `integer`, `MinBatchSize`: `integer`, `IsEnabled`: `boolean`, `CreatedAt`: `timestamp with time zone`, `MaxWaitTimeMS`: `integer`, `ConsumerCount`: `integer`, `PaymentContractAddress`: `character`, `ToeknAddress`: `character`}
 	_            = bytes.MinRead
 )
 

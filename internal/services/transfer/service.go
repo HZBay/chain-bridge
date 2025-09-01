@@ -80,7 +80,12 @@ func (s *service) TransferAssets(ctx context.Context, req *types.TransferRequest
 	}
 
 	// 1. 幂等性检查 - 检查 OperationID 是否已经存在
-	mainOperationID := uuid.MustParse(*req.OperationID)
+	// Validate operation_id format - it should be a valid UUID
+	mainOperationID, err := uuid.Parse(*req.OperationID)
+	if err != nil {
+		// Return a validation error for invalid UUID format
+		return nil, nil, fmt.Errorf("validation_error:operation_id:Must be a valid UUID format (e.g., 550e8400-e29b-41d4-a716-446655440000)")
+	}
 	existingTx, err := models.Transactions(
 		models.TransactionWhere.OperationID.EQ(null.StringFrom(mainOperationID.String())),
 		models.TransactionWhere.TXType.EQ("transfer"),
@@ -108,6 +113,26 @@ func (s *service) TransferAssets(ctx context.Context, req *types.TransferRequest
 	// OperationID 不存在，继续正常处理
 	log.Debug().Str("operation_id", *req.OperationID).Msg("New transfer operation, proceeding with processing")
 
+	// Validate chain exists first
+	if err := s.validateChainExists(*req.ChainID); err != nil {
+		return nil, nil, err
+	}
+
+	// Validate token exists and get ID
+	tokenID, err := s.getTokenIDBySymbolWithValidation(*req.ChainID, *req.TokenSymbol)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	// Validate both users have accounts on the specified chain
+	if err := s.validateUserAccountExists(ctx, *req.FromUserID, *req.ChainID); err != nil {
+		return nil, nil, fmt.Errorf("validation_error:from_user_account_not_found:%s:%d", *req.FromUserID, *req.ChainID)
+	}
+
+	if err := s.validateUserAccountExists(ctx, *req.ToUserID, *req.ChainID); err != nil {
+		return nil, nil, fmt.Errorf("validation_error:to_user_account_not_found:%s:%d", *req.ToUserID, *req.ChainID)
+	}
+
 	// 2. Generate transaction IDs
 	outgoingTxID := uuid.New()
 	incomingTxID := uuid.New()
@@ -123,7 +148,7 @@ func (s *service) TransferAssets(ctx context.Context, req *types.TransferRequest
 		BusinessType:      "transfer",
 		RelatedUserID:     null.StringFrom(*req.ToUserID),
 		TransferDirection: null.StringFrom("outgoing"),
-		TokenID:           s.getTokenIDBySymbol(*req.ChainID, *req.TokenSymbol),
+		TokenID:           tokenID, // Use validated token ID
 		Amount: sqltypes.NewDecimal(func() *decimal.Big {
 			d, _ := decimal.New(0, 0).SetString(fmt.Sprintf("-%s", *req.Amount))
 			return d
@@ -144,7 +169,7 @@ func (s *service) TransferAssets(ctx context.Context, req *types.TransferRequest
 		BusinessType:      "transfer",
 		RelatedUserID:     null.StringFrom(*req.FromUserID),
 		TransferDirection: null.StringFrom("incoming"),
-		TokenID:           s.getTokenIDBySymbol(*req.ChainID, *req.TokenSymbol),
+		TokenID:           tokenID, // Use validated token ID
 		Amount: sqltypes.NewDecimal(func() *decimal.Big {
 			d, _ := decimal.New(0, 0).SetString(*req.Amount)
 			return d
@@ -229,7 +254,7 @@ func (s *service) TransferAssets(ctx context.Context, req *types.TransferRequest
 		JobType:       queue.JobTypeTransfer,
 		TransactionID: operationID, // Use operation ID as the main transaction ID
 		ChainID:       *req.ChainID,
-		TokenID:       s.getTokenIDBySymbol(*req.ChainID, *req.TokenSymbol),
+		TokenID:       tokenID, // Use validated token ID
 		FromUserID:    *req.FromUserID,
 		ToUserID:      *req.ToUserID,
 		Amount:        *req.Amount,
@@ -282,8 +307,8 @@ func (s *service) TransferAssets(ctx context.Context, req *types.TransferRequest
 	batchInfo := &types.BatchInfo{
 		WillBeBatched:      true,
 		BatchType:          "batchTransferFrom",
-		CurrentBatchSize:   int64(s.getCurrentBatchSize(*req.ChainID, s.getTokenIDBySymbol(*req.ChainID, *req.TokenSymbol))),
-		OptimalBatchSize:   int64(s.getOptimalBatchSize(*req.ChainID, s.getTokenIDBySymbol(*req.ChainID, *req.TokenSymbol))),
+		CurrentBatchSize:   int64(s.getCurrentBatchSize(*req.ChainID, tokenID)),
+		OptimalBatchSize:   int64(s.getOptimalBatchSize(*req.ChainID, tokenID)),
 		ExpectedEfficiency: "74-76%",
 	}
 
@@ -491,14 +516,15 @@ func (s *service) GetUserTransactions(ctx context.Context, userID string, params
 
 // Helper methods
 
-func (s *service) getTokenIDBySymbol(chainID int64, symbol string) int {
+// getTokenIDBySymbolWithValidation validates token exists and returns ID or validation error
+func (s *service) getTokenIDBySymbolWithValidation(chainID int64, symbol string) (int, error) {
 	cacheKey := fmt.Sprintf("%d:%s", chainID, symbol)
 
 	// Check cache first
 	s.cacheMutex.RLock()
 	if tokenID, exists := s.tokenCache[cacheKey]; exists {
 		s.cacheMutex.RUnlock()
-		return tokenID
+		return tokenID, nil
 	}
 	s.cacheMutex.RUnlock()
 
@@ -513,12 +539,11 @@ func (s *service) getTokenIDBySymbol(chainID int64, symbol string) int {
 	).One(ctx, s.db)
 
 	if err != nil {
-		log.Warn().
-			Int64("chain_id", chainID).
-			Str("symbol", symbol).
-			Err(err).
-			Msg("Failed to find token, using default")
-		return 1 // Fallback to default
+		if errors.Is(err, sql.ErrNoRows) {
+			// Return structured validation error
+			return 0, fmt.Errorf("validation_error:token_not_found:%d:%s", chainID, symbol)
+		}
+		return 0, fmt.Errorf("database error while looking up token: %w", err)
 	}
 
 	tokenID := token.ID
@@ -534,7 +559,47 @@ func (s *service) getTokenIDBySymbol(chainID int64, symbol string) int {
 		Int("token_id", tokenID).
 		Msg("Token found and cached")
 
-	return tokenID
+	return tokenID, nil
+}
+
+// validateChainExists checks if a chain exists and is enabled
+func (s *service) validateChainExists(chainID int64) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	_, err := models.Chains(
+		models.ChainWhere.ChainID.EQ(chainID),
+		models.ChainWhere.IsEnabled.EQ(null.BoolFrom(true)),
+	).One(ctx, s.db)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("validation_error:chain_not_found:%d", chainID)
+		}
+		return fmt.Errorf("database error while validating chain: %w", err)
+	}
+
+	return nil
+}
+
+// validateUserAccountExists checks if a user has an account on the specified chain
+func (s *service) validateUserAccountExists(ctx context.Context, userID string, chainID int64) error {
+	ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	_, err := models.UserAccounts(
+		models.UserAccountWhere.UserID.EQ(userID),
+		models.UserAccountWhere.ChainID.EQ(chainID),
+	).One(ctxTimeout, s.db)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return fmt.Errorf("validation_error:user_account_not_found:%s:%d", userID, chainID)
+		}
+		return fmt.Errorf("database error while validating user account: %w", err)
+	}
+
+	return nil
 }
 
 func (s *service) getCurrentBatchSize(chainID int64, tokenID int) int32 {

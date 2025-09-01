@@ -12,7 +12,6 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
-	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"
 
@@ -482,11 +481,6 @@ func (w *TxConfirmationWatcher) finalizeUserBalancesForBatch(tx *sql.Tx, batch P
 
 // finalizeBalanceForMint finalizes balance after successful mint
 func (w *TxConfirmationWatcher) finalizeBalanceForMint(tx *sql.Tx, op BatchOperation, chainID int64, tokenID int) error {
-	userUUID, err := uuid.Parse(op.UserID)
-	if err != nil {
-		return fmt.Errorf("invalid user ID: %s", op.UserID)
-	}
-
 	// Add minted amount directly to confirmed_balance
 	query := `
 		INSERT INTO user_balances (user_id, chain_id, token_id, confirmed_balance, pending_balance, created_at, updated_at)
@@ -497,7 +491,7 @@ func (w *TxConfirmationWatcher) finalizeBalanceForMint(tx *sql.Tx, op BatchOpera
 			updated_at = $5,
 			last_change_time = $5`
 
-	_, err = tx.Exec(query, userUUID, chainID, tokenID, op.Amount, time.Now())
+	_, err := tx.Exec(query, op.UserID, chainID, tokenID, op.Amount, time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to finalize mint balance: %w", err)
 	}
@@ -507,11 +501,6 @@ func (w *TxConfirmationWatcher) finalizeBalanceForMint(tx *sql.Tx, op BatchOpera
 
 // finalizeBalanceForBurn finalizes balance after successful burn
 func (w *TxConfirmationWatcher) finalizeBalanceForBurn(tx *sql.Tx, op BatchOperation, chainID int64, tokenID int) error {
-	userUUID, err := uuid.Parse(op.UserID)
-	if err != nil {
-		return fmt.Errorf("invalid user ID: %s", op.UserID)
-	}
-
 	// Clear the pending_balance (amount was frozen during batching)
 	query := `
 		UPDATE user_balances 
@@ -521,7 +510,7 @@ func (w *TxConfirmationWatcher) finalizeBalanceForBurn(tx *sql.Tx, op BatchOpera
 			last_change_time = $5
 		WHERE user_id = $1 AND chain_id = $2 AND token_id = $3`
 
-	_, err = tx.Exec(query, userUUID, chainID, tokenID, op.Amount.Abs(), time.Now())
+	_, err := tx.Exec(query, op.UserID, chainID, tokenID, op.Amount.Abs(), time.Now())
 	if err != nil {
 		return fmt.Errorf("failed to finalize burn balance: %w", err)
 	}
@@ -531,18 +520,8 @@ func (w *TxConfirmationWatcher) finalizeBalanceForBurn(tx *sql.Tx, op BatchOpera
 
 // finalizeBalanceForTransfer finalizes balance after successful transfer
 func (w *TxConfirmationWatcher) finalizeBalanceForTransfer(tx *sql.Tx, op BatchOperation, chainID int64, tokenID int) error {
-	fromUserUUID, err := uuid.Parse(op.UserID)
-	if err != nil {
-		return fmt.Errorf("invalid user ID: %s", op.UserID)
-	}
-
 	if !op.RelatedUserID.Valid {
 		return fmt.Errorf("transfer operation missing related user ID")
-	}
-
-	toUserUUID, err := uuid.Parse(op.RelatedUserID.String)
-	if err != nil {
-		return fmt.Errorf("invalid related user ID: %s", op.RelatedUserID.String)
 	}
 
 	// Check transfer direction and process accordingly
@@ -556,7 +535,7 @@ func (w *TxConfirmationWatcher) finalizeBalanceForTransfer(tx *sql.Tx, op BatchO
 				last_change_time = $5
 			WHERE user_id = $1 AND chain_id = $2 AND token_id = $3`
 
-		_, err = tx.Exec(senderQuery, fromUserUUID, chainID, tokenID, op.Amount, time.Now())
+		_, err := tx.Exec(senderQuery, op.UserID, chainID, tokenID, op.Amount, time.Now())
 		if err != nil {
 			return fmt.Errorf("failed to finalize sender balance: %w", err)
 		}
@@ -571,7 +550,7 @@ func (w *TxConfirmationWatcher) finalizeBalanceForTransfer(tx *sql.Tx, op BatchO
 				updated_at = $5,
 				last_change_time = $5`
 
-		_, err = tx.Exec(receiverQuery, toUserUUID, chainID, tokenID, op.Amount, time.Now())
+		_, err = tx.Exec(receiverQuery, op.RelatedUserID.String, chainID, tokenID, op.Amount, time.Now())
 		if err != nil {
 			return fmt.Errorf("failed to finalize receiver balance: %w", err)
 		}
@@ -639,11 +618,6 @@ func (w *TxConfirmationWatcher) markBatchAsFailed(ctx context.Context, batch Pen
 
 // unfreezeBalanceForOperation unfreezes balance for a failed operation
 func (w *TxConfirmationWatcher) unfreezeBalanceForOperation(tx *sql.Tx, op BatchOperation, chainID int64, tokenID int) error {
-	userUUID, err := uuid.Parse(op.UserID)
-	if err != nil {
-		return fmt.Errorf("invalid user ID: %s", op.UserID)
-	}
-
 	switch op.TxType {
 	case "burn":
 		// Unfreeze: move from pending_balance back to confirmed_balance
@@ -657,7 +631,7 @@ func (w *TxConfirmationWatcher) unfreezeBalanceForOperation(tx *sql.Tx, op Batch
 			WHERE user_id = $1 AND chain_id = $2 AND token_id = $3 
 			AND pending_balance >= $4`
 
-		_, err = tx.Exec(query, userUUID, chainID, tokenID, op.Amount.Abs(), time.Now())
+		_, err := tx.Exec(query, op.UserID, chainID, tokenID, op.Amount.Abs(), time.Now())
 		return err
 
 	case "transfer":
@@ -673,7 +647,7 @@ func (w *TxConfirmationWatcher) unfreezeBalanceForOperation(tx *sql.Tx, op Batch
 				WHERE user_id = $1 AND chain_id = $2 AND token_id = $3 
 				AND pending_balance >= $4`
 
-			_, err = tx.Exec(query, userUUID, chainID, tokenID, op.Amount, time.Now())
+			_, err := tx.Exec(query, op.UserID, chainID, tokenID, op.Amount, time.Now())
 			return err
 		}
 	}

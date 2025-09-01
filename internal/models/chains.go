@@ -38,6 +38,10 @@ type Chain struct {
 	MinBatchSize            null.Int    `boil:"min_batch_size" json:"min_batch_size,omitempty" toml:"min_batch_size" yaml:"min_batch_size,omitempty"`
 	IsEnabled               null.Bool   `boil:"is_enabled" json:"is_enabled,omitempty" toml:"is_enabled" yaml:"is_enabled,omitempty"`
 	CreatedAt               null.Time   `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
+	// Maximum wait time in milliseconds for batch processing
+	MaxWaitTimeMS null.Int `boil:"max_wait_time_ms" json:"max_wait_time_ms,omitempty" toml:"max_wait_time_ms" yaml:"max_wait_time_ms,omitempty"`
+	// Number of consumer workers for this chain
+	ConsumerCount null.Int `boil:"consumer_count" json:"consumer_count,omitempty" toml:"consumer_count" yaml:"consumer_count,omitempty"`
 	// Payment contract address for PaymentMade event listening
 	PaymentContractAddress null.String `boil:"payment_contract_address" json:"payment_contract_address,omitempty" toml:"payment_contract_address" yaml:"payment_contract_address,omitempty"`
 	// Token address for chains
@@ -62,6 +66,8 @@ var ChainColumns = struct {
 	MinBatchSize            string
 	IsEnabled               string
 	CreatedAt               string
+	MaxWaitTimeMS           string
+	ConsumerCount           string
 	PaymentContractAddress  string
 	ToeknAddress            string
 }{
@@ -79,6 +85,8 @@ var ChainColumns = struct {
 	MinBatchSize:            "min_batch_size",
 	IsEnabled:               "is_enabled",
 	CreatedAt:               "created_at",
+	MaxWaitTimeMS:           "max_wait_time_ms",
+	ConsumerCount:           "consumer_count",
 	PaymentContractAddress:  "payment_contract_address",
 	ToeknAddress:            "toekn_address",
 }
@@ -98,6 +106,8 @@ var ChainTableColumns = struct {
 	MinBatchSize            string
 	IsEnabled               string
 	CreatedAt               string
+	MaxWaitTimeMS           string
+	ConsumerCount           string
 	PaymentContractAddress  string
 	ToeknAddress            string
 }{
@@ -115,6 +125,8 @@ var ChainTableColumns = struct {
 	MinBatchSize:            "chains.min_batch_size",
 	IsEnabled:               "chains.is_enabled",
 	CreatedAt:               "chains.created_at",
+	MaxWaitTimeMS:           "chains.max_wait_time_ms",
+	ConsumerCount:           "chains.consumer_count",
 	PaymentContractAddress:  "chains.payment_contract_address",
 	ToeknAddress:            "chains.toekn_address",
 }
@@ -136,6 +148,8 @@ var ChainWhere = struct {
 	MinBatchSize            whereHelpernull_Int
 	IsEnabled               whereHelpernull_Bool
 	CreatedAt               whereHelpernull_Time
+	MaxWaitTimeMS           whereHelpernull_Int
+	ConsumerCount           whereHelpernull_Int
 	PaymentContractAddress  whereHelpernull_String
 	ToeknAddress            whereHelpernull_String
 }{
@@ -153,6 +167,8 @@ var ChainWhere = struct {
 	MinBatchSize:            whereHelpernull_Int{field: "\"chains\".\"min_batch_size\""},
 	IsEnabled:               whereHelpernull_Bool{field: "\"chains\".\"is_enabled\""},
 	CreatedAt:               whereHelpernull_Time{field: "\"chains\".\"created_at\""},
+	MaxWaitTimeMS:           whereHelpernull_Int{field: "\"chains\".\"max_wait_time_ms\""},
+	ConsumerCount:           whereHelpernull_Int{field: "\"chains\".\"consumer_count\""},
 	PaymentContractAddress:  whereHelpernull_String{field: "\"chains\".\"payment_contract_address\""},
 	ToeknAddress:            whereHelpernull_String{field: "\"chains\".\"toekn_address\""},
 }
@@ -225,9 +241,9 @@ func (r *chainR) GetUserBalances() UserBalanceSlice {
 type chainL struct{}
 
 var (
-	chainAllColumns            = []string{"chain_id", "name", "short_name", "rpc_url", "explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "account_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at", "payment_contract_address", "toekn_address"}
+	chainAllColumns            = []string{"chain_id", "name", "short_name", "rpc_url", "explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "account_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at", "max_wait_time_ms", "consumer_count", "payment_contract_address", "toekn_address"}
 	chainColumnsWithoutDefault = []string{"chain_id", "name", "short_name", "rpc_url"}
-	chainColumnsWithDefault    = []string{"explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "account_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at", "payment_contract_address", "toekn_address"}
+	chainColumnsWithDefault    = []string{"explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "account_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at", "max_wait_time_ms", "consumer_count", "payment_contract_address", "toekn_address"}
 	chainPrimaryKeyColumns     = []string{"chain_id"}
 	chainGeneratedColumns      = []string{}
 )
