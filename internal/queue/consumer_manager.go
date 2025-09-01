@@ -4,10 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"math/big"
 	"sync"
 	"time"
 
+	"github.com/ethereum/go-ethereum/accounts/abi/bind"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/hzbay/chain-bridge/internal/blockchain"
+	"github.com/hzbay/chain-bridge/internal/config"
 	"github.com/hzbay/chain-bridge/internal/models"
 	"github.com/rs/zerolog/log"
 	"github.com/volatiletech/null/v8"
@@ -22,6 +26,7 @@ type ConsumerManager struct {
 	cpopCallers         map[int64]*blockchain.CPOPBatchCaller
 	confirmationWatcher *TxConfirmationWatcher
 	batchProcessor      BatchProcessor
+	config              config.Server
 
 	// Per-chain consumers management
 	consumers      map[int64]*ChainBatchConsumer // chainID -> consumer
@@ -53,21 +58,19 @@ func NewConsumerManager(
 	client *RabbitMQClient,
 	db *sql.DB,
 	optimizer *BatchOptimizer,
-	cpopCallers map[int64]*blockchain.CPOPBatchCaller,
-	confirmationWatcher *TxConfirmationWatcher,
 	batchProcessor BatchProcessor,
+	config config.Server,
 ) *ConsumerManager {
 	return &ConsumerManager{
-		client:              client,
-		db:                  db,
-		batchOptimizer:      optimizer,
-		cpopCallers:         cpopCallers,
-		confirmationWatcher: confirmationWatcher,
-		batchProcessor:      batchProcessor,
-		consumers:           make(map[int64]*ChainBatchConsumer),
-		stopChan:            make(chan struct{}),
-		refreshInterval:     5 * time.Minute, // Check for new chains every 5 minutes
-		workersPerChain:     3,               // Default 3 workers per chain
+		client:          client,
+		db:              db,
+		batchOptimizer:  optimizer,
+		batchProcessor:  batchProcessor,
+		consumers:       make(map[int64]*ChainBatchConsumer),
+		config:          config,
+		stopChan:        make(chan struct{}),
+		refreshInterval: 5 * time.Minute, // Check for new chains every 5 minutes
+		workersPerChain: 1,               // Default 3 workers per chain
 	}
 }
 
@@ -138,10 +141,16 @@ func (cm *ConsumerManager) Stop(ctx context.Context) error {
 	return nil
 }
 
-// setupConsumersForEnabledChains sets up consumers for all enabled chains
+// setupConsumersForEnabledChains initializes RabbitMQ batch consumers for all enabled blockchain chains.
+// This function performs the following operations:
+// 1. Retrieves all enabled chains from the database
+// 2. Creates CPOP (Custom Payment Operation Protocol) callers for blockchain interaction
+// 3. Sets up dedicated consumers for each chain to process transactions
+// 4. Initializes transaction confirmation watcher for monitoring blockchain confirmations
 func (cm *ConsumerManager) setupConsumersForEnabledChains(ctx context.Context) error {
 	log.Info().Msg("Setting up consumers for enabled chains")
 
+	// Step 1: Retrieve all enabled chains from database
 	chains, err := cm.getEnabledChains(ctx)
 	if err != nil {
 		return fmt.Errorf("failed to get enabled chains: %w", err)
@@ -149,20 +158,123 @@ func (cm *ConsumerManager) setupConsumersForEnabledChains(ctx context.Context) e
 
 	log.Info().Int("chains_count", len(chains)).Msg("Found enabled chains")
 
+	// Early return if no chains are enabled
+	if len(chains) == 0 {
+		log.Warn().Msg("No enabled chains found, skipping consumer setup")
+		return nil
+	}
+
+	// Step 2: Thread-safe initialization of consumer and caller maps
 	cm.consumersMutex.Lock()
 	defer cm.consumersMutex.Unlock()
 
+	// Initialize CPOP callers map for blockchain interactions
+	cm.cpopCallers = make(map[int64]*blockchain.CPOPBatchCaller)
+
+	// Step 3: Process each enabled chain and create necessary components
+	successfulChains := 0
 	for _, chain := range chains {
-		if _, exists := cm.consumers[chain.ChainID]; !exists {
-			if err := cm.createChainConsumer(ctx, chain); err != nil {
-				log.Error().
-					Int64("chain_id", chain.ChainID).
-					Str("chain_name", chain.Name).
-					Err(err).
-					Msg("Failed to create consumer for chain")
-				continue
-			}
+		// Skip if consumer already exists for this chain
+		if _, exists := cm.consumers[chain.ChainID]; exists {
+			log.Debug().
+				Int64("chain_id", chain.ChainID).
+				Str("chain_name", chain.Name).
+				Msg("Consumer already exists for chain, skipping")
+			continue
 		}
+
+		// Step 3a: Validate token contract address
+		if !common.IsHexAddress(chain.ToeknAddress.String) {
+			log.Warn().
+				Int64("chain_id", chain.ChainID).
+				Str("chain_name", chain.Name).
+				Str("invalid_address", chain.ToeknAddress.String).
+				Msg("Invalid token contract address, skipping chain")
+			continue
+		}
+
+		// Step 3b: Parse deployment private key for blockchain transactions
+		privateKey, err := blockchain.GetDeploymentPrivateKeyFromString(cm.config.Blockchain.UnifiedDeploymentPrivateKey)
+		if err != nil {
+			log.Error().
+				Int64("chain_id", chain.ChainID).
+				Str("chain_name", chain.Name).
+				Err(err).
+				Msg("Failed to parse deployment private key, skipping chain")
+			continue
+		}
+
+		// Step 3c: Create transaction authorization for this specific chain
+		auth, err := bind.NewKeyedTransactorWithChainID(privateKey, big.NewInt(chain.ChainID))
+		if err != nil {
+			log.Error().
+				Int64("chain_id", chain.ChainID).
+				Str("chain_name", chain.Name).
+				Err(err).
+				Msg("Failed to create transaction authorization, skipping chain")
+			continue
+		}
+
+		// Step 3d: Initialize CPOP batch caller for blockchain operations
+		caller, err := blockchain.NewCPOPBatchCaller(
+			chain.RPCURL,
+			common.HexToAddress(chain.ToeknAddress.String),
+			auth,
+		)
+		if err != nil {
+			log.Error().
+				Int64("chain_id", chain.ChainID).
+				Str("chain_name", chain.Name).
+				Str("rpc_url", chain.RPCURL).
+				Err(err).
+				Msg("Failed to create CPOP batch caller, skipping chain")
+			continue
+		}
+
+		// Step 3e: Store the caller for this chain
+		cm.cpopCallers[chain.ChainID] = caller
+
+		// Step 3f: Create and start the consumer for this chain
+		if err := cm.createChainConsumer(ctx, chain); err != nil {
+			log.Error().
+				Int64("chain_id", chain.ChainID).
+				Str("chain_name", chain.Name).
+				Err(err).
+				Msg("Failed to create consumer for chain, skipping")
+			// Remove the caller since consumer creation failed
+			delete(cm.cpopCallers, chain.ChainID)
+			continue
+		}
+
+		successfulChains++
+		log.Info().
+			Int64("chain_id", chain.ChainID).
+			Str("chain_name", chain.Name).
+			Msg("Successfully set up consumer for chain")
+	}
+
+	// Step 4: Initialize transaction confirmation watcher
+	// This monitors blockchain transactions for confirmations across all chains
+	if len(cm.cpopCallers) > 0 {
+		cm.confirmationWatcher = NewTxConfirmationWatcher(cm.db, cm.cpopCallers)
+		log.Info().
+			Int("monitored_chains", len(cm.cpopCallers)).
+			Msg("Transaction confirmation watcher initialized")
+	} else {
+		log.Warn().Msg("No CPOP callers available, confirmation watcher not initialized")
+	}
+
+	// Step 5: Log setup summary
+	log.Info().
+		Int("total_chains", len(chains)).
+		Int("successful_chains", successfulChains).
+		Int("failed_chains", len(chains)-successfulChains).
+		Int("active_consumers", len(cm.consumers)).
+		Msg("Consumer setup completed")
+
+	// Return error if no chains were successfully set up
+	if successfulChains == 0 && len(chains) > 0 {
+		return fmt.Errorf("failed to set up consumers for any of the %d enabled chains", len(chains))
 	}
 
 	return nil
@@ -230,8 +342,8 @@ func (cm *ConsumerManager) createChainConsumer(ctx context.Context, chain *model
 func (cm *ConsumerManager) generateQueueNamesForChain(chainID int64, tokens []*models.SupportedToken) []string {
 	var queueNames []string
 
-	// Job types that need queues
-	jobTypes := []JobType{JobTypeTransfer, JobTypeAssetAdjust, JobTypeNotification}
+	// Job types that need queues per chain/token
+	jobTypes := []JobType{JobTypeTransfer, JobTypeAssetAdjust}
 
 	for _, jobType := range jobTypes {
 		for _, token := range tokens {
@@ -239,6 +351,9 @@ func (cm *ConsumerManager) generateQueueNamesForChain(chainID int64, tokens []*m
 			queueNames = append(queueNames, queueName)
 		}
 	}
+
+	// Note: Notification queues are not consumed by this service
+	// They are only published to for other systems to consume
 
 	return queueNames
 }
