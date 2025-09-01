@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"fmt"
 	"math/big"
+	"strconv"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -345,9 +346,16 @@ func (c *RabbitMQBatchConsumer) handleInsufficientBalanceMessages(ctx context.Co
 
 		// ACK the message since we've processed it (marked as failed)
 		if err := msg.Delivery.Ack(false); err != nil {
-			log.Error().Err(err).
-				Str("job_id", job.GetID()).
-				Msg("Failed to ACK insufficient balance message")
+			// Only log error if client is still healthy
+			if c.client != nil && c.client.IsHealthy() {
+				log.Error().Err(err).
+					Str("job_id", job.GetID()).
+					Msg("Failed to ACK insufficient balance message")
+			} else {
+				log.Debug().Err(err).
+					Str("job_id", job.GetID()).
+					Msg("Skipping ACK error - RabbitMQ client not healthy")
+			}
 		}
 	}
 
@@ -408,6 +416,7 @@ func (c *RabbitMQBatchConsumer) sendInsufficientBalanceNotification(ctx context.
 
 	notification := NotificationJob{
 		ID:        uuid.New().String(),
+		JobType:   JobTypeNotification,
 		UserID:    userID,
 		EventType: "insufficient_balance",
 		Data:      notificationData,
@@ -622,11 +631,29 @@ func (c *RabbitMQBatchConsumer) prepareMintParams(ctx context.Context, jobs []As
 		}
 		recipients[i] = aaAddress
 
-		amount, ok := new(big.Int).SetString(job.Amount, 10)
-		if !ok {
+		// Process amount: remove +/- prefix and convert to ERC20 18-decimal precision
+		amountStr := job.Amount
+		if len(amountStr) > 0 && (amountStr[0] == '+' || amountStr[0] == '-') {
+			amountStr = amountStr[1:] // Remove prefix
+		}
+
+		// Parse as float first to handle decimal values
+		amountFloat, err := strconv.ParseFloat(amountStr, 64)
+		if err != nil {
 			return nil, nil, fmt.Errorf("invalid amount format: %s", job.Amount)
 		}
-		amounts[i] = amount
+
+		// Convert to ERC20 18-decimal precision (multiply by 10^18)
+		amountInt := new(big.Int)
+		// Use big.Float for precision to avoid floating point errors
+		amountBigFloat := big.NewFloat(amountFloat)
+		// Multiply by 10^18 for ERC20 precision
+		multiplier := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil))
+		amountBigFloat.Mul(amountBigFloat, multiplier)
+		// Convert to big.Int
+		amountBigFloat.Int(amountInt)
+
+		amounts[i] = amountInt
 	}
 
 	return recipients, amounts, nil
@@ -645,16 +672,29 @@ func (c *RabbitMQBatchConsumer) prepareBurnParams(ctx context.Context, jobs []As
 		}
 		accounts[i] = aaAddress
 
-		// 处理负数金额（burn时amount可能是负数）
+		// Process amount: remove +/- prefix and convert to ERC20 18-decimal precision
 		amountStr := job.Amount
-		if len(amountStr) > 0 && amountStr[0] == '-' {
-			amountStr = amountStr[1:] // 移除负号
+		if len(amountStr) > 0 && (amountStr[0] == '+' || amountStr[0] == '-') {
+			amountStr = amountStr[1:] // Remove prefix
 		}
-		amount, ok := new(big.Int).SetString(amountStr, 10)
-		if !ok {
+
+		// Parse as float first to handle decimal values
+		amountFloat, err := strconv.ParseFloat(amountStr, 64)
+		if err != nil {
 			return nil, nil, fmt.Errorf("invalid amount format: %s", job.Amount)
 		}
-		amounts[i] = amount
+
+		// Convert to ERC20 18-decimal precision (multiply by 10^18)
+		amountInt := new(big.Int)
+		// Use big.Float for precision to avoid floating point errors
+		amountBigFloat := big.NewFloat(amountFloat)
+		// Multiply by 10^18 for ERC20 precision
+		multiplier := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil))
+		amountBigFloat.Mul(amountBigFloat, multiplier)
+		// Convert to big.Int
+		amountBigFloat.Int(amountInt)
+
+		amounts[i] = amountInt
 	}
 
 	return accounts, amounts, nil
@@ -681,11 +721,29 @@ func (c *RabbitMQBatchConsumer) prepareTransferFromParams(ctx context.Context, j
 		}
 		toAddresses[i] = toAddress
 
-		amount, ok := new(big.Int).SetString(job.Amount, 10)
-		if !ok {
+		// Process amount: remove +/- prefix and convert to ERC20 18-decimal precision
+		amountStr := job.Amount
+		if len(amountStr) > 0 && (amountStr[0] == '+' || amountStr[0] == '-') {
+			amountStr = amountStr[1:] // Remove prefix
+		}
+
+		// Parse as float first to handle decimal values
+		amountFloat, err := strconv.ParseFloat(amountStr, 64)
+		if err != nil {
 			return nil, nil, nil, fmt.Errorf("invalid amount format: %s", job.Amount)
 		}
-		amounts[i] = amount
+
+		// Convert to ERC20 18-decimal precision (multiply by 10^18)
+		amountInt := new(big.Int)
+		// Use big.Float for precision to avoid floating point errors
+		amountBigFloat := big.NewFloat(amountFloat)
+		// Multiply by 10^18 for ERC20 precision
+		multiplier := new(big.Float).SetInt(new(big.Int).Exp(big.NewInt(10), big.NewInt(18), nil))
+		amountBigFloat.Mul(amountBigFloat, multiplier)
+		// Convert to big.Int
+		amountBigFloat.Int(amountInt)
+
+		amounts[i] = amountInt
 	}
 
 	return fromAddresses, toAddresses, amounts, nil
@@ -703,6 +761,32 @@ func (c *RabbitMQBatchConsumer) updateBatchToSubmitted(ctx context.Context, batc
 	}
 	defer tx.Rollback()
 
+	// Determine CPOP operation type based on the batch group
+	// We need to get the batch type to determine the correct operation type
+	batchTypeQuery := `SELECT batch_type FROM batches WHERE batch_id = $1`
+	var batchType string
+	err = tx.QueryRow(batchTypeQuery, batchID.String()).Scan(&batchType)
+	if err != nil {
+		return fmt.Errorf("failed to get batch type: %w", err)
+	}
+
+	// Map batch_type to cpop_operation_type
+	var cpopOperationType string
+	switch batchType {
+	case "mint":
+		cpopOperationType = "batch_mint"
+	case "burn":
+		cpopOperationType = "batch_burn"
+	case "transfer":
+		cpopOperationType = "batch_transfer"
+	case "asset_adjust": // Handle legacy data
+		// For legacy asset_adjust batches, determine operation type from job data
+		// Default to batch_mint for asset_adjust (most common case)
+		cpopOperationType = "batch_mint"
+	default:
+		cpopOperationType = "batch_mint" // Default fallback
+	}
+
 	// Update batch status to submitted
 	batchQuery := `
 		UPDATE batches 
@@ -718,7 +802,7 @@ func (c *RabbitMQBatchConsumer) updateBatchToSubmitted(ctx context.Context, batc
 		batchID.String(),
 		result.TxHash,
 		result.GasUsed,
-		"batch_operation", // Default operation type
+		cpopOperationType, // Use correct enum value
 		true)              // Assume aggregator was used
 
 	if err != nil {
@@ -746,7 +830,7 @@ func (c *RabbitMQBatchConsumer) updateBatchToSubmitted(ctx context.Context, batc
 	c.sendBatchStatusNotification(ctx, batchID, "submitted", map[string]interface{}{
 		"tx_hash":                result.TxHash,
 		"gas_used":               result.GasUsed,
-		"cpop_operation_type":    "batch_operation",
+		"cpop_operation_type":    cpopOperationType, // Use correct enum value
 		"master_aggregator_used": true,
 	})
 
@@ -858,7 +942,7 @@ func (c *RabbitMQBatchConsumer) updateBatchToConfirmed(tx *sql.Tx, batchID uuid.
 func (c *RabbitMQBatchConsumer) updateTransactionsToConfirmed(tx *sql.Tx, batchID uuid.UUID, result *blockchain.BatchResult) error {
 	// First, get all transactions that will be updated for notifications
 	getQuery := `
-		SELECT user_id, amount, business_type, reason_type, from_user_id, to_user_id, token_id, chain_id
+		SELECT user_id, amount, business_type, reason_type, related_user_id, transfer_direction, token_id, chain_id
 		FROM transactions 
 		WHERE batch_id = $1`
 
@@ -870,12 +954,12 @@ func (c *RabbitMQBatchConsumer) updateTransactionsToConfirmed(tx *sql.Tx, batchI
 
 	var transactionNotifications []map[string]interface{}
 	for rows.Next() {
-		var userID, businessType, reasonType, fromUserID, toUserID sql.NullString
+		var userID, businessType, reasonType, relatedUserID, transferDirection sql.NullString
 		var amount string
 		var tokenID int
 		var chainID int64
 
-		err := rows.Scan(&userID, &amount, &businessType, &reasonType, &fromUserID, &toUserID, &tokenID, &chainID)
+		err := rows.Scan(&userID, &amount, &businessType, &reasonType, &relatedUserID, &transferDirection, &tokenID, &chainID)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to scan transaction for notification")
 			continue
@@ -897,14 +981,25 @@ func (c *RabbitMQBatchConsumer) updateTransactionsToConfirmed(tx *sql.Tx, batchI
 		if reasonType.Valid {
 			notificationData["reason_type"] = reasonType.String
 		}
-		if fromUserID.Valid {
-			notificationData["from_user_id"] = fromUserID.String
-		}
-		if toUserID.Valid {
-			notificationData["to_user_id"] = toUserID.String
-		}
 		if userID.Valid {
 			notificationData["user_id"] = userID.String
+		}
+		if relatedUserID.Valid {
+			notificationData["related_user_id"] = relatedUserID.String
+
+			// For transfers, map related_user_id to from_user_id/to_user_id based on direction
+			if transferDirection.Valid {
+				notificationData["transfer_direction"] = transferDirection.String
+				if transferDirection.String == "outgoing" {
+					// User is sender, related_user_id is receiver
+					notificationData["from_user_id"] = userID.String
+					notificationData["to_user_id"] = relatedUserID.String
+				} else if transferDirection.String == "incoming" {
+					// User is receiver, related_user_id is sender
+					notificationData["from_user_id"] = relatedUserID.String
+					notificationData["to_user_id"] = userID.String
+				}
+			}
 		}
 
 		transactionNotifications = append(transactionNotifications, notificationData)
@@ -1175,6 +1270,9 @@ func (c *RabbitMQBatchConsumer) createPreparingBatchRecord(tx *sql.Tx, batchID u
 	// Get batch info from first message
 	firstJob := messages[0].Job
 
+	// Map JobType to database batch_type enum
+	batchType := c.mapJobTypeToBatchType(firstJob)
+
 	query := `
 		INSERT INTO batches (
 			batch_id, chain_id, token_id, batch_type, operation_count, 
@@ -1185,7 +1283,7 @@ func (c *RabbitMQBatchConsumer) createPreparingBatchRecord(tx *sql.Tx, batchID u
 		batchID.String(),
 		firstJob.GetChainID(),
 		firstJob.GetTokenID(),
-		string(firstJob.GetJobType()),
+		batchType,
 		len(messages),
 		len(messages), // For now, use actual batch size as optimal
 		"preparing",
@@ -1426,14 +1524,14 @@ func (c *RabbitMQBatchConsumer) getUserAAAddress(ctx context.Context, userID str
 	query := `
 		SELECT aa_address 
 		FROM user_accounts 
-		WHERE user_id = $1 AND chain_id = $2 AND is_deployed = true
+		WHERE user_id = $1 AND chain_id = $2
 		LIMIT 1`
 
 	var aaAddress string
 	err = c.db.QueryRowContext(ctx, query, userUUID, chainID).Scan(&aaAddress)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return common.Address{}, fmt.Errorf("no deployed AA wallet found for user %s on chain %d", userID, chainID)
+			return common.Address{}, fmt.Errorf("no AA wallet found for user %s on chain %d", userID, chainID)
 		}
 		return common.Address{}, fmt.Errorf("failed to query AA address: %w", err)
 	}
@@ -1469,6 +1567,7 @@ func (c *RabbitMQBatchConsumer) sendTransferNotifications(ctx context.Context, j
 	// Sender notification (debit)
 	senderNotification := NotificationJob{
 		ID:        uuid.New().String(),
+		JobType:   JobTypeNotification,
 		UserID:    job.FromUserID,
 		EventType: "balance_changed",
 		Data: map[string]interface{}{
@@ -1488,6 +1587,7 @@ func (c *RabbitMQBatchConsumer) sendTransferNotifications(ctx context.Context, j
 	// Receiver notification (credit)
 	receiverNotification := NotificationJob{
 		ID:        uuid.New().String(),
+		JobType:   JobTypeNotification,
 		UserID:    job.ToUserID,
 		EventType: "balance_changed",
 		Data: map[string]interface{}{
@@ -1524,6 +1624,7 @@ func (c *RabbitMQBatchConsumer) sendTransferNotifications(ctx context.Context, j
 func (c *RabbitMQBatchConsumer) sendAssetAdjustNotification(ctx context.Context, job AssetAdjustJob) {
 	notification := NotificationJob{
 		ID:        uuid.New().String(),
+		JobType:   JobTypeNotification,
 		UserID:    job.UserID,
 		EventType: "balance_changed",
 		Data: map[string]interface{}{
@@ -1557,6 +1658,7 @@ func (c *RabbitMQBatchConsumer) sendTransactionStatusNotification(ctx context.Co
 
 	notification := NotificationJob{
 		ID:        uuid.New().String(),
+		JobType:   JobTypeNotification,
 		UserID:    userID,
 		EventType: "transaction_status_changed",
 		Data: map[string]interface{}{
@@ -1608,6 +1710,7 @@ func (c *RabbitMQBatchConsumer) sendTransactionStatusNotifications(transactionNo
 
 		notification := NotificationJob{
 			ID:        uuid.New().String(),
+			JobType:   JobTypeNotification,
 			UserID:    userID,
 			EventType: "transaction_status_changed",
 			Data:      txData,
@@ -1626,6 +1729,7 @@ func (c *RabbitMQBatchConsumer) sendTransactionStatusNotifications(transactionNo
 		if toUID, ok := txData["to_user_id"].(string); ok && toUID != "" && toUID != userID {
 			recipientNotification := NotificationJob{
 				ID:        uuid.New().String(),
+				JobType:   JobTypeNotification,
 				UserID:    toUID,
 				EventType: "transaction_status_changed",
 				Data:      txData,
@@ -1651,6 +1755,7 @@ func (c *RabbitMQBatchConsumer) sendBatchStatusNotification(ctx context.Context,
 
 	notification := NotificationJob{
 		ID:        uuid.New().String(),
+		JobType:   JobTypeNotification,
 		EventType: "batch_status_changed",
 		Data: map[string]interface{}{
 			"batch_id":  batchID.String(),
@@ -1672,5 +1777,28 @@ func (c *RabbitMQBatchConsumer) sendBatchStatusNotification(ctx context.Context,
 			Str("batch_id", batchID.String()).
 			Str("status", status).
 			Msg("Failed to send batch status notification")
+	}
+}
+
+// mapJobTypeToBatchType maps JobType to database batch_type enum values
+func (c *RabbitMQBatchConsumer) mapJobTypeToBatchType(job BatchJob) string {
+	switch job.GetJobType() {
+	case JobTypeTransfer:
+		return "transfer"
+	case JobTypeAssetAdjust:
+		// For asset adjust jobs, determine mint/burn based on adjustment type
+		if adjustJob, ok := job.(AssetAdjustJob); ok {
+			if adjustJob.AdjustmentType == "mint" {
+				return "mint"
+			} else if adjustJob.AdjustmentType == "burn" {
+				return "burn"
+			}
+		}
+		// Fallback to mint if adjustment type is unclear
+		return "mint"
+	default:
+		// For unknown job types (like notifications), default to transfer
+		// This shouldn't happen in practice since notifications don't create batches
+		return "transfer"
 	}
 }

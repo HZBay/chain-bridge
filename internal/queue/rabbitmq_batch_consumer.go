@@ -8,6 +8,8 @@ import (
 	"sync"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/lib/pq"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/rs/zerolog/log"
 
@@ -49,7 +51,7 @@ func NewRabbitMQBatchConsumerForChain(
 		stopChan:        make(chan struct{}),
 
 		// Configuration optimized for single-chain processing
-		maxBatchSize:  30,               // Maximum batch size
+		maxBatchSize:  3,                // Maximum batch size
 		maxWaitTime:   15 * time.Second, // Maximum wait time
 		consumerCount: workerCount,      // Configurable workers per chain
 	}
@@ -195,6 +197,17 @@ func (c *RabbitMQBatchConsumer) consumeFromChainQueue(ctx context.Context, queue
 	}
 	defer ch.Close()
 
+	// Ensure queue is declared before consuming
+	_, err = c.client.DeclareQueue(queueName)
+	if err != nil {
+		log.Error().
+			Int64("chain_id", c.chainID).
+			Str("queue", queueName).
+			Err(err).
+			Msg("Failed to declare queue before consuming")
+		return
+	}
+
 	// Set QoS to limit prefetch count
 	err = ch.Qos(10, 0, false)
 	if err != nil {
@@ -257,10 +270,11 @@ func (c *RabbitMQBatchConsumer) handleChainMessage(delivery amqp.Delivery) {
 	if err != nil {
 		log.Error().
 			Int64("chain_id", c.chainID).
+			Str("message_body", string(delivery.Body)).
 			Err(err).
 			Msg("Failed to parse chain message")
 		c.errorCount++
-		delivery.Nack(false, false) // Don't requeue invalid messages
+		c.safeNackMessage(delivery, false, false) // Don't requeue invalid messages
 		return
 	}
 
@@ -270,9 +284,10 @@ func (c *RabbitMQBatchConsumer) handleChainMessage(delivery amqp.Delivery) {
 			Int64("expected_chain_id", c.chainID).
 			Int64("actual_chain_id", job.GetChainID()).
 			Str("job_id", job.GetID()).
+			Str("job_type", string(job.GetJobType())).
 			Msg("Job chain ID mismatch - this should not happen")
 		c.errorCount++
-		delivery.Nack(false, false)
+		c.safeNackMessage(delivery, false, false)
 		return
 	}
 
@@ -380,10 +395,26 @@ func (c *RabbitMQBatchConsumer) parseMessage(body []byte) (BatchJob, error) {
 		return nil, fmt.Errorf("failed to unmarshal message: %w", err)
 	}
 
+	// Log raw message for debugging
+	log.Debug().
+		Int64("chain_id", c.chainID).
+		Interface("raw_message", rawMessage).
+		Msg("Parsing message")
+
 	// Determine job type from message content
 	jobType, ok := rawMessage["job_type"].(string)
 	if !ok {
-		return nil, fmt.Errorf("missing or invalid job_type field")
+		// Try alternative field names for backward compatibility
+		if jType, exists := rawMessage["type"]; exists {
+			if jTypeStr, isStr := jType.(string); isStr {
+				jobType = jTypeStr
+				ok = true
+			}
+		}
+	}
+
+	if !ok {
+		return nil, fmt.Errorf("missing or invalid job_type field. Available fields: %v", getMapKeys(rawMessage))
 	}
 
 	switch JobType(jobType) {
@@ -401,16 +432,18 @@ func (c *RabbitMQBatchConsumer) parseMessage(body []byte) (BatchJob, error) {
 		}
 		return job, nil
 
-	case JobTypeNotification:
-		var job NotificationJob
-		if err := json.Unmarshal(body, &job); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal notification job: %w", err)
-		}
-		return job, nil
-
 	default:
-		return nil, fmt.Errorf("unsupported job type: %s", jobType)
+		return nil, fmt.Errorf("unsupported job type for chain consumer: %s", jobType)
 	}
+}
+
+// getMapKeys returns all keys from a map for debugging
+func getMapKeys(m map[string]interface{}) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	return keys
 }
 
 // GetQueueStats returns queue statistics for this chain
@@ -465,7 +498,7 @@ func (c *RabbitMQBatchConsumer) processRemainingMessages(ctx context.Context) {
 	c.pendingMessages = make(map[BatchGroup][]*MessageWrapper)
 	c.messagesMutex.Unlock()
 
-	// Process all remaining batches
+	// Process all remaining batches with shutdown context
 	for group, messages := range allMessages {
 		if len(messages) > 0 {
 			log.Info().
@@ -475,7 +508,7 @@ func (c *RabbitMQBatchConsumer) processRemainingMessages(ctx context.Context) {
 				Int("remaining_messages", len(messages)).
 				Msg("Processing remaining messages batch")
 
-			c.processBatch(ctx, messages, group)
+			c.processBatchDuringShutdown(ctx, messages, group)
 			c.processedCount += int64(len(messages))
 		}
 	}
@@ -487,6 +520,15 @@ func (c *RabbitMQBatchConsumer) processRemainingMessages(ctx context.Context) {
 
 // ackAllMessages acknowledges all messages in a batch
 func (c *RabbitMQBatchConsumer) ackAllMessages(messages []*MessageWrapper) {
+	// Check if client is healthy before attempting to ACK
+	if c.client == nil || !c.client.IsHealthy() {
+		log.Warn().
+			Int64("chain_id", c.chainID).
+			Int("message_count", len(messages)).
+			Msg("Skipping ACK - RabbitMQ client not healthy")
+		return
+	}
+
 	for _, msgWrapper := range messages {
 		if err := msgWrapper.Delivery.Ack(false); err != nil {
 			log.Error().
@@ -499,6 +541,15 @@ func (c *RabbitMQBatchConsumer) ackAllMessages(messages []*MessageWrapper) {
 
 // nackAllMessages negatively acknowledges all messages in a batch
 func (c *RabbitMQBatchConsumer) nackAllMessages(messages []*MessageWrapper) {
+	// Check if client is healthy before attempting to NACK
+	if c.client == nil || !c.client.IsHealthy() {
+		log.Warn().
+			Int64("chain_id", c.chainID).
+			Int("message_count", len(messages)).
+			Msg("Skipping NACK - RabbitMQ client not healthy")
+		return
+	}
+
 	for _, msgWrapper := range messages {
 		if err := msgWrapper.Delivery.Nack(false, true); err != nil { // Requeue for retry
 			log.Error().
@@ -507,4 +558,250 @@ func (c *RabbitMQBatchConsumer) nackAllMessages(messages []*MessageWrapper) {
 				Msg("Failed to NACK message")
 		}
 	}
+}
+
+// safeAckMessage safely acknowledges a single message
+func (c *RabbitMQBatchConsumer) safeAckMessage(delivery amqp.Delivery) {
+	if c.client == nil || !c.client.IsHealthy() {
+		log.Warn().
+			Int64("chain_id", c.chainID).
+			Msg("Skipping ACK - RabbitMQ client not healthy")
+		return
+	}
+
+	if err := delivery.Ack(false); err != nil {
+		log.Error().
+			Int64("chain_id", c.chainID).
+			Err(err).
+			Msg("Failed to ACK message")
+	}
+}
+
+// safeNackMessage safely negative acknowledges a single message
+func (c *RabbitMQBatchConsumer) safeNackMessage(delivery amqp.Delivery, multiple, requeue bool) {
+	if c.client == nil || !c.client.IsHealthy() {
+		log.Warn().
+			Int64("chain_id", c.chainID).
+			Msg("Skipping NACK - RabbitMQ client not healthy")
+		return
+	}
+
+	if err := delivery.Nack(multiple, requeue); err != nil {
+		log.Error().
+			Int64("chain_id", c.chainID).
+			Err(err).
+			Msg("Failed to NACK message")
+	}
+}
+
+// processBatchDuringShutdown processes a batch during shutdown without NACKing on failure
+func (c *RabbitMQBatchConsumer) processBatchDuringShutdown(ctx context.Context, messages []*MessageWrapper, group BatchGroup) {
+	log.Info().
+		Int64("chain_id", group.ChainID).
+		Int("token_id", group.TokenID).
+		Str("job_type", string(group.JobType)).
+		Int("batch_size", len(messages)).
+		Msg("Processing shutdown batch")
+
+	startTime := time.Now()
+
+	// Step 0: Pre-validate user balances and separate valid/invalid operations
+	validMessages, invalidMessages, err := c.validateAndSeparateByBalance(ctx, messages)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to validate user balances during shutdown")
+		// During shutdown, don't NACK - just log the failure
+		return
+	}
+
+	// Handle invalid messages (insufficient balance) during shutdown
+	if len(invalidMessages) > 0 {
+		log.Warn().
+			Int("invalid_count", len(invalidMessages)).
+			Int("valid_count", len(validMessages)).
+			Msg("Some operations have insufficient balance during shutdown")
+
+		// Process invalid messages but don't attempt NACK during shutdown
+		c.handleInsufficientBalanceMessagesDuringShutdown(ctx, invalidMessages)
+	}
+
+	// If no valid messages, exit early
+	if len(validMessages) == 0 {
+		log.Info().Msg("No valid operations to process during shutdown")
+		return
+	}
+
+	// Update log to reflect actual processing count
+	log.Info().
+		Int("original_batch_size", len(messages)).
+		Int("valid_operations", len(validMessages)).
+		Int("invalid_operations", len(invalidMessages)).
+		Msg("Proceeding with valid operations during shutdown")
+
+	// Step 1: Insert/Update transactions to 'batching' status (only valid messages)
+	batchID := uuid.New()
+	err = c.updateTransactionsToBatching(ctx, validMessages, batchID)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to update transactions to batching status during shutdown")
+		// During shutdown, don't NACK - just log the failure
+		return
+	}
+
+	// Step 2: Execute blockchain batch operation (only valid messages)
+	result, err := c.executeBlockchainBatch(ctx, validMessages, group)
+	if err != nil {
+		log.Error().Err(err).Msg("Blockchain batch operation failed during shutdown")
+		c.handleBatchFailureDuringShutdown(ctx, validMessages, batchID, err)
+		return
+	}
+
+	// Step 2.5: Update to 'submitted' status after successful blockchain submission
+	err = c.updateBatchToSubmitted(ctx, batchID, result)
+	if err != nil {
+		log.Error().Err(err).
+			Str("tx_hash", result.TxHash).
+			Msg("Failed to update batch to submitted status during shutdown")
+		// NOTE: Blockchain operation succeeded but status update failed
+		// The batch will be picked up by the confirmation monitor
+	}
+
+	processingTime := time.Since(startTime)
+
+	// During shutdown, we don't wait for confirmations
+	// Complete the batch immediately and let the confirmation watcher handle it
+	log.Info().
+		Str("tx_hash", result.TxHash).
+		Msg("Transaction submitted during shutdown, background watcher will handle completion")
+
+	// Complete the batch without waiting for confirmation
+	err = c.completeSuccessfulBatch(ctx, messages, group, batchID, result, processingTime)
+	if err != nil {
+		log.Error().Err(err).
+			Str("tx_hash", result.TxHash).
+			Msg("Failed to complete successful batch during shutdown")
+		// During shutdown, don't NACK - just log the failure
+		return
+	}
+
+	// During shutdown, we don't ACK/NACK messages to avoid connection errors
+	// The messages will be redelivered when the service restarts
+	log.Info().
+		Str("batch_id", batchID.String()).
+		Str("tx_hash", result.TxHash).
+		Float64("efficiency", result.Efficiency).
+		Dur("processing_time", processingTime).
+		Int("messages_processed", len(messages)).
+		Msg("Batch processed successfully during shutdown")
+}
+
+// handleBatchFailureDuringShutdown handles batch failures during shutdown without NACKing
+func (c *RabbitMQBatchConsumer) handleBatchFailureDuringShutdown(ctx context.Context, messages []*MessageWrapper, batchID uuid.UUID, failureErr error) {
+	log.Error().Err(failureErr).Str("batch_id", batchID.String()).Msg("Handling batch failure during shutdown")
+
+	if c.db != nil {
+		tx, err := c.db.BeginTx(ctx, nil)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to begin transaction for batch failure handling during shutdown")
+			// During shutdown, don't NACK - just log the failure
+			return
+		}
+		defer tx.Rollback()
+
+		// Update batch status to failed
+		batchQuery := `UPDATE batches SET status = 'failed' WHERE batch_id = $1`
+		_, err = tx.Exec(batchQuery, batchID.String())
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to update batch to failed status during shutdown")
+		}
+
+		// Update transactions to failed status
+		jobIDs := make([]string, len(messages))
+		for i, msg := range messages {
+			jobIDs[i] = msg.Job.GetID()
+		}
+
+		txQuery := `UPDATE transactions SET status = 'failed' WHERE tx_id = ANY($1)`
+		_, err = tx.Exec(txQuery, pq.Array(jobIDs))
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to update failed transaction statuses during shutdown")
+		} else {
+			// Send transaction status notifications for failed transactions
+			for _, msg := range messages {
+				var userID string
+				switch job := msg.Job.(type) {
+				case TransferJob:
+					userID = job.FromUserID // Notify sender about failed transaction
+				case AssetAdjustJob:
+					userID = job.UserID
+				}
+
+				if userID != "" {
+					if txID, err := uuid.Parse(msg.Job.GetID()); err == nil {
+						extraData := map[string]interface{}{
+							"failure_reason": failureErr.Error(),
+							"batch_id":       batchID.String(),
+							"chain_id":       c.chainID,
+						}
+						c.sendTransactionStatusNotification(ctx, txID, "failed", userID, extraData)
+					}
+				}
+			}
+		}
+
+		// Unfreeze balances for failed operations
+		jobs := make([]BatchJob, len(messages))
+		for i, msg := range messages {
+			jobs[i] = msg.Job
+		}
+
+		for _, job := range jobs {
+			err = c.unfreezeUserBalance(tx, job)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to unfreeze user balance during shutdown")
+			}
+		}
+
+		if err = tx.Commit(); err != nil {
+			log.Error().Err(err).Msg("Failed to commit batch failure handling during shutdown")
+		} else {
+			// Send batch status notification after successful commit
+			c.sendBatchStatusNotification(ctx, batchID, "failed", map[string]interface{}{
+				"failure_reason":    failureErr.Error(),
+				"transaction_count": len(messages),
+			})
+
+			log.Info().Str("batch_id", batchID.String()).Msg("Successfully handled batch failure during shutdown")
+		}
+	}
+
+	// During shutdown, don't NACK messages to avoid connection errors
+	log.Info().Str("batch_id", batchID.String()).Msg("Batch failed during shutdown - messages will be redelivered on restart")
+}
+
+// handleInsufficientBalanceMessagesDuringShutdown handles insufficient balance messages during shutdown
+func (c *RabbitMQBatchConsumer) handleInsufficientBalanceMessagesDuringShutdown(ctx context.Context, messages []*MessageWrapper) {
+	// Similar to handleInsufficientBalanceMessages but without NACK
+	log.Info().Int("count", len(messages)).Msg("Handling insufficient balance messages during shutdown")
+
+	// Process notifications but don't ACK/NACK
+	for _, msg := range messages {
+		var userID string
+		switch job := msg.Job.(type) {
+		case TransferJob:
+			userID = job.FromUserID
+		case AssetAdjustJob:
+			userID = job.UserID
+		}
+
+		if userID != "" {
+			if txID, err := uuid.Parse(msg.Job.GetID()); err == nil {
+				extraData := map[string]interface{}{
+					"failure_reason": "insufficient balance",
+					"chain_id":       c.chainID,
+				}
+				c.sendTransactionStatusNotification(ctx, txID, "failed", userID, extraData)
+			}
+		}
+	}
+
+	log.Info().Int("count", len(messages)).Msg("Processed insufficient balance messages during shutdown")
 }

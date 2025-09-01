@@ -38,6 +38,7 @@ const (
 // TransferJob represents a transfer operation to be batched
 type TransferJob struct {
 	ID            string    `json:"id"`
+	JobType       JobType   `json:"job_type"`
 	TransactionID uuid.UUID `json:"transaction_id"`
 	ChainID       int64     `json:"chain_id"`
 	TokenID       int       `json:"token_id"`
@@ -54,13 +55,14 @@ type TransferJob struct {
 func (t TransferJob) GetID() string           { return t.ID }
 func (t TransferJob) GetChainID() int64       { return t.ChainID }
 func (t TransferJob) GetTokenID() int         { return t.TokenID }
-func (t TransferJob) GetJobType() JobType     { return JobTypeTransfer }
+func (t TransferJob) GetJobType() JobType     { return t.JobType }
 func (t TransferJob) GetPriority() Priority   { return t.Priority }
 func (t TransferJob) GetCreatedAt() time.Time { return t.CreatedAt }
 
 // AssetAdjustJob represents an asset adjustment operation (mint/burn)
 type AssetAdjustJob struct {
 	ID             string    `json:"id"`
+	JobType        JobType   `json:"job_type"`
 	TransactionID  uuid.UUID `json:"transaction_id"`
 	ChainID        int64     `json:"chain_id"`
 	TokenID        int       `json:"token_id"`
@@ -77,13 +79,14 @@ type AssetAdjustJob struct {
 func (a AssetAdjustJob) GetID() string           { return a.ID }
 func (a AssetAdjustJob) GetChainID() int64       { return a.ChainID }
 func (a AssetAdjustJob) GetTokenID() int         { return a.TokenID }
-func (a AssetAdjustJob) GetJobType() JobType     { return JobTypeAssetAdjust }
+func (a AssetAdjustJob) GetJobType() JobType     { return a.JobType }
 func (a AssetAdjustJob) GetPriority() Priority   { return a.Priority }
 func (a AssetAdjustJob) GetCreatedAt() time.Time { return a.CreatedAt }
 
 // NotificationJob represents a notification to be sent
 type NotificationJob struct {
 	ID        string                 `json:"id"`
+	JobType   JobType                `json:"job_type"`
 	UserID    string                 `json:"user_id,omitempty"`
 	EventType string                 `json:"event_type"`
 	Data      map[string]interface{} `json:"data"`
@@ -94,7 +97,7 @@ type NotificationJob struct {
 func (n NotificationJob) GetID() string           { return n.ID }
 func (n NotificationJob) GetChainID() int64       { return 0 } // Notifications are not chain-specific
 func (n NotificationJob) GetTokenID() int         { return 0 } // Notifications are not token-specific
-func (n NotificationJob) GetJobType() JobType     { return JobTypeNotification }
+func (n NotificationJob) GetJobType() JobType     { return n.JobType }
 func (n NotificationJob) GetPriority() Priority   { return n.Priority }
 func (n NotificationJob) GetCreatedAt() time.Time { return n.CreatedAt }
 
