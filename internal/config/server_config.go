@@ -148,7 +148,7 @@ func DefaultServiceConfigFromEnv() Server {
 			ConnMaxLifetime: time.Second * time.Duration(util.GetEnvAsInt("DB_CONN_MAX_LIFETIME_SEC", 60)),
 		},
 		Echo: EchoServer{
-			Debug:                          util.GetEnvAsBool("SERVER_ECHO_DEBUG", false),
+			Debug:                          util.GetEnvAsBool("SERVER_ECHO_DEBUG", true),
 			ListenAddress:                  util.GetEnv("SERVER_ECHO_LISTEN_ADDRESS", ":8080"),
 			HideInternalServerErrorDetails: util.GetEnvAsBool("SERVER_ECHO_HIDE_INTERNAL_SERVER_ERROR_DETAILS", true),
 			BaseURL:                        util.GetEnv("SERVER_ECHO_BASE_URL", "http://localhost:8080"),

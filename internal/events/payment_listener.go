@@ -167,8 +167,8 @@ func (l *PaymentEventListener) syncHistoricalEvents(ctx context.Context) {
 		currentBlock -= l.config.ConfirmationBlocks
 	}
 
-	// Batch size for historical sync
-	const batchSize = 1000
+	// Batch size for historical sync (stay under RPC limits)
+	const batchSize = 500
 	fromBlock := l.config.StartBlock
 
 	for fromBlock <= currentBlock {
@@ -262,23 +262,57 @@ func (l *PaymentEventListener) pollForNewEvents(ctx context.Context) error {
 	fromBlock := l.lastProcessedBlock + 1
 	l.mutex.RUnlock()
 
+	// Initialize lastProcessedBlock to recent block if it's 0
+	if l.lastProcessedBlock == 0 {
+		// Start from recent blocks instead of genesis
+		if currentBlock > 1000 {
+			fromBlock = currentBlock - 1000
+		} else {
+			fromBlock = 1
+		}
+		l.mutex.Lock()
+		l.lastProcessedBlock = fromBlock - 1
+		l.mutex.Unlock()
+	}
+
 	if fromBlock > currentBlock {
 		return nil // No new blocks to process
 	}
 
-	log.Debug().
-		Uint64("from_block", fromBlock).
-		Uint64("to_block", currentBlock).
-		Msg("Polling for new events")
+	// Split large ranges into batches to avoid RPC limits (max 500 blocks)
+	const maxBlockRange = 500
 
-	err = l.fetchEventsInRange(ctx, fromBlock, currentBlock)
-	if err != nil {
-		return fmt.Errorf("failed to fetch events in range: %w", err)
+	for batchStart := fromBlock; batchStart <= currentBlock; batchStart += maxBlockRange {
+		batchEnd := batchStart + maxBlockRange - 1
+		if batchEnd > currentBlock {
+			batchEnd = currentBlock
+		}
+
+		log.Debug().
+			Uint64("from_block", batchStart).
+			Uint64("to_block", batchEnd).
+			Msg("Polling for new events")
+
+		err = l.fetchEventsInRange(ctx, batchStart, batchEnd)
+		if err != nil {
+			return fmt.Errorf("failed to fetch events in range: %w", err)
+		}
+
+		l.mutex.Lock()
+		l.lastProcessedBlock = batchEnd
+		l.mutex.Unlock()
+
+		// Brief pause between batches to avoid overwhelming RPC
+		if batchEnd < currentBlock {
+			select {
+			case <-time.After(100 * time.Millisecond):
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-l.stopChan:
+				return nil
+			}
+		}
 	}
-
-	l.mutex.Lock()
-	l.lastProcessedBlock = currentBlock
-	l.mutex.Unlock()
 
 	return nil
 }

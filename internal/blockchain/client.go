@@ -128,34 +128,55 @@ func (c *CPOPClient) IsAccountDeployed(ctx context.Context, ownerAddress string,
 
 // DeployAccount deploys an AA account to the blockchain
 func (c *CPOPClient) DeployAccount(ctx context.Context, privateKey *ecdsa.PrivateKey, ownerAddress string, salt *big.Int) (*DeploymentResult, error) {
-	// For now, simulate account deployment
-	// In production, this should call the actual AccountManager contract's createAccount function
+	// Real blockchain deployment implementation
 
-	// Calculate account address
+	// Calculate account address first
 	accountAddress, err := c.CreateAccountAddress(ctx, ownerAddress, salt)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get account address: %w", err)
 	}
 
-	// Generate a mock transaction hash
-	hashData := fmt.Sprintf("deploy-%s-%s", ownerAddress, salt.String())
-	txHash := crypto.Keccak256Hash([]byte(hashData))
+	// Create transaction auth from private key
+	chainID, err := c.client.NetworkID(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chain ID: %w", err)
+	}
 
-	// Get gas price for estimation
+	auth, err := bind.NewKeyedTransactorWithChainID(privateKey, chainID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create transaction auth: %w", err)
+	}
+
+	// Get gas price and apply factor
 	gasPrice, err := c.client.SuggestGasPrice(ctx)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get gas price: %w", err)
 	}
 
-	// Apply gas price factor
 	adjustedGasPrice := new(big.Int).Mul(gasPrice, big.NewInt(int64(c.config.GasPriceFactor*100)))
 	adjustedGasPrice = adjustedGasPrice.Div(adjustedGasPrice, big.NewInt(100))
 
+	// Set transaction parameters
+	auth.GasPrice = adjustedGasPrice
+	auth.GasLimit = c.config.DefaultGasLimit
+
+	// Get default master signer from contract
+	masterSigner, err := c.accountManager.GetDefaultMasterSigner(&bind.CallOpts{Context: ctx})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get default master signer: %w", err)
+	}
+
+	// Call the actual contract method to create account
+	tx, err := c.accountManager.CreateUserAccount(auth, common.HexToAddress(ownerAddress), masterSigner)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create user account: %w", err)
+	}
+
 	return &DeploymentResult{
-		TxHash:         txHash.Hex(),
+		TxHash:         tx.Hash().Hex(),
 		AccountAddress: accountAddress,
-		GasUsed:        c.config.DefaultGasLimit,
-		GasPrice:       adjustedGasPrice,
+		GasUsed:        tx.Gas(),
+		GasPrice:       tx.GasPrice(),
 	}, nil
 }
 

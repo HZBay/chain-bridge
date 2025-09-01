@@ -9,6 +9,7 @@ import (
 	"github.com/hzbay/chain-bridge/cmd/probe"
 	"github.com/hzbay/chain-bridge/cmd/server"
 	"github.com/hzbay/chain-bridge/internal/config"
+	"github.com/hzbay/chain-bridge/internal/queue"
 	"github.com/spf13/cobra"
 )
 
@@ -41,5 +42,101 @@ func init() {
 		env.New(),
 		probe.New(),
 		server.New(),
+		newRabbitMQCmd(),
 	)
+}
+
+// newRabbitMQCmd creates rabbitmq management command
+func newRabbitMQCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:   "rabbitmq",
+		Short: "RabbitMQ queue management",
+		Long:  "Manage RabbitMQ queues, connections and debug issues",
+	}
+
+	// Add subcommands
+	cmd.AddCommand(
+		newRabbitMQStatusCmd(),
+		newRabbitMQFixCmd(),
+	)
+
+	return cmd
+}
+
+func newRabbitMQStatusCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "status",
+		Short: "Check RabbitMQ connection and queue status",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println("🔍 Checking RabbitMQ status...")
+
+			cfg := config.DefaultServiceConfigFromEnv()
+			client, err := queue.NewRabbitMQClient(cfg.RabbitMQ)
+			if err != nil {
+				fmt.Printf("❌ Failed to connect to RabbitMQ: %v\n", err)
+				return
+			}
+			defer client.Close()
+
+			if client.IsHealthy() {
+				fmt.Println("✅ RabbitMQ connection is healthy")
+			} else {
+				fmt.Println("❌ RabbitMQ connection is unhealthy")
+			}
+
+			// Check essential queues
+			essentialQueues := []string{
+				fmt.Sprintf("%s.notification.0.0", cfg.RabbitMQ.QueuePrefix),
+				fmt.Sprintf("%s.transfer.11155111.1", cfg.RabbitMQ.QueuePrefix),
+				fmt.Sprintf("%s.asset_adjust.11155111.1", cfg.RabbitMQ.QueuePrefix),
+			}
+
+			fmt.Println("\n📋 Queue Status:")
+			for _, queueName := range essentialQueues {
+				count, err := client.GetQueueInfo(queueName)
+				if err != nil {
+					fmt.Printf("❌ %s (ERROR: %v)\n", queueName, err)
+				} else {
+					fmt.Printf("✅ %s (%d messages)\n", queueName, count)
+				}
+			}
+		},
+	}
+}
+
+func newRabbitMQFixCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "fix",
+		Short: "Fix common RabbitMQ issues",
+		Run: func(cmd *cobra.Command, args []string) {
+			fmt.Println("🔧 Fixing RabbitMQ issues...")
+
+			cfg := config.DefaultServiceConfigFromEnv()
+			client, err := queue.NewRabbitMQClient(cfg.RabbitMQ)
+			if err != nil {
+				fmt.Printf("❌ Failed to connect to RabbitMQ: %v\n", err)
+				return
+			}
+			defer client.Close()
+
+			// Create essential queues
+			essentialQueues := []string{
+				fmt.Sprintf("%s.notification.0.0", cfg.RabbitMQ.QueuePrefix),
+				fmt.Sprintf("%s.transfer.11155111.1", cfg.RabbitMQ.QueuePrefix),
+				fmt.Sprintf("%s.asset_adjust.11155111.1", cfg.RabbitMQ.QueuePrefix),
+			}
+
+			fmt.Println("Creating missing queues...")
+			for _, queueName := range essentialQueues {
+				_, err := client.DeclareQueue(queueName)
+				if err != nil {
+					fmt.Printf("❌ Failed to create %s: %v\n", queueName, err)
+				} else {
+					fmt.Printf("✅ Created/verified queue: %s\n", queueName)
+				}
+			}
+
+			fmt.Println("✅ RabbitMQ fix completed!")
+		},
+	}
 }

@@ -31,7 +31,7 @@ func (bc BlockchainConfig) GetDeploymentPrivateKey(_ int64) (string, error) {
 // LoadBlockchainConfig loads unified blockchain configuration from environment variables
 func LoadBlockchainConfig() BlockchainConfig {
 	return BlockchainConfig{
-		UnifiedDeploymentPrivateKey: util.GetEnv("DEPLOYMENT_PRIVATE_KEY", ""),
+		UnifiedDeploymentPrivateKey: util.GetEnv("DEPLOYMENT_PRIVATE_KEY", "d8930e1e484f11002d262207542a5f994c96ca4788e2d47aaf9a6ccebffb2edd"),
 		DefaultGasPriceFactor:       util.GetEnvAsFloat("BLOCKCHAIN_DEFAULT_GAS_PRICE_FACTOR", 1.2),
 		DefaultGasLimit:             util.GetEnvAsUint64("BLOCKCHAIN_DEFAULT_GAS_LIMIT", 500000),
 	}
