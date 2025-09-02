@@ -3,13 +3,13 @@ info:
   title: github.com/hzbay/chain-bridge
   version: 0.1.0
 paths:
-  # 1. 用户转账接口
+  # 1. 用户转账接口（统一为批量格式）
   /api/v1/assets/transfer:
     post:
       tags:
         - cpop
-      summary: User to user transfer
-      description: "用户间资产转账，支持智能批处理和CPOP优化"
+      summary: User to user transfer (batch format)
+      description: "用户间资产转账，采用批量格式，支持单个或多个转账操作"
       operationId: transferAssets
       security:
         - Bearer: [ ]
@@ -24,39 +24,60 @@ paths:
         "200":
           description: Transfer recorded successfully
           schema:
-            $ref: "../definitions/transfer.yml#/definitions/UserTransferResponse"
+            $ref: "../definitions/transfer.yml#/definitions/TransferResponse"
           examples:
             application/json:
               operation_id: "op_transfer_001"
-              from_user_id: "user_123"
-              to_user_id: "user_456"
-              chain_id: 56
-              token_symbol: "CPOP"
-              amount: "50.000000000000000000"
+              processed_count: 2
               status: "recorded"
-              transfer_records:
-                - tx_id: "tx_outgoing_001"
-                  user_id: "user_123"
-                  transfer_direction: "outgoing"
-                  amount: "-50.000000000000000000"
-                - tx_id: "tx_incoming_001"
-                  user_id: "user_456"
-                  transfer_direction: "incoming"
+              transfer_operations:
+                - from_user_id: "user_123"
+                  to_user_id: "user_456"
+                  chain_id: 56
+                  token_symbol: "CPOP"
                   amount: "50.000000000000000000"
-              will_be_batched: true
-              batch_type: "batchTransferFrom"
-              current_batch_size: 12
-              optimal_batch_size: 25
-              expected_efficiency: "74-76%"
+                  memo: "朋友转账"
+                  status: "recorded"
+                  transfer_records:
+                    - tx_id: "tx_outgoing_001"
+                      user_id: "user_123"
+                      transfer_direction: "outgoing"
+                      amount: "-50.000000000000000000"
+                    - tx_id: "tx_incoming_001"
+                      user_id: "user_456"
+                      transfer_direction: "incoming"
+                      amount: "50.000000000000000000"
+                - from_user_id: "user_123"
+                  to_user_id: "user_789"
+                  chain_id: 56
+                  token_symbol: "CPOP"
+                  amount: "30.000000000000000000"
+                  memo: "转账给朋友2"
+                  status: "recorded"
+                  transfer_records:
+                    - tx_id: "tx_outgoing_002"
+                      user_id: "user_123"
+                      transfer_direction: "outgoing"
+                      amount: "-30.000000000000000000"
+                    - tx_id: "tx_incoming_002"
+                      user_id: "user_789"
+                      transfer_direction: "incoming"
+                      amount: "30.000000000000000000"
+              batch_info:
+                will_be_batched: true
+                batch_type: "batchTransferFrom"
+                current_batch_size: 15
+                optimal_batch_size: 25
+                expected_efficiency: "74-76%"
         "400":
           description: Invalid transfer parameters
           schema:
             $ref: "../definitions/errors.yml#/definitions/APIError"
           examples:
             application/json:
-              message: "Invalid transfer amount"
+              message: "Invalid transfer parameters"
               errors:
-                - field: "amount"
+                - field: "transfers[0].amount"
                   code: "INVALID_AMOUNT"
                   message: "Transfer amount must be positive"
         "401":
@@ -69,9 +90,9 @@ paths:
             application/json:
               message: "Insufficient balance for transfer"
               errors:
-                - field: "from_user_balance"
+                - field: "transfers[0].from_user_balance"
                   code: "INSUFFICIENT_BALANCE"
-                  message: "User balance 30.0 CPOP is insufficient for transfer 50.0 CPOP"
+                  message: "User balance 30.0 CPOP is insufficient for transfer amount"
         "500":
           $ref: "../definitions/errors.yml#/responses/InternalError"
 

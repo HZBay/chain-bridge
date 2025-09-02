@@ -100,15 +100,11 @@ definitions:
         format: date-time
         description: "Confirmation timestamp"
 
-  # 转账请求
-  TransferRequest:
+  # 单个转账操作
+  TransferOperation:
     type: object
-    required: [operation_id, from_user_id, to_user_id, chain_id, token_symbol, amount]
+    required: [from_user_id, to_user_id, chain_id, token_symbol, amount]
     properties:
-      operation_id:
-        type: string
-        description: "Operation ID for idempotency"
-        example: "op_transfer_001"
       from_user_id:
         type: string
         description: "Sender user ID"
@@ -135,6 +131,23 @@ definitions:
         description: "Transfer memo"
         example: "朋友转账"
 
+  # 转账请求（统一为批量格式，与adjust接口保持一致）
+  TransferRequest:
+    type: object
+    required: [operation_id, transfers]
+    properties:
+      operation_id:
+        type: string
+        description: "Operation ID for idempotency"
+        example: "op_transfer_001"
+      transfers:
+        type: array
+        items:
+          $ref: "#/definitions/TransferOperation"
+        description: "Array of transfer operations"
+      batch_preference:
+        $ref: "./assets.yml#/definitions/BatchPreference"
+
   # 转账记录
   TransferRecord:
     type: object
@@ -156,15 +169,11 @@ definitions:
         description: "Amount with sign"
         example: "-50.000000000000000000"
 
-  # 转账响应
-  TransferResponse:
+  # 转账操作结果
+  TransferOperationResult:
     type: object
-    required: [operation_id, from_user_id, to_user_id, chain_id, token_symbol, amount, status, transfer_records]
+    required: [from_user_id, to_user_id, chain_id, token_symbol, amount, status, transfer_records]
     properties:
-      operation_id:
-        type: string
-        description: "Operation ID"
-        example: "op_transfer_001"
       from_user_id:
         type: string
         description: "Sender user ID"
@@ -186,6 +195,10 @@ definitions:
         type: string
         description: "Transfer amount"
         example: "50.000000000000000000"
+      memo:
+        type: string
+        description: "Transfer memo"
+        example: "朋友转账"
       status:
         type: string
         description: "Transfer status"
@@ -194,6 +207,33 @@ definitions:
         type: array
         items:
           $ref: "#/definitions/TransferRecord"
+        description: "Generated transaction records"
+
+  # 转账响应（与adjust接口保持一致的结构）
+  TransferResponse:
+    type: object
+    required: [operation_id, processed_count, status, transfer_operations, batch_info]
+    properties:
+      operation_id:
+        type: string
+        description: "Operation ID"
+        example: "op_transfer_001"
+      processed_count:
+        type: integer
+        format: int64
+        description: "Number of transfers processed"
+        example: 2
+      status:
+        type: string
+        description: "Overall transfer status"
+        example: "recorded"
+      transfer_operations:
+        type: array
+        items:
+          $ref: "#/definitions/TransferOperationResult"
+        description: "Results of each transfer operation"
+      batch_info:
+        $ref: "./assets.yml#/definitions/BatchInfo"
 
   # 交易历史响应
   TransactionHistoryResponse:
@@ -242,16 +282,6 @@ definitions:
         description: "Total gas saved"
         example: "45.80 USD"
 
-  # 转账完整响应 (包含data和batch_info)
-  TransferCompleteResponse:
-    type: object
-    required: [data, batch_info]
-    properties:
-      data:
-        $ref: "#/definitions/TransferResponse"
-      batch_info:
-        $ref: "./assets.yml#/definitions/BatchInfo"
-
   # 用户交易历史完整响应 (不带data包装，平级字段)
   UserTransactionHistoryResponse:
     type: object
@@ -293,62 +323,3 @@ definitions:
         type: string
         description: "Total gas saved"
         example: "45.80 USD"
-
-  # 转账响应 (不带data包装，平级字段，包含batch_info字段)
-  UserTransferResponse:
-    type: object
-    required: [operation_id, from_user_id, to_user_id, chain_id, token_symbol, amount, status, transfer_records, will_be_batched, batch_type, current_batch_size, optimal_batch_size, expected_efficiency]
-    properties:
-      operation_id:
-        type: string
-        description: "Operation ID"
-        example: "op_transfer_001"
-      from_user_id:
-        type: string
-        description: "Sender user ID"
-        example: "user_123"
-      to_user_id:
-        type: string
-        description: "Recipient user ID"
-        example: "user_456"
-      chain_id:
-        type: integer
-        format: int64
-        description: "Chain ID"
-        example: 56
-      token_symbol:
-        type: string
-        description: "Token symbol"
-        example: "CPOP"
-      amount:
-        type: string
-        description: "Transfer amount"
-        example: "50.000000000000000000"
-      status:
-        type: string
-        description: "Transfer status"
-        example: "recorded"
-      transfer_records:
-        type: array
-        items:
-          $ref: "#/definitions/TransferRecord"
-      will_be_batched:
-        type: boolean
-        description: "Whether will be batched"
-        example: true
-      batch_type:
-        type: string
-        description: "Batch operation type"
-        example: "batchTransferFrom"
-      current_batch_size:
-        type: integer
-        description: "Current batch size"
-        example: 12
-      optimal_batch_size:
-        type: integer
-        description: "Optimal batch size"
-        example: 25
-      expected_efficiency:
-        type: string
-        description: "Expected efficiency"
-        example: "74-76%"

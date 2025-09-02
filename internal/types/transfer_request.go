@@ -7,6 +7,7 @@ package types
 
 import (
 	"context"
+	"strconv"
 
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/strfmt"
@@ -19,54 +20,24 @@ import (
 // swagger:model transferRequest
 type TransferRequest struct {
 
-	// Transfer amount
-	// Example: 50.000000000000000000
-	// Required: true
-	Amount *string `json:"amount"`
-
-	// Chain ID
-	// Example: 56
-	// Required: true
-	ChainID *int64 `json:"chain_id"`
-
-	// Sender user ID
-	// Example: user_123
-	// Required: true
-	FromUserID *string `json:"from_user_id"`
-
-	// Transfer memo
-	// Example: 朋友转账
-	Memo string `json:"memo,omitempty"`
+	// batch preference
+	BatchPreference *BatchPreference `json:"batch_preference,omitempty"`
 
 	// Operation ID for idempotency
 	// Example: op_transfer_001
 	// Required: true
 	OperationID *string `json:"operation_id"`
 
-	// Recipient user ID
-	// Example: user_456
+	// Array of transfer operations
 	// Required: true
-	ToUserID *string `json:"to_user_id"`
-
-	// Token symbol
-	// Example: CPOP
-	// Required: true
-	TokenSymbol *string `json:"token_symbol"`
+	Transfers []*TransferOperation `json:"transfers"`
 }
 
 // Validate validates this transfer request
 func (m *TransferRequest) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateAmount(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateChainID(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateFromUserID(formats); err != nil {
+	if err := m.validateBatchPreference(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -74,11 +45,7 @@ func (m *TransferRequest) Validate(formats strfmt.Registry) error {
 		res = append(res, err)
 	}
 
-	if err := m.validateToUserID(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateTokenSymbol(formats); err != nil {
+	if err := m.validateTransfers(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -88,28 +55,20 @@ func (m *TransferRequest) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *TransferRequest) validateAmount(formats strfmt.Registry) error {
-
-	if err := validate.Required("amount", "body", m.Amount); err != nil {
-		return err
+func (m *TransferRequest) validateBatchPreference(formats strfmt.Registry) error {
+	if swag.IsZero(m.BatchPreference) { // not required
+		return nil
 	}
 
-	return nil
-}
-
-func (m *TransferRequest) validateChainID(formats strfmt.Registry) error {
-
-	if err := validate.Required("chain_id", "body", m.ChainID); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *TransferRequest) validateFromUserID(formats strfmt.Registry) error {
-
-	if err := validate.Required("from_user_id", "body", m.FromUserID); err != nil {
-		return err
+	if m.BatchPreference != nil {
+		if err := m.BatchPreference.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batch_preference")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batch_preference")
+			}
+			return err
+		}
 	}
 
 	return nil
@@ -124,26 +83,84 @@ func (m *TransferRequest) validateOperationID(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *TransferRequest) validateToUserID(formats strfmt.Registry) error {
+func (m *TransferRequest) validateTransfers(formats strfmt.Registry) error {
 
-	if err := validate.Required("to_user_id", "body", m.ToUserID); err != nil {
+	if err := validate.Required("transfers", "body", m.Transfers); err != nil {
 		return err
+	}
+
+	for i := 0; i < len(m.Transfers); i++ {
+		if swag.IsZero(m.Transfers[i]) { // not required
+			continue
+		}
+
+		if m.Transfers[i] != nil {
+			if err := m.Transfers[i].Validate(formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("transfers" + "." + strconv.Itoa(i))
+				} else if ce, ok := err.(*errors.CompositeError); ok {
+					return ce.ValidateName("transfers" + "." + strconv.Itoa(i))
+				}
+				return err
+			}
+		}
+
 	}
 
 	return nil
 }
 
-func (m *TransferRequest) validateTokenSymbol(formats strfmt.Registry) error {
-
-	if err := validate.Required("token_symbol", "body", m.TokenSymbol); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// ContextValidate validates this transfer request based on context it is used
+// ContextValidate validate this transfer request based on the context it is used
 func (m *TransferRequest) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+	var res []error
+
+	if err := m.contextValidateBatchPreference(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.contextValidateTransfers(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if len(res) > 0 {
+		return errors.CompositeValidationError(res...)
+	}
+	return nil
+}
+
+func (m *TransferRequest) contextValidateBatchPreference(ctx context.Context, formats strfmt.Registry) error {
+
+	if m.BatchPreference != nil {
+		if err := m.BatchPreference.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batch_preference")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batch_preference")
+			}
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (m *TransferRequest) contextValidateTransfers(ctx context.Context, formats strfmt.Registry) error {
+
+	for i := 0; i < len(m.Transfers); i++ {
+
+		if m.Transfers[i] != nil {
+			if err := m.Transfers[i].ContextValidate(ctx, formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("transfers" + "." + strconv.Itoa(i))
+				} else if ce, ok := err.(*errors.CompositeError); ok {
+					return ce.ValidateName("transfers" + "." + strconv.Itoa(i))
+				}
+				return err
+			}
+		}
+
+	}
+
 	return nil
 }
 

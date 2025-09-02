@@ -578,8 +578,10 @@ func (s *service) DeleteChain(ctx context.Context, chainID int64) error {
 		return fmt.Errorf("failed to fetch chain: %w", err)
 	}
 
-	// TODO: Add checks for chain usage (tokens, transactions, etc.)
-	// For now, we'll allow deletion but could add validation later
+	// Check for chain usage before allowing deletion
+	if err := s.validateChainCanBeDeleted(ctx, chainID); err != nil {
+		return err
+	}
 
 	// Delete from database
 	if _, err := chain.Delete(ctx, s.db); err != nil {
@@ -630,6 +632,59 @@ func (s *service) ToggleChainStatus(ctx context.Context, chainID int64, enabled 
 		Int64("chain_id", chainID).
 		Str("status", status).
 		Msg("Chain status updated successfully")
+
+	return nil
+}
+
+// validateChainCanBeDeleted checks if a chain can safely be deleted
+func (s *service) validateChainCanBeDeleted(ctx context.Context, chainID int64) error {
+	// Check if there are any supported tokens on this chain
+	tokenCount, err := models.SupportedTokens(
+		models.SupportedTokenWhere.ChainID.EQ(chainID),
+	).Count(ctx, s.db)
+	if err != nil {
+		return fmt.Errorf("failed to check tokens on chain: %w", err)
+	}
+	if tokenCount > 0 {
+		return fmt.Errorf("cannot delete chain %d: %d tokens are configured on this chain", chainID, tokenCount)
+	}
+
+	// Check if there are any user accounts on this chain
+	accountCount, err := models.UserAccounts(
+		models.UserAccountWhere.ChainID.EQ(chainID),
+	).Count(ctx, s.db)
+	if err != nil {
+		return fmt.Errorf("failed to check user accounts on chain: %w", err)
+	}
+	if accountCount > 0 {
+		return fmt.Errorf("cannot delete chain %d: %d user accounts exist on this chain", chainID, accountCount)
+	}
+
+	// Check if there are any transactions on this chain
+	transactionCount, err := models.Transactions(
+		models.TransactionWhere.ChainID.EQ(chainID),
+	).Count(ctx, s.db)
+	if err != nil {
+		return fmt.Errorf("failed to check transactions on chain: %w", err)
+	}
+	if transactionCount > 0 {
+		return fmt.Errorf("cannot delete chain %d: %d transactions exist on this chain", chainID, transactionCount)
+	}
+
+	// Check if there are any user balances on this chain
+	balanceCount, err := models.UserBalances(
+		models.UserBalanceWhere.ChainID.EQ(chainID),
+	).Count(ctx, s.db)
+	if err != nil {
+		return fmt.Errorf("failed to check user balances on chain: %w", err)
+	}
+	if balanceCount > 0 {
+		return fmt.Errorf("cannot delete chain %d: %d user balances exist on this chain", chainID, balanceCount)
+	}
+
+	log.Info().
+		Int64("chain_id", chainID).
+		Msg("Chain validation passed - safe to delete")
 
 	return nil
 }

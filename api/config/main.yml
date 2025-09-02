@@ -98,14 +98,10 @@ definitions:
   # Transfer definitions  
   transferResponse:
     $ref: "../definitions/transfer.yml#/definitions/TransferResponse"
-  transferCompleteResponse:
-    $ref: "../definitions/transfer.yml#/definitions/TransferCompleteResponse"
   transactionHistoryResponse:
     $ref: "../definitions/transfer.yml#/definitions/TransactionHistoryResponse"
   userTransactionHistoryResponse:
     $ref: "../definitions/transfer.yml#/definitions/UserTransactionHistoryResponse"
-  userTransferResponse:
-    $ref: "../definitions/transfer.yml#/definitions/UserTransferResponse"
   # Account definitions
   accountResponse:
     $ref: "../definitions/account.yml#/definitions/AccountResponse"

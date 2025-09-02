@@ -154,6 +154,13 @@ func (c *RabbitMQBatchConsumer) processBatch(ctx context.Context, messages []*Me
 
 	// Step 5: Record performance metrics
 	if c.batchOptimizer != nil {
+		// Get current gas price from blockchain result or estimate
+		gasPrice := 0.0
+		if result.GasUsed > 0 {
+			// Estimate gas price from total cost / gas used
+			gasPrice = float64(result.GasSaved+result.GasUsed) / float64(result.GasUsed)
+		}
+
 		performance := BatchPerformance{
 			BatchSize:        len(messages),
 			ProcessingTime:   processingTime,
@@ -162,6 +169,11 @@ func (c *RabbitMQBatchConsumer) processBatch(ctx context.Context, messages []*Me
 			Timestamp:        time.Now(),
 			ChainID:          group.ChainID,
 			TokenID:          group.TokenID,
+			// Enhanced metrics for chain optimization
+			GasPrice:      gasPrice,
+			BlockNumber:   c.extractBlockNumber(result.BlockNumber),
+			WaitTime:      int(c.maxWaitTime.Milliseconds()),
+			ConsumerCount: c.consumerCount,
 		}
 		c.batchOptimizer.RecordBatchPerformance(performance)
 	}
@@ -1762,4 +1774,22 @@ func (c *RabbitMQBatchConsumer) mapJobTypeToBatchType(job BatchJob) string {
 		// This shouldn't happen in practice since notifications don't create batches
 		return "transfer"
 	}
+}
+
+// extractBlockNumber safely converts *big.Int block number to int64
+// Returns 0 if block number is nil or exceeds int64 range
+func (c *RabbitMQBatchConsumer) extractBlockNumber(blockNumber *big.Int) int64 {
+	if blockNumber == nil {
+		return 0
+	}
+
+	// Check if the big.Int value fits in int64
+	if !blockNumber.IsInt64() {
+		log.Warn().
+			Str("block_number", blockNumber.String()).
+			Msg("Block number exceeds int64 range, using 0")
+		return 0
+	}
+
+	return blockNumber.Int64()
 }

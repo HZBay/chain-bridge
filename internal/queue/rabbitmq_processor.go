@@ -76,6 +76,20 @@ func (r *RabbitMQProcessor) PublishNotification(ctx context.Context, job Notific
 	return r.client.PublishMessage(ctx, queueName, job)
 }
 
+// PublishHealthCheck publishes a health check job to the appropriate queue
+func (r *RabbitMQProcessor) PublishHealthCheck(ctx context.Context, job HealthCheckJob) error {
+	queueName := r.client.GetQueueName(job.GetJobType(), job.GetChainID(), job.GetTokenID())
+
+	log.Debug().
+		Str("queue", queueName).
+		Str("job_id", job.GetID()).
+		Int64("chain_id", job.GetChainID()).
+		Int("token_id", job.GetTokenID()).
+		Msg("Publishing health check job to queue")
+
+	return r.client.PublishMessage(ctx, queueName, job)
+}
+
 // StartBatchConsumer starts the consumer manager which handles per-chain consumers
 func (r *RabbitMQProcessor) StartBatchConsumer(ctx context.Context) error {
 	log.Info().Msg("Starting RabbitMQ batch consumer with per-chain queue management")

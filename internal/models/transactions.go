@@ -48,6 +48,8 @@ type Transaction struct {
 	Metadata           null.JSON         `boil:"metadata" json:"metadata,omitempty" toml:"metadata" yaml:"metadata,omitempty"`
 	CreatedAt          null.Time         `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
 	ConfirmedAt        null.Time         `boil:"confirmed_at" json:"confirmed_at,omitempty" toml:"confirmed_at" yaml:"confirmed_at,omitempty"`
+	FailureReason      null.String       `boil:"failure_reason" json:"failure_reason,omitempty" toml:"failure_reason" yaml:"failure_reason,omitempty"`
+	UpdatedAt          null.Time         `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
 
 	R *transactionR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L transactionL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -77,6 +79,8 @@ var TransactionColumns = struct {
 	Metadata           string
 	CreatedAt          string
 	ConfirmedAt        string
+	FailureReason      string
+	UpdatedAt          string
 }{
 	ID:                 "id",
 	TXID:               "tx_id",
@@ -101,6 +105,8 @@ var TransactionColumns = struct {
 	Metadata:           "metadata",
 	CreatedAt:          "created_at",
 	ConfirmedAt:        "confirmed_at",
+	FailureReason:      "failure_reason",
+	UpdatedAt:          "updated_at",
 }
 
 var TransactionTableColumns = struct {
@@ -127,6 +133,8 @@ var TransactionTableColumns = struct {
 	Metadata           string
 	CreatedAt          string
 	ConfirmedAt        string
+	FailureReason      string
+	UpdatedAt          string
 }{
 	ID:                 "transactions.id",
 	TXID:               "transactions.tx_id",
@@ -151,6 +159,8 @@ var TransactionTableColumns = struct {
 	Metadata:           "transactions.metadata",
 	CreatedAt:          "transactions.created_at",
 	ConfirmedAt:        "transactions.confirmed_at",
+	FailureReason:      "transactions.failure_reason",
+	UpdatedAt:          "transactions.updated_at",
 }
 
 // Generated where
@@ -200,6 +210,8 @@ var TransactionWhere = struct {
 	Metadata           whereHelpernull_JSON
 	CreatedAt          whereHelpernull_Time
 	ConfirmedAt        whereHelpernull_Time
+	FailureReason      whereHelpernull_String
+	UpdatedAt          whereHelpernull_Time
 }{
 	ID:                 whereHelperint{field: "\"transactions\".\"id\""},
 	TXID:               whereHelperstring{field: "\"transactions\".\"tx_id\""},
@@ -224,6 +236,8 @@ var TransactionWhere = struct {
 	Metadata:           whereHelpernull_JSON{field: "\"transactions\".\"metadata\""},
 	CreatedAt:          whereHelpernull_Time{field: "\"transactions\".\"created_at\""},
 	ConfirmedAt:        whereHelpernull_Time{field: "\"transactions\".\"confirmed_at\""},
+	FailureReason:      whereHelpernull_String{field: "\"transactions\".\"failure_reason\""},
+	UpdatedAt:          whereHelpernull_Time{field: "\"transactions\".\"updated_at\""},
 }
 
 // TransactionRels is where relationship names are stored.
@@ -264,9 +278,9 @@ func (r *transactionR) GetToken() *SupportedToken {
 type transactionL struct{}
 
 var (
-	transactionAllColumns            = []string{"id", "tx_id", "operation_id", "user_id", "chain_id", "tx_type", "business_type", "related_user_id", "transfer_direction", "token_id", "amount", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_type", "reason_detail", "metadata", "created_at", "confirmed_at"}
+	transactionAllColumns            = []string{"id", "tx_id", "operation_id", "user_id", "chain_id", "tx_type", "business_type", "related_user_id", "transfer_direction", "token_id", "amount", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_type", "reason_detail", "metadata", "created_at", "confirmed_at", "failure_reason", "updated_at"}
 	transactionColumnsWithoutDefault = []string{"tx_id", "user_id", "chain_id", "tx_type", "business_type", "token_id", "amount", "reason_type"}
-	transactionColumnsWithDefault    = []string{"id", "operation_id", "related_user_id", "transfer_direction", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_detail", "metadata", "created_at", "confirmed_at"}
+	transactionColumnsWithDefault    = []string{"id", "operation_id", "related_user_id", "transfer_direction", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_detail", "metadata", "created_at", "confirmed_at", "failure_reason", "updated_at"}
 	transactionPrimaryKeyColumns     = []string{"id"}
 	transactionGeneratedColumns      = []string{}
 )
@@ -753,6 +767,9 @@ func (o *Transaction) Insert(ctx context.Context, exec boil.ContextExecutor, col
 		if queries.MustTime(o.CreatedAt).IsZero() {
 			queries.SetScanner(&o.CreatedAt, currTime)
 		}
+		if queries.MustTime(o.UpdatedAt).IsZero() {
+			queries.SetScanner(&o.UpdatedAt, currTime)
+		}
 	}
 
 	nzDefaults := queries.NonZeroDefaultSet(transactionColumnsWithDefault, o)
@@ -825,6 +842,12 @@ func (o *Transaction) Insert(ctx context.Context, exec boil.ContextExecutor, col
 // See boil.Columns.UpdateColumnSet documentation to understand column list inference for updates.
 // Update does not automatically update the record in case of default values. Use .Reload() to refresh the records.
 func (o *Transaction) Update(ctx context.Context, exec boil.ContextExecutor, columns boil.Columns) (int64, error) {
+	if !boil.TimestampsAreSkipped(ctx) {
+		currTime := time.Now().In(boil.GetLocation())
+
+		queries.SetScanner(&o.UpdatedAt, currTime)
+	}
+
 	var err error
 	key := makeCacheKey(columns, nil)
 	transactionUpdateCacheMut.RLock()
@@ -958,6 +981,7 @@ func (o *Transaction) Upsert(ctx context.Context, exec boil.ContextExecutor, upd
 		if queries.MustTime(o.CreatedAt).IsZero() {
 			queries.SetScanner(&o.CreatedAt, currTime)
 		}
+		queries.SetScanner(&o.UpdatedAt, currTime)
 	}
 
 	nzDefaults := queries.NonZeroDefaultSet(transactionColumnsWithDefault, o)

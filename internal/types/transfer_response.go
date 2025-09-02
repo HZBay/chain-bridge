@@ -20,59 +20,35 @@ import (
 // swagger:model transferResponse
 type TransferResponse struct {
 
-	// Transfer amount
-	// Example: 50.000000000000000000
+	// batch info
 	// Required: true
-	Amount *string `json:"amount"`
-
-	// Chain ID
-	// Example: 56
-	// Required: true
-	ChainID *int64 `json:"chain_id"`
-
-	// Sender user ID
-	// Example: user_123
-	// Required: true
-	FromUserID *string `json:"from_user_id"`
+	BatchInfo *BatchInfo `json:"batch_info"`
 
 	// Operation ID
 	// Example: op_transfer_001
 	// Required: true
 	OperationID *string `json:"operation_id"`
 
-	// Transfer status
+	// Number of transfers processed
+	// Example: 2
+	// Required: true
+	ProcessedCount *int64 `json:"processed_count"`
+
+	// Overall transfer status
 	// Example: recorded
 	// Required: true
 	Status *string `json:"status"`
 
-	// Recipient user ID
-	// Example: user_456
+	// Results of each transfer operation
 	// Required: true
-	ToUserID *string `json:"to_user_id"`
-
-	// Token symbol
-	// Example: CPOP
-	// Required: true
-	TokenSymbol *string `json:"token_symbol"`
-
-	// transfer records
-	// Required: true
-	TransferRecords []*TransferRecord `json:"transfer_records"`
+	TransferOperations []*TransferOperationResult `json:"transfer_operations"`
 }
 
 // Validate validates this transfer response
 func (m *TransferResponse) Validate(formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.validateAmount(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateChainID(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateFromUserID(formats); err != nil {
+	if err := m.validateBatchInfo(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -80,19 +56,15 @@ func (m *TransferResponse) Validate(formats strfmt.Registry) error {
 		res = append(res, err)
 	}
 
+	if err := m.validateProcessedCount(formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.validateStatus(formats); err != nil {
 		res = append(res, err)
 	}
 
-	if err := m.validateToUserID(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateTokenSymbol(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateTransferRecords(formats); err != nil {
+	if err := m.validateTransferOperations(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -102,28 +74,21 @@ func (m *TransferResponse) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *TransferResponse) validateAmount(formats strfmt.Registry) error {
+func (m *TransferResponse) validateBatchInfo(formats strfmt.Registry) error {
 
-	if err := validate.Required("amount", "body", m.Amount); err != nil {
+	if err := validate.Required("batch_info", "body", m.BatchInfo); err != nil {
 		return err
 	}
 
-	return nil
-}
-
-func (m *TransferResponse) validateChainID(formats strfmt.Registry) error {
-
-	if err := validate.Required("chain_id", "body", m.ChainID); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *TransferResponse) validateFromUserID(formats strfmt.Registry) error {
-
-	if err := validate.Required("from_user_id", "body", m.FromUserID); err != nil {
-		return err
+	if m.BatchInfo != nil {
+		if err := m.BatchInfo.Validate(formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batch_info")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batch_info")
+			}
+			return err
+		}
 	}
 
 	return nil
@@ -132,6 +97,15 @@ func (m *TransferResponse) validateFromUserID(formats strfmt.Registry) error {
 func (m *TransferResponse) validateOperationID(formats strfmt.Registry) error {
 
 	if err := validate.Required("operation_id", "body", m.OperationID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *TransferResponse) validateProcessedCount(formats strfmt.Registry) error {
+
+	if err := validate.Required("processed_count", "body", m.ProcessedCount); err != nil {
 		return err
 	}
 
@@ -147,41 +121,23 @@ func (m *TransferResponse) validateStatus(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *TransferResponse) validateToUserID(formats strfmt.Registry) error {
+func (m *TransferResponse) validateTransferOperations(formats strfmt.Registry) error {
 
-	if err := validate.Required("to_user_id", "body", m.ToUserID); err != nil {
+	if err := validate.Required("transfer_operations", "body", m.TransferOperations); err != nil {
 		return err
 	}
 
-	return nil
-}
-
-func (m *TransferResponse) validateTokenSymbol(formats strfmt.Registry) error {
-
-	if err := validate.Required("token_symbol", "body", m.TokenSymbol); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *TransferResponse) validateTransferRecords(formats strfmt.Registry) error {
-
-	if err := validate.Required("transfer_records", "body", m.TransferRecords); err != nil {
-		return err
-	}
-
-	for i := 0; i < len(m.TransferRecords); i++ {
-		if swag.IsZero(m.TransferRecords[i]) { // not required
+	for i := 0; i < len(m.TransferOperations); i++ {
+		if swag.IsZero(m.TransferOperations[i]) { // not required
 			continue
 		}
 
-		if m.TransferRecords[i] != nil {
-			if err := m.TransferRecords[i].Validate(formats); err != nil {
+		if m.TransferOperations[i] != nil {
+			if err := m.TransferOperations[i].Validate(formats); err != nil {
 				if ve, ok := err.(*errors.Validation); ok {
-					return ve.ValidateName("transfer_records" + "." + strconv.Itoa(i))
+					return ve.ValidateName("transfer_operations" + "." + strconv.Itoa(i))
 				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("transfer_records" + "." + strconv.Itoa(i))
+					return ce.ValidateName("transfer_operations" + "." + strconv.Itoa(i))
 				}
 				return err
 			}
@@ -196,7 +152,11 @@ func (m *TransferResponse) validateTransferRecords(formats strfmt.Registry) erro
 func (m *TransferResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
-	if err := m.contextValidateTransferRecords(ctx, formats); err != nil {
+	if err := m.contextValidateBatchInfo(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.contextValidateTransferOperations(ctx, formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -206,16 +166,32 @@ func (m *TransferResponse) ContextValidate(ctx context.Context, formats strfmt.R
 	return nil
 }
 
-func (m *TransferResponse) contextValidateTransferRecords(ctx context.Context, formats strfmt.Registry) error {
+func (m *TransferResponse) contextValidateBatchInfo(ctx context.Context, formats strfmt.Registry) error {
 
-	for i := 0; i < len(m.TransferRecords); i++ {
+	if m.BatchInfo != nil {
+		if err := m.BatchInfo.ContextValidate(ctx, formats); err != nil {
+			if ve, ok := err.(*errors.Validation); ok {
+				return ve.ValidateName("batch_info")
+			} else if ce, ok := err.(*errors.CompositeError); ok {
+				return ce.ValidateName("batch_info")
+			}
+			return err
+		}
+	}
 
-		if m.TransferRecords[i] != nil {
-			if err := m.TransferRecords[i].ContextValidate(ctx, formats); err != nil {
+	return nil
+}
+
+func (m *TransferResponse) contextValidateTransferOperations(ctx context.Context, formats strfmt.Registry) error {
+
+	for i := 0; i < len(m.TransferOperations); i++ {
+
+		if m.TransferOperations[i] != nil {
+			if err := m.TransferOperations[i].ContextValidate(ctx, formats); err != nil {
 				if ve, ok := err.(*errors.Validation); ok {
-					return ve.ValidateName("transfer_records" + "." + strconv.Itoa(i))
+					return ve.ValidateName("transfer_operations" + "." + strconv.Itoa(i))
 				} else if ce, ok := err.(*errors.CompositeError); ok {
-					return ce.ValidateName("transfer_records" + "." + strconv.Itoa(i))
+					return ce.ValidateName("transfer_operations" + "." + strconv.Itoa(i))
 				}
 				return err
 			}

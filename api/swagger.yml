@@ -1497,10 +1497,10 @@ paths:
     post:
       security:
       - Bearer: []
-      description: 用户间资产转账，支持智能批处理和CPOP优化
+      description: 用户间资产转账，采用批量格式，支持单个或多个转账操作
       tags:
       - cpop
-      summary: User to user transfer
+      summary: User to user transfer (batch format)
       operationId: transferAssets
       parameters:
       - description: Transfer request
@@ -1516,114 +1516,174 @@ paths:
             type: object
             required:
             - operation_id
-            - from_user_id
-            - to_user_id
-            - chain_id
-            - token_symbol
-            - amount
+            - processed_count
             - status
-            - transfer_records
-            - will_be_batched
-            - batch_type
-            - current_batch_size
-            - optimal_batch_size
-            - expected_efficiency
+            - transfer_operations
+            - batch_info
             properties:
-              amount:
-                description: Transfer amount
-                type: string
-                example: "50.000000000000000000"
-              batch_type:
-                description: Batch operation type
-                type: string
-                example: batchTransferFrom
-              chain_id:
-                description: Chain ID
-                type: integer
-                format: int64
-                example: 56
-              current_batch_size:
-                description: Current batch size
-                type: integer
-                example: 12
-              expected_efficiency:
-                description: Expected efficiency
-                type: string
-                example: 74-76%
-              from_user_id:
-                description: Sender user ID
-                type: string
-                example: user_123
+              batch_info:
+                type: object
+                properties:
+                  batch_id:
+                    description: Batch ID
+                    type: string
+                    example: batch_daily_rewards_20241215
+                  batch_type:
+                    description: Batch operation type
+                    type: string
+                    example: batchTransferFrom
+                  current_batch_size:
+                    description: Current batch size
+                    type: integer
+                    example: 24
+                  estimated_gas_savings:
+                    description: Estimated gas savings
+                    type: string
+                    example: 156.80 USD
+                  expected_efficiency:
+                    description: Expected efficiency
+                    type: string
+                    example: 75-77%
+                  next_batch_estimate:
+                    description: Next batch processing estimate
+                    type: string
+                    example: 5-10 minutes
+                  optimal_batch_size:
+                    description: Optimal batch size
+                    type: integer
+                    example: 25
+                  pending_operations:
+                    description: Number of pending operations
+                    type: integer
+                    example: 3
+                  will_be_batched:
+                    description: Whether will be processed in batch
+                    type: boolean
+                    example: true
               operation_id:
                 description: Operation ID
                 type: string
                 example: op_transfer_001
-              optimal_batch_size:
-                description: Optimal batch size
+              processed_count:
+                description: Number of transfers processed
                 type: integer
-                example: 25
+                format: int64
+                example: 2
               status:
-                description: Transfer status
+                description: Overall transfer status
                 type: string
                 example: recorded
-              to_user_id:
-                description: Recipient user ID
-                type: string
-                example: user_456
-              token_symbol:
-                description: Token symbol
-                type: string
-                example: CPOP
-              transfer_records:
+              transfer_operations:
+                description: Results of each transfer operation
                 type: array
                 items:
                   type: object
+                  required:
+                  - from_user_id
+                  - to_user_id
+                  - chain_id
+                  - token_symbol
+                  - amount
+                  - status
+                  - transfer_records
                   properties:
                     amount:
-                      description: Amount with sign
+                      description: Transfer amount
                       type: string
-                      example: "-50.000000000000000000"
-                    transfer_direction:
-                      description: Transfer direction
-                      type: string
-                      enum:
-                      - outgoing
-                      - incoming
-                    tx_id:
-                      description: Transaction ID
-                      type: string
-                      example: tx_outgoing_001
-                    user_id:
-                      description: User ID
+                      example: "50.000000000000000000"
+                    chain_id:
+                      description: Chain ID
+                      type: integer
+                      format: int64
+                      example: 56
+                    from_user_id:
+                      description: Sender user ID
                       type: string
                       example: user_123
-              will_be_batched:
-                description: Whether will be batched
-                type: boolean
-                example: true
+                    memo:
+                      description: Transfer memo
+                      type: string
+                      example: 朋友转账
+                    status:
+                      description: Transfer status
+                      type: string
+                      example: recorded
+                    to_user_id:
+                      description: Recipient user ID
+                      type: string
+                      example: user_456
+                    token_symbol:
+                      description: Token symbol
+                      type: string
+                      example: CPOP
+                    transfer_records:
+                      description: Generated transaction records
+                      type: array
+                      items:
+                        type: object
+                        properties:
+                          amount:
+                            description: Amount with sign
+                            type: string
+                            example: "-50.000000000000000000"
+                          transfer_direction:
+                            description: Transfer direction
+                            type: string
+                            enum:
+                            - outgoing
+                            - incoming
+                          tx_id:
+                            description: Transaction ID
+                            type: string
+                            example: tx_outgoing_001
+                          user_id:
+                            description: User ID
+                            type: string
+                            example: user_123
           examples:
             application/json:
-              amount: "50.000000000000000000"
-              batch_type: batchTransferFrom
-              chain_id: 56
-              current_batch_size: 12
-              expected_efficiency: 74-76%
-              from_user_id: user_123
+              batch_info:
+                batch_type: batchTransferFrom
+                current_batch_size: 15
+                expected_efficiency: 74-76%
+                optimal_batch_size: 25
+                will_be_batched: true
               operation_id: op_transfer_001
-              optimal_batch_size: 25
+              processed_count: 2
               status: recorded
-              to_user_id: user_456
-              token_symbol: CPOP
-              transfer_records:
-              - amount: "-50.000000000000000000"
-                transfer_direction: outgoing
-                tx_id: tx_outgoing_001
-                user_id: user_123
+              transfer_operations:
               - amount: "50.000000000000000000"
-                transfer_direction: incoming
-                tx_id: tx_incoming_001
-                user_id: user_456
-              will_be_batched: true
+                chain_id: 56
+                from_user_id: user_123
+                memo: 朋友转账
+                status: recorded
+                to_user_id: user_456
+                token_symbol: CPOP
+                transfer_records:
+                - amount: "-50.000000000000000000"
+                  transfer_direction: outgoing
+                  tx_id: tx_outgoing_001
+                  user_id: user_123
+                - amount: "50.000000000000000000"
+                  transfer_direction: incoming
+                  tx_id: tx_incoming_001
+                  user_id: user_456
+              - amount: "30.000000000000000000"
+                chain_id: 56
+                from_user_id: user_123
+                memo: 转账给朋友2
+                status: recorded
+                to_user_id: user_789
+                token_symbol: CPOP
+                transfer_records:
+                - amount: "-30.000000000000000000"
+                  transfer_direction: outgoing
+                  tx_id: tx_outgoing_002
+                  user_id: user_123
+                - amount: "30.000000000000000000"
+                  transfer_direction: incoming
+                  tx_id: tx_incoming_002
+                  user_id: user_789
         "400":
           description: Invalid transfer parameters
           schema:
@@ -1632,9 +1692,9 @@ paths:
             application/json:
               errors:
               - code: INVALID_AMOUNT
-                field: amount
+                field: transfers[0].amount
                 message: Transfer amount must be positive
-              message: Invalid transfer amount
+              message: Invalid transfer parameters
         "401":
           description: Unauthorized error
           schema:
@@ -1650,9 +1710,8 @@ paths:
             application/json:
               errors:
               - code: INSUFFICIENT_BALANCE
-                field: from_user_balance
-                message: User balance 30.0 CPOP is insufficient for transfer 50.0
-                  CPOP
+                field: transfers[0].from_user_balance
+                message: User balance 30.0 CPOP is insufficient for transfer amount
               message: Insufficient balance for transfer
         "500":
           description: Internal server error
@@ -4146,16 +4205,85 @@ definitions:
         - mint
         - burn
         - transfer
-  transferCompleteResponse:
+  transferOperation:
     type: object
     required:
-    - data
-    - batch_info
+    - from_user_id
+    - to_user_id
+    - chain_id
+    - token_symbol
+    - amount
     properties:
-      batch_info:
-        $ref: '#/definitions/batchInfo'
-      data:
-        $ref: '#/definitions/transferResponse'
+      amount:
+        description: Transfer amount
+        type: string
+        example: "50.000000000000000000"
+      chain_id:
+        description: Chain ID
+        type: integer
+        format: int64
+        example: 56
+      from_user_id:
+        description: Sender user ID
+        type: string
+        example: user_123
+      memo:
+        description: Transfer memo
+        type: string
+        example: 朋友转账
+      to_user_id:
+        description: Recipient user ID
+        type: string
+        example: user_456
+      token_symbol:
+        description: Token symbol
+        type: string
+        example: CPOP
+  transferOperationResult:
+    type: object
+    required:
+    - from_user_id
+    - to_user_id
+    - chain_id
+    - token_symbol
+    - amount
+    - status
+    - transfer_records
+    properties:
+      amount:
+        description: Transfer amount
+        type: string
+        example: "50.000000000000000000"
+      chain_id:
+        description: Chain ID
+        type: integer
+        format: int64
+        example: 56
+      from_user_id:
+        description: Sender user ID
+        type: string
+        example: user_123
+      memo:
+        description: Transfer memo
+        type: string
+        example: 朋友转账
+      status:
+        description: Transfer status
+        type: string
+        example: recorded
+      to_user_id:
+        description: Recipient user ID
+        type: string
+        example: user_456
+      token_symbol:
+        description: Token symbol
+        type: string
+        example: CPOP
+      transfer_records:
+        description: Generated transaction records
+        type: array
+        items:
+          $ref: '#/definitions/transferRecord'
   transferRecord:
     type: object
     properties:
@@ -4181,86 +4309,48 @@ definitions:
     type: object
     required:
     - operation_id
-    - from_user_id
-    - to_user_id
-    - chain_id
-    - token_symbol
-    - amount
+    - transfers
     properties:
-      amount:
-        description: Transfer amount
-        type: string
-        example: "50.000000000000000000"
-      chain_id:
-        description: Chain ID
-        type: integer
-        format: int64
-        example: 56
-      from_user_id:
-        description: Sender user ID
-        type: string
-        example: user_123
-      memo:
-        description: Transfer memo
-        type: string
-        example: 朋友转账
+      batch_preference:
+        $ref: '#/definitions/batchPreference'
       operation_id:
         description: Operation ID for idempotency
         type: string
         example: op_transfer_001
-      to_user_id:
-        description: Recipient user ID
-        type: string
-        example: user_456
-      token_symbol:
-        description: Token symbol
-        type: string
-        example: CPOP
+      transfers:
+        description: Array of transfer operations
+        type: array
+        items:
+          $ref: '#/definitions/transferOperation'
   transferResponse:
     type: object
     required:
     - operation_id
-    - from_user_id
-    - to_user_id
-    - chain_id
-    - token_symbol
-    - amount
+    - processed_count
     - status
-    - transfer_records
+    - transfer_operations
+    - batch_info
     properties:
-      amount:
-        description: Transfer amount
-        type: string
-        example: "50.000000000000000000"
-      chain_id:
-        description: Chain ID
-        type: integer
-        format: int64
-        example: 56
-      from_user_id:
-        description: Sender user ID
-        type: string
-        example: user_123
+      batch_info:
+        $ref: '#/definitions/batchInfo'
       operation_id:
         description: Operation ID
         type: string
         example: op_transfer_001
+      processed_count:
+        description: Number of transfers processed
+        type: integer
+        format: int64
+        example: 2
       status:
-        description: Transfer status
+        description: Overall transfer status
         type: string
         example: recorded
-      to_user_id:
-        description: Recipient user ID
-        type: string
-        example: user_456
-      token_symbol:
-        description: Token symbol
-        type: string
-        example: CPOP
-      transfer_records:
+      transfer_operations:
+        description: Results of each transfer operation
         type: array
         items:
-          $ref: '#/definitions/transferRecord'
+          $ref: '#/definitions/transferOperationResult'
   updateChainRequest:
     type: object
     properties:
@@ -4459,76 +4549,6 @@ definitions:
         description: User ID
         type: string
         example: user_123
-  userTransferResponse:
-    type: object
-    required:
-    - operation_id
-    - from_user_id
-    - to_user_id
-    - chain_id
-    - token_symbol
-    - amount
-    - status
-    - transfer_records
-    - will_be_batched
-    - batch_type
-    - current_batch_size
-    - optimal_batch_size
-    - expected_efficiency
-    properties:
-      amount:
-        description: Transfer amount
-        type: string
-        example: "50.000000000000000000"
-      batch_type:
-        description: Batch operation type
-        type: string
-        example: batchTransferFrom
-      chain_id:
-        description: Chain ID
-        type: integer
-        format: int64
-        example: 56
-      current_batch_size:
-        description: Current batch size
-        type: integer
-        example: 12
-      expected_efficiency:
-        description: Expected efficiency
-        type: string
-        example: 74-76%
-      from_user_id:
-        description: Sender user ID
-        type: string
-        example: user_123
-      operation_id:
-        description: Operation ID
-        type: string
-        example: op_transfer_001
-      optimal_batch_size:
-        description: Optimal batch size
-        type: integer
-        example: 25
-      status:
-        description: Transfer status
-        type: string
-        example: recorded
-      to_user_id:
-        description: Recipient user ID
-        type: string
-        example: user_456
-      token_symbol:
-        description: Token symbol
-        type: string
-        example: CPOP
-      transfer_records:
-        type: array
-        items:
-          $ref: '#/definitions/transferRecord'
-      will_be_batched:
-        description: Whether will be batched
-        type: boolean
-        example: true
 responses:
   AuthForbiddenResponse:
     description: PublicHTTPError, type `USER_DEACTIVATED`/`NOT_LOCAL_USER`

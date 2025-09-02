@@ -245,7 +245,12 @@ func (s *service) AdjustAssets(ctx context.Context, req *types.AssetAdjustReques
 			// Note: We don't return error here because transactions are already recorded
 			// The batch processor failure doesn't mean the adjustment failed
 
-			// TODO: 是否要将对应的transaction设置为failed
+			// Mark corresponding transaction as failed since it cannot be processed
+			if updateErr := s.markTransactionAsFailed(context.Background(), job.ID, "queue_publish_failed"); updateErr != nil {
+				log.Error().Err(updateErr).
+					Str("job_id", job.ID).
+					Msg("Failed to mark transaction as failed")
+			}
 		}
 	}
 
@@ -721,6 +726,84 @@ func (s *service) estimateNextBatch(pendingCount int64) string {
 		return "5-15 minutes"
 	}
 	return "2-5 minutes"
+}
+
+// markTransactionAsFailed marks a transaction as failed in the database and sends notification
+func (s *service) markTransactionAsFailed(ctx context.Context, txID string, failureReason string) error {
+	// Get transaction details before updating
+	tx, err := models.Transactions(
+		models.TransactionWhere.TXID.EQ(txID),
+	).One(ctx, s.db)
+	if err != nil {
+		return fmt.Errorf("failed to fetch transaction for notification: %w", err)
+	}
+
+	query := `
+		UPDATE transactions 
+		SET 
+			status = 'failed',
+			failure_reason = $2
+		WHERE tx_id = $1`
+
+	_, err = s.db.ExecContext(ctx, query, txID, failureReason)
+	if err != nil {
+		return fmt.Errorf("failed to mark transaction as failed: %w", err)
+	}
+
+	// Send transaction status change notification
+	s.sendTransactionFailedNotification(ctx, tx, failureReason)
+
+	log.Info().
+		Str("tx_id", txID).
+		Str("failure_reason", failureReason).
+		Msg("Transaction marked as failed")
+
+	return nil
+}
+
+// sendTransactionFailedNotification sends notification when transaction fails
+func (s *service) sendTransactionFailedNotification(ctx context.Context, tx *models.Transaction, failureReason string) {
+	if s.batchProcessor == nil {
+		return // No notification processor available, skip silently
+	}
+
+	// Build notification data following the established patterns from the notification guide
+	notificationData := map[string]interface{}{
+		"type":           "transaction_status_changed",
+		"transaction_id": tx.TXID,
+		"user_id":        tx.UserID,
+		"old_status":     "pending", // Assuming original status was pending
+		"new_status":     "failed",
+		"failure_reason": failureReason,
+		"chain_id":       tx.ChainID,
+		"token_id":       tx.TokenID,
+		"business_type":  tx.BusinessType,
+		"tx_type":        tx.TXType,
+		"timestamp":      time.Now().Unix(), // Use Unix timestamp for consistency
+	}
+
+	// Add amount if available
+	if tx.Amount.Big != nil {
+		notificationData["amount"] = tx.Amount.Big.String()
+	}
+
+	notification := queue.NotificationJob{
+		ID:        uuid.New().String(),
+		JobType:   queue.JobTypeNotification,
+		UserID:    tx.UserID,
+		EventType: "transaction_status_changed", // Keep this for routing purposes
+		Data:      notificationData,
+		Priority:  queue.PriorityHigh, // High priority for failure notifications
+		CreatedAt: time.Now(),
+	}
+
+	if err := s.batchProcessor.PublishNotification(ctx, notification); err != nil {
+		log.Warn().Err(err).
+			Str("transaction_id", tx.TXID).
+			Str("user_id", tx.UserID).
+			Str("failure_reason", failureReason).
+			Msg("Failed to send transaction failed notification")
+	}
 }
 
 // Helper functions for creating pointers

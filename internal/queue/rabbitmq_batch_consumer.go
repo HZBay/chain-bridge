@@ -233,6 +233,103 @@ func (c *RabbitMQBatchConsumer) GetBatchConfig() map[string]interface{} {
 	}
 }
 
+// ApplyOptimizerRecommendations applies recommendations from the batch optimizer
+func (c *RabbitMQBatchConsumer) ApplyOptimizerRecommendations() {
+	if c.batchOptimizer == nil {
+		return
+	}
+
+	// Get optimization recommendations for all tokens on this chain
+	// Using token_id = 1 as a representative token for chain-level optimization
+	recommendation := c.batchOptimizer.GetOptimizationRecommendation(c.chainID, 1)
+
+	if recommendation == nil {
+		return
+	}
+
+	// Apply batch size recommendation if it's within database constraints
+	if recommendation.RecommendedSize != c.maxBatchSize &&
+		recommendation.RecommendedSize >= c.minBatchSize &&
+		recommendation.ExpectedImprovement > 5.0 { // Only apply if improvement > 5%
+
+		old := c.maxBatchSize
+		c.maxBatchSize = recommendation.RecommendedSize
+
+		log.Info().
+			Int64("chain_id", c.chainID).
+			Int("old_batch_size", old).
+			Int("new_batch_size", c.maxBatchSize).
+			Float64("expected_improvement", recommendation.ExpectedImprovement).
+			Float64("confidence", recommendation.Confidence).
+			Str("reason", recommendation.Reason).
+			Msg("Applied optimizer batch size recommendation")
+	}
+
+	// Apply wait time recommendation if significantly different
+	if recommendation.RecommendedWaitTime > 0 {
+		newWaitTime := time.Duration(recommendation.RecommendedWaitTime) * time.Millisecond
+		if abs(int(newWaitTime.Milliseconds())-int(c.maxWaitTime.Milliseconds())) > 2000 { // >2s difference
+			old := c.maxWaitTime
+			c.maxWaitTime = newWaitTime
+
+			log.Info().
+				Int64("chain_id", c.chainID).
+				Dur("old_wait_time", old).
+				Dur("new_wait_time", c.maxWaitTime).
+				Str("chain_characteristics", recommendation.ChainCharacteristics).
+				Msg("Applied optimizer wait time recommendation")
+		}
+	}
+
+	// Log consumer count recommendation (cannot dynamically change running consumers)
+	if recommendation.RecommendedConsumerCount != c.consumerCount {
+		log.Info().
+			Int64("chain_id", c.chainID).
+			Int("current_consumers", c.consumerCount).
+			Int("recommended_consumers", recommendation.RecommendedConsumerCount).
+			Str("chain_characteristics", recommendation.ChainCharacteristics).
+			Msg("Consumer count recommendation (requires restart to apply)")
+	}
+}
+
+// abs returns absolute value of an integer
+func abs(x int) int {
+	if x < 0 {
+		return -x
+	}
+	return x
+}
+
+// runOptimizationWorker periodically applies optimizer recommendations
+func (c *RabbitMQBatchConsumer) runOptimizationWorker(ctx context.Context) {
+	defer c.workerWg.Done()
+
+	// Apply optimization every 10 minutes
+	ticker := time.NewTicker(10 * time.Minute)
+	defer ticker.Stop()
+
+	log.Info().
+		Int64("chain_id", c.chainID).
+		Msg("Starting optimization worker for chain")
+
+	// Apply initial optimization after 2 minutes (allow time for data collection)
+	initialDelay := time.After(2 * time.Minute)
+
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-c.stopChan:
+			return
+		case <-initialDelay:
+			c.ApplyOptimizerRecommendations()
+			initialDelay = nil // Only fire once
+		case <-ticker.C:
+			c.ApplyOptimizerRecommendations()
+		}
+	}
+}
+
 // ============================================================================
 // LIFECYCLE MANAGEMENT
 // ============================================================================
@@ -250,6 +347,12 @@ func (c *RabbitMQBatchConsumer) Start(ctx context.Context) error {
 	// Start message aggregator
 	c.workerWg.Add(1)
 	go c.runMessageAggregator(ctx)
+
+	// Start optimization application worker if optimizer is available
+	if c.batchOptimizer != nil {
+		c.workerWg.Add(1)
+		go c.runOptimizationWorker(ctx)
+	}
 
 	// Start consumer workers for this chain's queues
 	for i := 0; i < c.consumerCount; i++ {

@@ -15,50 +15,29 @@ import (
 	"github.com/go-openapi/validate"
 )
 
-// UserTransferResponse user transfer response
+// TransferOperationResult transfer operation result
 //
-// swagger:model userTransferResponse
-type UserTransferResponse struct {
+// swagger:model transferOperationResult
+type TransferOperationResult struct {
 
 	// Transfer amount
 	// Example: 50.000000000000000000
 	// Required: true
 	Amount *string `json:"amount"`
 
-	// Batch operation type
-	// Example: batchTransferFrom
-	// Required: true
-	BatchType *string `json:"batch_type"`
-
 	// Chain ID
 	// Example: 56
 	// Required: true
 	ChainID *int64 `json:"chain_id"`
-
-	// Current batch size
-	// Example: 12
-	// Required: true
-	CurrentBatchSize *int64 `json:"current_batch_size"`
-
-	// Expected efficiency
-	// Example: 74-76%
-	// Required: true
-	ExpectedEfficiency *string `json:"expected_efficiency"`
 
 	// Sender user ID
 	// Example: user_123
 	// Required: true
 	FromUserID *string `json:"from_user_id"`
 
-	// Operation ID
-	// Example: op_transfer_001
-	// Required: true
-	OperationID *string `json:"operation_id"`
-
-	// Optimal batch size
-	// Example: 25
-	// Required: true
-	OptimalBatchSize *int64 `json:"optimal_batch_size"`
+	// Transfer memo
+	// Example: 朋友转账
+	Memo string `json:"memo,omitempty"`
 
 	// Transfer status
 	// Example: recorded
@@ -75,25 +54,16 @@ type UserTransferResponse struct {
 	// Required: true
 	TokenSymbol *string `json:"token_symbol"`
 
-	// transfer records
+	// Generated transaction records
 	// Required: true
 	TransferRecords []*TransferRecord `json:"transfer_records"`
-
-	// Whether will be batched
-	// Example: true
-	// Required: true
-	WillBeBatched *bool `json:"will_be_batched"`
 }
 
-// Validate validates this user transfer response
-func (m *UserTransferResponse) Validate(formats strfmt.Registry) error {
+// Validate validates this transfer operation result
+func (m *TransferOperationResult) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateAmount(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateBatchType(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -101,23 +71,7 @@ func (m *UserTransferResponse) Validate(formats strfmt.Registry) error {
 		res = append(res, err)
 	}
 
-	if err := m.validateCurrentBatchSize(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateExpectedEfficiency(formats); err != nil {
-		res = append(res, err)
-	}
-
 	if err := m.validateFromUserID(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateOperationID(formats); err != nil {
-		res = append(res, err)
-	}
-
-	if err := m.validateOptimalBatchSize(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -137,17 +91,13 @@ func (m *UserTransferResponse) Validate(formats strfmt.Registry) error {
 		res = append(res, err)
 	}
 
-	if err := m.validateWillBeBatched(formats); err != nil {
-		res = append(res, err)
-	}
-
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
 	return nil
 }
 
-func (m *UserTransferResponse) validateAmount(formats strfmt.Registry) error {
+func (m *TransferOperationResult) validateAmount(formats strfmt.Registry) error {
 
 	if err := validate.Required("amount", "body", m.Amount); err != nil {
 		return err
@@ -156,16 +106,7 @@ func (m *UserTransferResponse) validateAmount(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *UserTransferResponse) validateBatchType(formats strfmt.Registry) error {
-
-	if err := validate.Required("batch_type", "body", m.BatchType); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *UserTransferResponse) validateChainID(formats strfmt.Registry) error {
+func (m *TransferOperationResult) validateChainID(formats strfmt.Registry) error {
 
 	if err := validate.Required("chain_id", "body", m.ChainID); err != nil {
 		return err
@@ -174,25 +115,7 @@ func (m *UserTransferResponse) validateChainID(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *UserTransferResponse) validateCurrentBatchSize(formats strfmt.Registry) error {
-
-	if err := validate.Required("current_batch_size", "body", m.CurrentBatchSize); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *UserTransferResponse) validateExpectedEfficiency(formats strfmt.Registry) error {
-
-	if err := validate.Required("expected_efficiency", "body", m.ExpectedEfficiency); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *UserTransferResponse) validateFromUserID(formats strfmt.Registry) error {
+func (m *TransferOperationResult) validateFromUserID(formats strfmt.Registry) error {
 
 	if err := validate.Required("from_user_id", "body", m.FromUserID); err != nil {
 		return err
@@ -201,25 +124,7 @@ func (m *UserTransferResponse) validateFromUserID(formats strfmt.Registry) error
 	return nil
 }
 
-func (m *UserTransferResponse) validateOperationID(formats strfmt.Registry) error {
-
-	if err := validate.Required("operation_id", "body", m.OperationID); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *UserTransferResponse) validateOptimalBatchSize(formats strfmt.Registry) error {
-
-	if err := validate.Required("optimal_batch_size", "body", m.OptimalBatchSize); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-func (m *UserTransferResponse) validateStatus(formats strfmt.Registry) error {
+func (m *TransferOperationResult) validateStatus(formats strfmt.Registry) error {
 
 	if err := validate.Required("status", "body", m.Status); err != nil {
 		return err
@@ -228,7 +133,7 @@ func (m *UserTransferResponse) validateStatus(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *UserTransferResponse) validateToUserID(formats strfmt.Registry) error {
+func (m *TransferOperationResult) validateToUserID(formats strfmt.Registry) error {
 
 	if err := validate.Required("to_user_id", "body", m.ToUserID); err != nil {
 		return err
@@ -237,7 +142,7 @@ func (m *UserTransferResponse) validateToUserID(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *UserTransferResponse) validateTokenSymbol(formats strfmt.Registry) error {
+func (m *TransferOperationResult) validateTokenSymbol(formats strfmt.Registry) error {
 
 	if err := validate.Required("token_symbol", "body", m.TokenSymbol); err != nil {
 		return err
@@ -246,7 +151,7 @@ func (m *UserTransferResponse) validateTokenSymbol(formats strfmt.Registry) erro
 	return nil
 }
 
-func (m *UserTransferResponse) validateTransferRecords(formats strfmt.Registry) error {
+func (m *TransferOperationResult) validateTransferRecords(formats strfmt.Registry) error {
 
 	if err := validate.Required("transfer_records", "body", m.TransferRecords); err != nil {
 		return err
@@ -273,17 +178,8 @@ func (m *UserTransferResponse) validateTransferRecords(formats strfmt.Registry) 
 	return nil
 }
 
-func (m *UserTransferResponse) validateWillBeBatched(formats strfmt.Registry) error {
-
-	if err := validate.Required("will_be_batched", "body", m.WillBeBatched); err != nil {
-		return err
-	}
-
-	return nil
-}
-
-// ContextValidate validate this user transfer response based on the context it is used
-func (m *UserTransferResponse) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+// ContextValidate validate this transfer operation result based on the context it is used
+func (m *TransferOperationResult) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.contextValidateTransferRecords(ctx, formats); err != nil {
@@ -296,7 +192,7 @@ func (m *UserTransferResponse) ContextValidate(ctx context.Context, formats strf
 	return nil
 }
 
-func (m *UserTransferResponse) contextValidateTransferRecords(ctx context.Context, formats strfmt.Registry) error {
+func (m *TransferOperationResult) contextValidateTransferRecords(ctx context.Context, formats strfmt.Registry) error {
 
 	for i := 0; i < len(m.TransferRecords); i++ {
 
@@ -317,7 +213,7 @@ func (m *UserTransferResponse) contextValidateTransferRecords(ctx context.Contex
 }
 
 // MarshalBinary interface implementation
-func (m *UserTransferResponse) MarshalBinary() ([]byte, error) {
+func (m *TransferOperationResult) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -325,8 +221,8 @@ func (m *UserTransferResponse) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *UserTransferResponse) UnmarshalBinary(b []byte) error {
-	var res UserTransferResponse
+func (m *TransferOperationResult) UnmarshalBinary(b []byte) error {
+	var res TransferOperationResult
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}

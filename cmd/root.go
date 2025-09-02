@@ -89,6 +89,7 @@ func newRabbitMQStatusCmd() *cobra.Command {
 				fmt.Sprintf("%s.notification.0.0", cfg.RabbitMQ.QueuePrefix),
 				fmt.Sprintf("%s.transfer.11155111.1", cfg.RabbitMQ.QueuePrefix),
 				fmt.Sprintf("%s.asset_adjust.11155111.1", cfg.RabbitMQ.QueuePrefix),
+				fmt.Sprintf("%s.health_check.999999.999999", cfg.RabbitMQ.QueuePrefix), // Health check queue
 			}
 
 			fmt.Println("\n📋 Queue Status:")

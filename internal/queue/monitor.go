@@ -87,11 +87,11 @@ func (m *Monitor) GetDetailedStats() map[string]Stats {
 // HealthCheck performs a health check on the queue system
 func (m *Monitor) HealthCheck(ctx context.Context) error {
 	// Create a test job to verify queue is working
-	testJob := TransferJob{
+	testJob := HealthCheckJob{
 		ID:           "health-check-" + time.Now().Format("20060102150405"),
-		JobType:      JobTypeTransfer,
-		ChainID:      1, // Test chain
-		TokenID:      1, // Test token
+		JobType:      JobTypeHealthCheck,
+		ChainID:      999999, // Use a special health check chain ID
+		TokenID:      999999, // Use a special health check token ID
 		FromUserID:   "health-check-user",
 		ToUserID:     "health-check-user",
 		Amount:       "0.000001", // Minimal amount
@@ -102,7 +102,7 @@ func (m *Monitor) HealthCheck(ctx context.Context) error {
 	}
 
 	// Try to publish test job
-	if err := m.processor.PublishTransfer(ctx, testJob); err != nil {
+	if err := m.processor.PublishHealthCheck(ctx, testJob); err != nil {
 		log.Error().Err(err).Msg("Queue health check failed - unable to publish test job")
 		return err
 	}

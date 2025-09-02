@@ -106,7 +106,9 @@ func (s *Server) Ready() bool {
 		s.Local != nil &&
 		s.AccountService != nil &&
 		s.BatchProcessor != nil &&
-		s.PaymentEventService != nil
+		s.PaymentEventService != nil &&
+		s.BatchOptimizer != nil &&
+		s.QueueMonitor != nil
 }
 
 func (s *Server) InitCmd() *Server {
@@ -207,6 +209,9 @@ func (s *Server) InitTokensService() error {
 func (s *Server) InitBatchProcessor() error {
 	var err error
 
+	// Initialize queue monitor first (will be passed to optimizer)
+	s.QueueMonitor = queue.NewMonitor(nil) // Will set processor later
+
 	// Initialize batch optimizer with chains service
 	s.BatchOptimizer = queue.NewBatchOptimizer(s.QueueMonitor, s.ChainsService)
 
@@ -221,13 +226,15 @@ func (s *Server) InitBatchProcessor() error {
 		if err != nil {
 			return fmt.Errorf("failed to create batch processor: %w", err)
 		}
-	}
 
-	// Initialize queue monitor
-	s.QueueMonitor = queue.NewMonitor(s.BatchProcessor)
+		// Update monitor with the actual processor
+		s.QueueMonitor = queue.NewMonitor(s.BatchProcessor)
+	}
 
 	log.Info().
 		Bool("rabbitmq_enabled", s.Config.RabbitMQ.Enabled).
+		Bool("optimizer_enabled", s.BatchOptimizer != nil).
+		Bool("monitor_enabled", s.QueueMonitor != nil).
 		Msg("Batch processor with monitoring and optimization initialized")
 
 	return nil
@@ -371,6 +378,26 @@ func (s *Server) Start() error {
 		} else {
 			log.Info().Msg("Batch processor started")
 		}
+	}
+
+	// Start adaptive batch optimization if optimizer is available
+	if s.BatchOptimizer != nil {
+		go func() {
+			ctx := context.Background()
+			// Run optimization every 5 minutes
+			s.BatchOptimizer.StartAdaptiveOptimization(ctx, 5*time.Minute)
+		}()
+		log.Info().Msg("Adaptive batch optimization started")
+	}
+
+	// Start queue monitoring if monitor is available
+	if s.QueueMonitor != nil {
+		go func() {
+			ctx := context.Background()
+			// Run health checks every 2 minutes
+			s.QueueMonitor.StartPeriodicHealthCheck(ctx, 2*time.Minute)
+		}()
+		log.Info().Msg("Queue monitoring started")
 	}
 
 	return s.Echo.Start(s.Config.Echo.ListenAddress)

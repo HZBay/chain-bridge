@@ -24,6 +24,7 @@ const (
 	JobTypeTransfer     JobType = "transfer"
 	JobTypeAssetAdjust  JobType = "asset_adjust"
 	JobTypeNotification JobType = "notification"
+	JobTypeHealthCheck  JobType = "health_check"
 )
 
 // Priority defines job priority levels
@@ -101,6 +102,28 @@ func (n NotificationJob) GetJobType() JobType     { return n.JobType }
 func (n NotificationJob) GetPriority() Priority   { return n.Priority }
 func (n NotificationJob) GetCreatedAt() time.Time { return n.CreatedAt }
 
+// HealthCheckJob represents a health check operation for queue monitoring
+type HealthCheckJob struct {
+	ID           string    `json:"id"`
+	JobType      JobType   `json:"job_type"`
+	ChainID      int64     `json:"chain_id"`
+	TokenID      int       `json:"token_id"`
+	FromUserID   string    `json:"from_user_id"`
+	ToUserID     string    `json:"to_user_id"`
+	Amount       string    `json:"amount"`
+	BusinessType string    `json:"business_type"`
+	ReasonType   string    `json:"reason_type"`
+	Priority     Priority  `json:"priority"`
+	CreatedAt    time.Time `json:"created_at"`
+}
+
+func (h HealthCheckJob) GetID() string           { return h.ID }
+func (h HealthCheckJob) GetChainID() int64       { return h.ChainID }
+func (h HealthCheckJob) GetTokenID() int         { return h.TokenID }
+func (h HealthCheckJob) GetJobType() JobType     { return h.JobType }
+func (h HealthCheckJob) GetPriority() Priority   { return h.Priority }
+func (h HealthCheckJob) GetCreatedAt() time.Time { return h.CreatedAt }
+
 // Stats provides statistics about queue performance
 type Stats struct {
 	QueueName       string        `json:"queue_name"`
@@ -118,6 +141,7 @@ type BatchProcessor interface {
 	PublishTransfer(ctx context.Context, job TransferJob) error
 	PublishAssetAdjust(ctx context.Context, job AssetAdjustJob) error
 	PublishNotification(ctx context.Context, job NotificationJob) error
+	PublishHealthCheck(ctx context.Context, job HealthCheckJob) error
 
 	// Consumer management
 	StartBatchConsumer(ctx context.Context) error

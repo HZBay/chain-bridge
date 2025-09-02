@@ -115,6 +115,27 @@ func (h *HybridBatchProcessor) PublishNotification(ctx context.Context, job Noti
 	return err
 }
 
+// PublishHealthCheck publishes a health check job using the selected processor
+func (h *HybridBatchProcessor) PublishHealthCheck(ctx context.Context, job HealthCheckJob) error {
+	processor, processorType := h.selectProcessor()
+
+	startTime := time.Now()
+	err := processor.PublishHealthCheck(ctx, job)
+	latency := time.Since(startTime)
+
+	// Update metrics
+	h.updateMetrics(processorType, err == nil, latency)
+
+	log.Debug().
+		Str("processor", processorType).
+		Str("job_id", job.ID).
+		Err(err).
+		Dur("latency", latency).
+		Msg("Health check job published")
+
+	return err
+}
+
 // selectProcessor returns the RabbitMQ processor (simplified implementation)
 func (h *HybridBatchProcessor) selectProcessor() (BatchProcessor, string) {
 	// Always use RabbitMQ processor - simplified approach
