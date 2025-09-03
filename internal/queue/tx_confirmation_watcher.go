@@ -12,6 +12,7 @@ import (
 	"github.com/ethereum/go-ethereum"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/core/types"
+	"github.com/google/uuid"
 	"github.com/rs/zerolog/log"
 	"github.com/shopspring/decimal"
 
@@ -21,7 +22,8 @@ import (
 // TxConfirmationWatcher monitors blockchain transactions for confirmations
 type TxConfirmationWatcher struct {
 	db          *sql.DB
-	cpopCallers map[int64]*blockchain.CPOPBatchCaller
+	unifiedCallers map[int64]*blockchain.UnifiedBatchCaller // Changed from cpopCallers
+	notificationProcessor NotificationProcessor // Added for sending success notifications
 
 	// Configuration
 	confirmationBlocks int
@@ -36,6 +38,11 @@ type TxConfirmationWatcher struct {
 	processedCount int64
 	failedCount    int64
 	startedAt      time.Time
+}
+
+// NotificationProcessor defines the interface for sending notifications
+type NotificationProcessor interface {
+	PublishNotification(ctx context.Context, notification NotificationJob) error
 }
 
 // PendingBatch represents a batch waiting for confirmation
@@ -59,16 +66,21 @@ type BatchOperation struct {
 	TxType        string          `db:"tx_type"`
 	Amount        decimal.Decimal `db:"amount"`
 	Direction     sql.NullString  `db:"transfer_direction"`
+	// NFT-specific fields
+	CollectionID  sql.NullString  `db:"collection_id"`
+	NFTTokenID    sql.NullString  `db:"nft_token_id"`
 }
 
 // NewTxConfirmationWatcher creates a new transaction confirmation watcher
 func NewTxConfirmationWatcher(
 	db *sql.DB,
-	cpopCallers map[int64]*blockchain.CPOPBatchCaller,
+	unifiedCallers map[int64]*blockchain.UnifiedBatchCaller,
+	notificationProcessor NotificationProcessor,
 ) *TxConfirmationWatcher {
 	return &TxConfirmationWatcher{
 		db:          db,
-		cpopCallers: cpopCallers,
+		unifiedCallers: unifiedCallers,
+		notificationProcessor: notificationProcessor,
 
 		// Default configuration
 		confirmationBlocks: 6,                // 6 blocks for confirmation
@@ -267,7 +279,7 @@ func (w *TxConfirmationWatcher) getBatchOperations(ctx context.Context, batchID 
 	query := `
 		SELECT 
 			tx_id, user_id, related_user_id, tx_type, 
-			amount, transfer_direction
+			amount, transfer_direction, collection_id, nft_token_id
 		FROM transactions 
 		WHERE batch_id = $1 
 		ORDER BY created_at ASC`
@@ -288,6 +300,8 @@ func (w *TxConfirmationWatcher) getBatchOperations(ctx context.Context, batchID 
 			&op.TxType,
 			&op.Amount,
 			&op.Direction,
+			&op.CollectionID,
+			&op.NFTTokenID,
 		)
 		if err != nil {
 			log.Error().Err(err).Msg("Failed to scan operation row")
@@ -307,12 +321,12 @@ func (w *TxConfirmationWatcher) processBatchConfirmation(ctx context.Context, ba
 		Str("tx_hash", batch.TxHash).
 		Msg("Processing batch confirmation")
 
-	caller := w.cpopCallers[batch.ChainID]
+	caller := w.unifiedCallers[batch.ChainID]
 	if caller == nil {
 		log.Error().
 			Int64("chain_id", batch.ChainID).
 			Str("batch_id", batch.BatchID).
-			Msg("No CPOP caller found for chain")
+			Msg("No unified caller found for chain")
 		w.markBatchAsFailed(ctx, batch, "no_caller_found")
 		return
 	}
@@ -403,6 +417,12 @@ func (w *TxConfirmationWatcher) confirmBatch(ctx context.Context, batch PendingB
 		return fmt.Errorf("failed to finalize user balances: %w", err)
 	}
 
+	// Finalize NFT assets for NFT operations
+	err = w.finalizeNFTAssetsForBatch(tx, batch)
+	if err != nil {
+		return fmt.Errorf("failed to finalize NFT assets: %w", err)
+	}
+
 	if err = tx.Commit(); err != nil {
 		return fmt.Errorf("failed to commit batch confirmation: %w", err)
 	}
@@ -412,6 +432,9 @@ func (w *TxConfirmationWatcher) confirmBatch(ctx context.Context, batch PendingB
 		Str("tx_hash", batch.TxHash).
 		Int("operations", len(batch.Operations)).
 		Msg("Batch successfully confirmed")
+
+	// Send success notifications after successful confirmation
+	w.sendSuccessNotifications(ctx, batch)
 
 	return nil
 }
@@ -895,4 +918,203 @@ func (w *TxConfirmationWatcher) IsHealthy() bool {
 
 	err := w.db.PingContext(ctx)
 	return err == nil
+}
+
+// finalizeNFTAssetsForBatch finalizes NFT assets for all NFT operations in the batch
+func (w *TxConfirmationWatcher) finalizeNFTAssetsForBatch(tx *sql.Tx, batch PendingBatch) error {
+	for _, op := range batch.Operations {
+		// Only process NFT operations
+		switch op.TxType {
+		case "nft_mint":
+			err := w.finalizeNFTForMint(tx, op, batch.ChainID)
+			if err != nil {
+				return fmt.Errorf("failed to finalize NFT mint: %w", err)
+			}
+		case "nft_burn":
+			err := w.finalizeNFTForBurn(tx, op, batch.ChainID)
+			if err != nil {
+				return fmt.Errorf("failed to finalize NFT burn: %w", err)
+			}
+		case "nft_transfer":
+			err := w.finalizeNFTForTransfer(tx, op, batch.ChainID)
+			if err != nil {
+				return fmt.Errorf("failed to finalize NFT transfer: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
+// finalizeNFTForMint finalizes NFT asset after successful mint
+func (w *TxConfirmationWatcher) finalizeNFTForMint(tx *sql.Tx, op BatchOperation, chainID int64) error {
+	if !op.CollectionID.Valid || !op.NFTTokenID.Valid {
+		return fmt.Errorf("NFT mint operation missing collection_id or nft_token_id")
+	}
+
+	// Update NFT asset to minted status
+	query := `
+		UPDATE nft_assets
+		SET 
+			is_minted = true,
+			is_locked = false,
+			updated_at = $4
+		WHERE collection_id = $1 AND token_id = $2 AND owner_user_id = $3`
+
+	_, err := tx.Exec(query, op.CollectionID.String, op.NFTTokenID.String, op.UserID, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to finalize NFT mint: %w", err)
+	}
+
+	return nil
+}
+
+// finalizeNFTForBurn finalizes NFT asset after successful burn
+func (w *TxConfirmationWatcher) finalizeNFTForBurn(tx *sql.Tx, op BatchOperation, chainID int64) error {
+	if !op.CollectionID.Valid || !op.NFTTokenID.Valid {
+		return fmt.Errorf("NFT burn operation missing collection_id or nft_token_id")
+	}
+
+	// Update NFT asset to burned status
+	query := `
+		UPDATE nft_assets
+		SET 
+			is_burned = true,
+			is_locked = false,
+			updated_at = $4
+		WHERE collection_id = $1 AND token_id = $2 AND owner_user_id = $3`
+
+	_, err := tx.Exec(query, op.CollectionID.String, op.NFTTokenID.String, op.UserID, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to finalize NFT burn: %w", err)
+	}
+
+	return nil
+}
+
+// finalizeNFTForTransfer finalizes NFT asset after successful transfer
+func (w *TxConfirmationWatcher) finalizeNFTForTransfer(tx *sql.Tx, op BatchOperation, chainID int64) error {
+	if !op.CollectionID.Valid || !op.NFTTokenID.Valid || !op.RelatedUserID.Valid {
+		return fmt.Errorf("NFT transfer operation missing collection_id, nft_token_id, or related_user_id")
+	}
+
+	// Update NFT asset ownership and unlock
+	query := `
+		UPDATE nft_assets
+		SET 
+			owner_user_id = $4,
+			is_locked = false,
+			updated_at = $5
+		WHERE collection_id = $1 AND token_id = $2 AND owner_user_id = $3`
+
+	_, err := tx.Exec(query, op.CollectionID.String, op.NFTTokenID.String, op.UserID, op.RelatedUserID.String, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to finalize NFT transfer: %w", err)
+	}
+
+	return nil
+}
+
+// sendSuccessNotifications sends success notifications for all operations in the batch
+func (w *TxConfirmationWatcher) sendSuccessNotifications(ctx context.Context, batch PendingBatch) {
+	if w.notificationProcessor == nil {
+		return // No notification processor available, skip silently
+	}
+
+	for _, op := range batch.Operations {
+		// Only send success notifications for NFT operations
+		switch op.TxType {
+		case "nft_mint":
+			w.sendNFTSuccessNotification(ctx, op, "nft_mint_success", batch.ChainID, batch.TxHash)
+		case "nft_burn":
+			w.sendNFTSuccessNotification(ctx, op, "nft_burn_success", batch.ChainID, batch.TxHash)
+		case "nft_transfer":
+			w.sendNFTSuccessNotification(ctx, op, "nft_transfer_success", batch.ChainID, batch.TxHash)
+			// Also send notification to recipient for transfers
+			if op.RelatedUserID.Valid {
+				w.sendNFTTransferReceivedNotification(ctx, op, batch.ChainID, batch.TxHash)
+			}
+		}
+	}
+}
+
+// sendNFTSuccessNotification sends a success notification for NFT operations
+func (w *TxConfirmationWatcher) sendNFTSuccessNotification(ctx context.Context, op BatchOperation, notificationType string, chainID int64, txHash string) {
+	// Build notification data
+	notificationData := map[string]interface{}{
+		"type":         notificationType,
+		"user_id":      op.UserID,
+		"chain_id":     chainID,
+		"tx_hash":      txHash,
+		"timestamp":    time.Now().Unix(),
+		"status":       "confirmed",
+	}
+
+	// Add NFT-specific data if available
+	if op.CollectionID.Valid {
+		notificationData["collection_id"] = op.CollectionID.String
+	}
+	if op.NFTTokenID.Valid {
+		notificationData["nft_token_id"] = op.NFTTokenID.String
+	}
+	if op.RelatedUserID.Valid && notificationType == "nft_transfer_success" {
+		notificationData["to_user_id"] = op.RelatedUserID.String
+	}
+
+	notification := NotificationJob{
+		ID:        uuid.New().String(),
+		JobType:   JobTypeNotification,
+		UserID:    op.UserID,
+		EventType: notificationType,
+		Data:      notificationData,
+		Priority:  PriorityNormal, // Normal priority for success notifications
+		CreatedAt: time.Now(),
+	}
+
+	if err := w.notificationProcessor.PublishNotification(ctx, notification); err != nil {
+		log.Warn().Err(err).
+			Str("tx_id", op.TxID).
+			Str("user_id", op.UserID).
+			Str("notification_type", notificationType).
+			Msg("Failed to send NFT success notification")
+	}
+}
+
+// sendNFTTransferReceivedNotification sends a notification to the recipient of an NFT transfer
+func (w *TxConfirmationWatcher) sendNFTTransferReceivedNotification(ctx context.Context, op BatchOperation, chainID int64, txHash string) {
+	// Build notification data for recipient
+	notificationData := map[string]interface{}{
+		"type":         "nft_transfer_received",
+		"user_id":      op.RelatedUserID.String, // Recipient
+		"chain_id":     chainID,
+		"tx_hash":      txHash,
+		"timestamp":    time.Now().Unix(),
+		"status":       "confirmed",
+		"from_user_id": op.UserID, // Sender
+	}
+
+	// Add NFT-specific data if available
+	if op.CollectionID.Valid {
+		notificationData["collection_id"] = op.CollectionID.String
+	}
+	if op.NFTTokenID.Valid {
+		notificationData["nft_token_id"] = op.NFTTokenID.String
+	}
+
+	notification := NotificationJob{
+		ID:        uuid.New().String(),
+		JobType:   JobTypeNotification,
+		UserID:    op.RelatedUserID.String, // Send to recipient
+		EventType: "nft_transfer_received",
+		Data:      notificationData,
+		Priority:  PriorityNormal, // Normal priority for success notifications
+		CreatedAt: time.Now(),
+	}
+
+	if err := w.notificationProcessor.PublishNotification(ctx, notification); err != nil {
+		log.Warn().Err(err).
+			Str("tx_id", op.TxID).
+			Str("recipient_user_id", op.RelatedUserID.String).
+			Str("from_user_id", op.UserID).
+			Msg("Failed to send NFT transfer received notification")
+	}
 }

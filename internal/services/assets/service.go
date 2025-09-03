@@ -500,7 +500,7 @@ func (s *service) determinePriority(businessType string) queue.Priority {
 	}
 }
 
-// GetUserAssets retrieves user assets across all supported chains
+// GetUserAssets retrieves user assets across all supported chains including NFT collections
 func (s *service) GetUserAssets(ctx context.Context, userID string) (*types.AssetsResponse, *types.BatchInfo, error) {
 	log.Info().Str("user_id", userID).Msg("Getting user assets")
 
@@ -513,79 +513,113 @@ func (s *service) GetUserAssets(ctx context.Context, userID string) (*types.Asse
 		qm.OrderBy(models.UserBalanceColumns.ChainID+" ASC, "+models.UserBalanceColumns.TokenID+" ASC"),
 	).All(ctx, s.db)
 
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			// User has no assets, return empty response
-			log.Debug().Str("user_id", userID).Msg("No assets found for user")
+	// Query user NFT assets with collection and chain information
+	userNFTs, err2 := models.NFTAssets(
+		models.NFTAssetWhere.OwnerUserID.EQ(userID),
+		models.NFTAssetWhere.IsBurned.EQ(null.BoolFrom(false)), // Only include non-burned NFTs
+		qm.Load(models.NFTAssetRels.Collection),
+		qm.Load(models.NFTAssetRels.Collection+"."+models.NFTCollectionRels.Chain),
+		qm.OrderBy(models.NFTAssetColumns.ChainID+" ASC, "+models.NFTAssetColumns.CollectionID+" ASC, "+models.NFTAssetColumns.TokenID+" ASC"),
+	).All(ctx, s.db)
 
-			response := &types.AssetsResponse{
-				UserID:        strPtr(userID),
-				TotalValueUsd: float32Ptr(0.0),
-				Assets:        []*types.AssetInfo{},
-			}
-
-			batchInfo := s.getBatchInfoForUser(ctx, userID)
-			return response, batchInfo, nil
-		}
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
 		return nil, nil, fmt.Errorf("failed to query user balances: %w", err)
+	}
+
+	if err2 != nil && !errors.Is(err2, sql.ErrNoRows) {
+		return nil, nil, fmt.Errorf("failed to query user NFT assets: %w", err2)
+	}
+
+	// Check if user has no assets at all
+	if (err != nil && errors.Is(err, sql.ErrNoRows) || len(userBalances) == 0) &&
+		(err2 != nil && errors.Is(err2, sql.ErrNoRows) || len(userNFTs) == 0) {
+		// User has no assets, return empty response
+		log.Debug().Str("user_id", userID).Msg("No assets found for user")
+
+		response := &types.AssetsResponse{
+			UserID:        strPtr(userID),
+			TotalValueUsd: float32Ptr(0.0),
+			Assets:        []*types.AssetInfo{},
+		}
+
+		batchInfo := s.getBatchInfoForUser(ctx, userID)
+		return response, batchInfo, nil
 	}
 
 	// Convert database records to API response format
 	var assets []*types.AssetInfo
 	var totalValueUsd float64
 
-	for _, balance := range userBalances {
-		// Ensure relationships are loaded
-		if balance.R == nil || balance.R.Chain == nil || balance.R.Token == nil {
-			log.Warn().
-				Str("user_id", userID).
-				Int64("chain_id", balance.ChainID).
-				Int("token_id", balance.TokenID).
-				Msg("Missing relationship data for user balance, skipping")
-			continue
+	// Process fungible token balances
+	if userBalances != nil {
+		for _, balance := range userBalances {
+			// Ensure relationships are loaded
+			if balance.R == nil || balance.R.Chain == nil || balance.R.Token == nil {
+				log.Warn().
+					Str("user_id", userID).
+					Int64("chain_id", balance.ChainID).
+					Int("token_id", balance.TokenID).
+					Msg("Missing relationship data for user balance, skipping")
+				continue
+			}
+
+			chain := balance.R.Chain
+			token := balance.R.Token
+
+			// Skip assets with zero confirmed balance to match previous behavior
+			if balance.ConfirmedBalance.Big == nil || balance.ConfirmedBalance.Big.Sign() <= 0 {
+				log.Debug().
+					Str("user_id", userID).
+					Int64("chain_id", balance.ChainID).
+					Int("token_id", balance.TokenID).
+					Msg("Skipping asset with zero confirmed balance")
+				continue
+			}
+
+			// Convert balance values
+			confirmedBalance := s.formatDecimal(balance.ConfirmedBalance)
+			pendingBalance := s.formatDecimal(balance.PendingBalance)
+			lockedBalance := s.formatDecimal(balance.LockedBalance)
+
+			// Calculate USD value (placeholder - in production would use price feeds)
+			balanceUsd := s.calculateBalanceUSD(balance.ConfirmedBalance, token.Symbol)
+			totalValueUsd += balanceUsd
+
+			// Determine sync status based on last sync time
+			syncStatus := s.determineSyncStatus(balance.LastSyncTime)
+
+			// Build asset info for fungible token
+			assetInfo := &types.AssetInfo{
+				ChainID:          &balance.ChainID,
+				ChainName:        chain.ShortName,
+				Symbol:           &token.Symbol,
+				Name:             token.Name,
+				ContractAddress:  token.ContractAddress.String,
+				Decimals:         int64(token.Decimals),
+				ConfirmedBalance: &confirmedBalance,
+				PendingBalance:   &pendingBalance,
+				LockedBalance:    &lockedBalance,
+				BalanceUsd:       float32(balanceUsd),
+				SyncStatus:       &syncStatus,
+			}
+
+			assets = append(assets, assetInfo)
 		}
+	}
 
-		chain := balance.R.Chain
-		token := balance.R.Token
+	// Process NFT assets - group by collection
+	var nftCollections []*NFTCollectionGroup
+	if userNFTs != nil {
+		nftCollections = s.groupNFTsByCollection(userNFTs)
+		for _, collection := range nftCollections {
+			// Calculate collection value (placeholder - in production would use NFT price feeds)
+			collectionValueUsd := s.calculateNFTCollectionValue(collection)
+			totalValueUsd += collectionValueUsd
 
-		// Skip assets with zero confirmed balance to match previous behavior
-		if balance.ConfirmedBalance.Big == nil || balance.ConfirmedBalance.Big.Sign() <= 0 {
-			log.Debug().
-				Str("user_id", userID).
-				Int64("chain_id", balance.ChainID).
-				Int("token_id", balance.TokenID).
-				Msg("Skipping asset with zero confirmed balance")
-			continue
+			// Build asset info for NFT collection
+			nftAssetInfo := s.buildNFTCollectionAssetInfo(collection, collectionValueUsd)
+			assets = append(assets, nftAssetInfo)
 		}
-
-		// Convert balance values
-		confirmedBalance := s.formatDecimal(balance.ConfirmedBalance)
-		pendingBalance := s.formatDecimal(balance.PendingBalance)
-		lockedBalance := s.formatDecimal(balance.LockedBalance)
-
-		// Calculate USD value (placeholder - in production would use price feeds)
-		balanceUsd := s.calculateBalanceUSD(balance.ConfirmedBalance, token.Symbol)
-		totalValueUsd += balanceUsd
-
-		// Determine sync status based on last sync time
-		syncStatus := s.determineSyncStatus(balance.LastSyncTime)
-
-		// Build asset info
-		assetInfo := &types.AssetInfo{
-			ChainID:          &balance.ChainID,
-			ChainName:        chain.ShortName,
-			Symbol:           &token.Symbol,
-			Name:             token.Name,
-			ContractAddress:  token.ContractAddress.String,
-			Decimals:         int64(token.Decimals),
-			ConfirmedBalance: &confirmedBalance,
-			PendingBalance:   &pendingBalance,
-			LockedBalance:    &lockedBalance,
-			BalanceUsd:       float32(balanceUsd),
-			SyncStatus:       &syncStatus,
-		}
-
-		assets = append(assets, assetInfo)
 	}
 
 	// Build response
@@ -603,6 +637,7 @@ func (s *service) GetUserAssets(ctx context.Context, userID string) (*types.Asse
 		Str("user_id", userID).
 		Float64("total_value_usd", totalValueUsd).
 		Int("asset_count", len(assets)).
+		Int("nft_collections", len(nftCollections)).
 		Msg("User assets retrieved successfully")
 
 	return response, batchInfo, nil
@@ -813,4 +848,149 @@ func strPtr(s string) *string {
 
 func float32Ptr(f float32) *float32 {
 	return &f
+}
+
+// NFT Collection processing types and helpers
+
+// NFTCollectionGroup represents a grouped collection of NFTs
+type NFTCollectionGroup struct {
+	CollectionID    string
+	CollectionName  string
+	ContractAddress string
+	ChainID         int64
+	ChainName       string
+	NFTs            []*models.NFTAsset
+	Collection      *models.NFTCollection // Reference to the collection model
+}
+
+// groupNFTsByCollection groups NFT assets by collection
+func (s *service) groupNFTsByCollection(nfts []*models.NFTAsset) []*NFTCollectionGroup {
+	collectionMap := make(map[string]*NFTCollectionGroup)
+
+	for _, nft := range nfts {
+		// Ensure relationships are loaded
+		if nft.R == nil || nft.R.Collection == nil {
+			log.Warn().
+				Str("collection_id", nft.CollectionID).
+				Str("token_id", nft.TokenID).
+				Msg("Missing collection relationship data for NFT, skipping")
+			continue
+		}
+
+		collection := nft.R.Collection
+		chainName := "Unknown Chain"
+
+		// Get chain name if available
+		if collection.R != nil && collection.R.Chain != nil {
+			chainName = collection.R.Chain.ShortName
+		}
+
+		key := fmt.Sprintf("%d_%s", nft.ChainID, nft.CollectionID)
+
+		if group, exists := collectionMap[key]; exists {
+			// Add NFT to existing group
+			group.NFTs = append(group.NFTs, nft)
+		} else {
+			// Create new group
+			contractAddress := ""
+			if collection.ContractAddress != "" {
+				contractAddress = collection.ContractAddress
+			}
+
+			collectionMap[key] = &NFTCollectionGroup{
+				CollectionID:    nft.CollectionID,
+				CollectionName:  collection.Name,
+				ContractAddress: contractAddress,
+				ChainID:         nft.ChainID,
+				ChainName:       chainName,
+				NFTs:            []*models.NFTAsset{nft},
+				Collection:      collection,
+			}
+		}
+	}
+
+	// Convert map to slice
+	var groups []*NFTCollectionGroup
+	for _, group := range collectionMap {
+		groups = append(groups, group)
+	}
+
+	return groups
+}
+
+// calculateNFTCollectionValue calculates USD value for an NFT collection (placeholder implementation)
+func (s *service) calculateNFTCollectionValue(collection *NFTCollectionGroup) float64 {
+	// Placeholder calculation - in production, this would:
+	// 1. Query NFT price feeds (OpenSea, Blur, etc.)
+	// 2. Use floor prices, recent sales data
+	// 3. Consider rarity and attributes
+	// 4. Handle different collection valuations
+
+	// Mock floor prices based on collection
+	var floorPriceUSD float64
+	switch {
+	case collection.CollectionName == "CPOP Genesis NFTs":
+		floorPriceUSD = 50.0 // $50 per NFT
+	case collection.CollectionName == "CPOP Badge Collection":
+		floorPriceUSD = 10.0 // $10 per NFT
+	default:
+		floorPriceUSD = 5.0 // Default $5 per NFT
+	}
+
+	// Total value = floor price * number of NFTs
+	return floorPriceUSD * float64(len(collection.NFTs))
+}
+
+// buildNFTCollectionAssetInfo builds AssetInfo for an NFT collection
+func (s *service) buildNFTCollectionAssetInfo(collection *NFTCollectionGroup, valueUsd float64) *types.AssetInfo {
+	// For NFT collections, we represent them differently in AssetInfo:
+	// - Symbol will be the collection symbol
+	// - Name will be the collection name 
+	// - ConfirmedBalance will be the count of NFTs
+	// - PendingBalance will be "0" (no pending concept for NFTs in this context)
+	// - LockedBalance will be count of locked NFTs
+
+	// Count NFTs by status
+	totalCount := len(collection.NFTs)
+	lockedCount := 0
+	mintedCount := 0
+
+	for _, nft := range collection.NFTs {
+		if nft.IsLocked.Valid && nft.IsLocked.Bool {
+			lockedCount++
+		}
+		if nft.IsMinted.Valid && nft.IsMinted.Bool {
+			mintedCount++
+		}
+	}
+
+	confirmedBalance := fmt.Sprintf("%d", mintedCount)   // Only count minted NFTs as confirmed
+	pendingBalance := fmt.Sprintf("%d", totalCount-mintedCount) // Unminted NFTs as pending
+	lockedBalance := fmt.Sprintf("%d", lockedCount)     // Locked NFTs
+
+	// Use collection symbol or fallback to collection ID
+	symbol := collection.Collection.Symbol
+	if symbol == "" {
+		symbol = fmt.Sprintf("NFT_%s", collection.CollectionID)
+	}
+
+	// Determine sync status - for NFTs, we consider them synced if collection exists
+	syncStatus := "synced"
+	if !collection.Collection.IsEnabled.Valid || !collection.Collection.IsEnabled.Bool {
+		syncStatus = "pending"
+	}
+
+	return &types.AssetInfo{
+		ChainID:          &collection.ChainID,
+		ChainName:        collection.ChainName,
+		Symbol:           &symbol,
+		Name:             collection.CollectionName,
+		ContractAddress:  collection.ContractAddress,
+		Decimals:         0, // NFTs don't have decimals
+		ConfirmedBalance: &confirmedBalance,
+		PendingBalance:   &pendingBalance,
+		LockedBalance:    &lockedBalance,
+		BalanceUsd:       float32(valueUsd),
+		SyncStatus:       &syncStatus,
+	}
 }

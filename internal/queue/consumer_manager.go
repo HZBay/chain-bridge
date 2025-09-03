@@ -23,7 +23,7 @@ type ConsumerManager struct {
 	client              *RabbitMQClient
 	db                  *sql.DB
 	batchOptimizer      *BatchOptimizer
-	cpopCallers         map[int64]*blockchain.CPOPBatchCaller
+	unifiedCallers      map[int64]*blockchain.UnifiedBatchCaller // Changed from cpopCallers
 	confirmationWatcher *TxConfirmationWatcher
 	batchProcessor      BatchProcessor
 	config              config.Server
@@ -168,8 +168,8 @@ func (cm *ConsumerManager) setupConsumersForEnabledChains(ctx context.Context) e
 	cm.consumersMutex.Lock()
 	defer cm.consumersMutex.Unlock()
 
-	// Initialize CPOP callers map for blockchain interactions
-	cm.cpopCallers = make(map[int64]*blockchain.CPOPBatchCaller)
+	// Initialize unified callers map for blockchain interactions
+	cm.unifiedCallers = make(map[int64]*blockchain.UnifiedBatchCaller)
 
 	// Step 3: Process each enabled chain and create necessary components
 	successfulChains := 0
@@ -215,11 +215,30 @@ func (cm *ConsumerManager) setupConsumersForEnabledChains(ctx context.Context) e
 			continue
 		}
 
-		// Step 3d: Initialize CPOP batch caller for blockchain operations
-		caller, err := blockchain.NewCPOPBatchCaller(
+		// Step 3d: Initialize unified batch caller for blockchain operations
+		// Get NFT contract address if available
+		nftContractAddr := common.Address{} // Default to zero address
+		if chain.OfficialNFTContractAddress.Valid && chain.OfficialNFTContractAddress.String != "" {
+			if common.IsHexAddress(chain.OfficialNFTContractAddress.String) {
+				nftContractAddr = common.HexToAddress(chain.OfficialNFTContractAddress.String)
+				log.Info().
+					Int64("chain_id", chain.ChainID).
+					Str("nft_contract_addr", nftContractAddr.Hex()).
+					Msg("NFT contract address found for chain")
+			} else {
+				log.Warn().
+					Int64("chain_id", chain.ChainID).
+					Str("invalid_nft_address", chain.OfficialNFTContractAddress.String).
+					Msg("Invalid NFT contract address format, NFT operations will be disabled")
+			}
+		}
+
+		caller, err := blockchain.NewUnifiedBatchCaller(
 			chain.RPCURL,
-			common.HexToAddress(chain.ToeknAddress.String),
+			common.HexToAddress(chain.ToeknAddress.String), // CPOP token address
+			nftContractAddr,                                // NFT contract address
 			auth,
+			chain.ChainID,
 		)
 		if err != nil {
 			log.Error().
@@ -227,12 +246,12 @@ func (cm *ConsumerManager) setupConsumersForEnabledChains(ctx context.Context) e
 				Str("chain_name", chain.Name).
 				Str("rpc_url", chain.RPCURL).
 				Err(err).
-				Msg("Failed to create CPOP batch caller, skipping chain")
+				Msg("Failed to create unified batch caller, skipping chain")
 			continue
 		}
 
 		// Step 3e: Store the caller for this chain
-		cm.cpopCallers[chain.ChainID] = caller
+		cm.unifiedCallers[chain.ChainID] = caller
 
 		// Step 3f: Create and start the consumer for this chain
 		if err := cm.createChainConsumer(ctx, chain); err != nil {
@@ -242,7 +261,7 @@ func (cm *ConsumerManager) setupConsumersForEnabledChains(ctx context.Context) e
 				Err(err).
 				Msg("Failed to create consumer for chain, skipping")
 			// Remove the caller since consumer creation failed
-			delete(cm.cpopCallers, chain.ChainID)
+			delete(cm.unifiedCallers, chain.ChainID)
 			continue
 		}
 
@@ -255,13 +274,13 @@ func (cm *ConsumerManager) setupConsumersForEnabledChains(ctx context.Context) e
 
 	// Step 4: Initialize transaction confirmation watcher
 	// This monitors blockchain transactions for confirmations across all chains
-	if len(cm.cpopCallers) > 0 {
-		cm.confirmationWatcher = NewTxConfirmationWatcher(cm.db, cm.cpopCallers)
+	if len(cm.unifiedCallers) > 0 {
+		cm.confirmationWatcher = NewTxConfirmationWatcher(cm.db, cm.unifiedCallers, cm.batchProcessor)
 		log.Info().
-			Int("monitored_chains", len(cm.cpopCallers)).
+			Int("monitored_chains", len(cm.unifiedCallers)).
 			Msg("Transaction confirmation watcher initialized")
 	} else {
-		log.Warn().Msg("No CPOP callers available, confirmation watcher not initialized")
+		log.Warn().Msg("No unified callers available, confirmation watcher not initialized")
 	}
 
 	// Step 5: Log setup summary
@@ -301,7 +320,7 @@ func (cm *ConsumerManager) createChainConsumer(ctx context.Context, chain *model
 		cm.client,
 		cm.db,
 		cm.batchOptimizer,
-		cm.cpopCallers,
+		cm.unifiedCallers,
 		cm.confirmationWatcher,
 		cm.batchProcessor,
 		chain.ChainID,

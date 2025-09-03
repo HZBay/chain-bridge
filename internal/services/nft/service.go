@@ -4,12 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/hzbay/chain-bridge/internal/models"
 	"github.com/hzbay/chain-bridge/internal/queue"
 	"github.com/rs/zerolog/log"
+	"github.com/volatiletech/null/v8"
+	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 )
 
 // Service defines the interface for NFT operations
@@ -236,7 +240,67 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 		Int("mint_count", len(request.MintOperations)).
 		Msg("Processing NFT batch mint request")
 
-	// Validate collection exists and is enabled
+	// 1. 幂等性检查 - 检查 OperationID 是否已经存在
+	// Validate operation_id format - it should be a valid UUID
+	mainOperationID, err := uuid.Parse(request.OperationID)
+	if err != nil {
+		// Return a validation error for invalid UUID format
+		return nil, nil, NFTError{
+			Type:    ErrorTypeValidation,
+			Message: fmt.Sprintf("operation_id must be a valid UUID format (e.g., 550e8400-e29b-41d4-a716-446655440000): %s", request.OperationID),
+		}
+	}
+
+	existingTx, err := models.Transactions(
+		models.TransactionWhere.OperationID.EQ(null.StringFrom(mainOperationID.String())),
+	).One(ctx, s.db)
+
+	if err == nil && existingTx != nil {
+		// OperationID 已存在，返回已有结果
+		log.Info().
+			Str("operation_id", request.OperationID).
+			Str("existing_tx_id", existingTx.TXID).
+			Msg("Operation already processed, returning existing result")
+
+		// 统计已处理的记录数
+		processedCount, err := models.Transactions(
+			models.TransactionWhere.OperationID.EQ(null.StringFrom(mainOperationID.String())),
+		).Count(ctx, s.db)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to count existing transactions")
+			processedCount = int64(len(request.MintOperations)) // fallback
+		}
+
+		// 返回已有结果
+		status := existingTx.Status.String
+		if status == "" {
+			status = "recorded"
+		}
+
+		response := &BatchMintResponse{
+			OperationID:    request.OperationID,
+			ProcessedCount: int(processedCount),
+			Status:         status,
+		}
+
+		// Build batch info for idempotent response
+		batchInfo := &BatchInfo{
+			BatchID:              generateBatchID(),
+			QueuedTransactions:   int(processedCount),
+			EstimatedProcessTime: "5-10 minutes",
+			Priority:             getPriority(request.BatchPreferences),
+		}
+
+		return response, batchInfo, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		// 数据库查询错误（非记录不存在）
+		return nil, nil, fmt.Errorf("failed to check operation idempotency: %w", err)
+	}
+
+	// OperationID 不存在，继续正常处理
+	log.Debug().Str("operation_id", request.OperationID).Msg("New operation, proceeding with processing")
+
+	// 2. Validate collection exists and is enabled
 	collection, err := s.GetCollection(ctx, request.CollectionID)
 	if err != nil {
 		return nil, nil, NFTError{
@@ -278,13 +342,13 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 		// Create transaction record
 		transactionID := uuid.New()
 
-		// Insert transaction record
+		// Insert transaction record with operation_id for idempotency
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO transactions (
-				transaction_id, user_id, chain_id, tx_type, status, amount, 
+				transaction_id, operation_id, user_id, chain_id, tx_type, status, amount, 
 				collection_id, nft_token_id, nft_metadata, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-		`, transactionID, mintOp.ToUserID, request.ChainID, "nft_mint", "recorded",
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+		`, transactionID, mainOperationID.String(), mintOp.ToUserID, request.ChainID, "nft_mint", "recorded",
 			"1", request.CollectionID, tokenID, convertMetadataToJSON(mintOp.Meta))
 
 		if err != nil {
@@ -329,7 +393,20 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 
 		// Queue the job for batch processing
 		if err := s.batchProcessor.PublishNFTMint(ctx, mintJob); err != nil {
-			return nil, nil, fmt.Errorf("failed to queue NFT mint job: %w", err)
+			log.Error().Err(err).
+				Str("job_id", mintJob.ID).
+				Str("user_id", mintJob.ToUserID).
+				Msg("Failed to publish NFT mint job, but transaction is recorded")
+
+			// Note: We don't return error here because transactions are already recorded
+			// The batch processor failure doesn't mean the mint failed
+
+			// Mark corresponding transaction as failed since it cannot be processed
+			if updateErr := s.markTransactionAsFailed(context.Background(), transactionID.String(), "queue_publish_failed"); updateErr != nil {
+				log.Error().Err(updateErr).
+					Str("job_id", mintJob.ID).
+					Msg("Failed to mark transaction as failed")
+			}
 		}
 
 		processedCount++
@@ -365,7 +442,67 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 		Int("burn_count", len(request.BurnOperations)).
 		Msg("Processing NFT batch burn request")
 
-	// Validate collection exists and is enabled
+	// 1. 幂等性检查 - 检查 OperationID 是否已经存在
+	// Validate operation_id format - it should be a valid UUID
+	mainOperationID, err := uuid.Parse(request.OperationID)
+	if err != nil {
+		// Return a validation error for invalid UUID format
+		return nil, nil, NFTError{
+			Type:    ErrorTypeValidation,
+			Message: fmt.Sprintf("operation_id must be a valid UUID format (e.g., 550e8400-e29b-41d4-a716-446655440000): %s", request.OperationID),
+		}
+	}
+
+	existingTx, err := models.Transactions(
+		models.TransactionWhere.OperationID.EQ(null.StringFrom(mainOperationID.String())),
+	).One(ctx, s.db)
+
+	if err == nil && existingTx != nil {
+		// OperationID 已存在，返回已有结果
+		log.Info().
+			Str("operation_id", request.OperationID).
+			Str("existing_tx_id", existingTx.TXID).
+			Msg("Operation already processed, returning existing result")
+
+		// 统计已处理的记录数
+		processedCount, err := models.Transactions(
+			models.TransactionWhere.OperationID.EQ(null.StringFrom(mainOperationID.String())),
+		).Count(ctx, s.db)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to count existing transactions")
+			processedCount = int64(len(request.BurnOperations)) // fallback
+		}
+
+		// 返回已有结果
+		status := existingTx.Status.String
+		if status == "" {
+			status = "recorded"
+		}
+
+		response := &BatchBurnResponse{
+			OperationID:    request.OperationID,
+			ProcessedCount: int(processedCount),
+			Status:         status,
+		}
+
+		// Build batch info for idempotent response
+		batchInfo := &BatchInfo{
+			BatchID:              generateBatchID(),
+			QueuedTransactions:   int(processedCount),
+			EstimatedProcessTime: "5-10 minutes",
+			Priority:             getPriority(request.BatchPreferences),
+		}
+
+		return response, batchInfo, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		// 数据库查询错误（非记录不存在）
+		return nil, nil, fmt.Errorf("failed to check operation idempotency: %w", err)
+	}
+
+	// OperationID 不存在，继续正常处理
+	log.Debug().Str("operation_id", request.OperationID).Msg("New operation, proceeding with processing")
+
+	// 2. Validate collection exists and is enabled
 	collection, err := s.GetCollection(ctx, request.CollectionID)
 	if err != nil {
 		return nil, nil, err
@@ -436,14 +573,14 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 			}
 		}
 
-		// Create transaction record
+		// Create transaction record with operation_id for idempotency
 		transactionID := uuid.New()
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO transactions (
-				transaction_id, user_id, chain_id, tx_type, status, amount,
+				transaction_id, operation_id, user_id, chain_id, tx_type, status, amount,
 				collection_id, nft_token_id, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
-		`, transactionID, burnOp.OwnerUserID, request.ChainID, "nft_burn", "recorded",
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+		`, transactionID, mainOperationID.String(), burnOp.OwnerUserID, request.ChainID, "nft_burn", "recorded",
 			"1", request.CollectionID, burnOp.TokenID)
 
 		if err != nil {
@@ -467,7 +604,20 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 
 		// Queue the job for batch processing
 		if err := s.batchProcessor.PublishNFTBurn(ctx, burnJob); err != nil {
-			return nil, nil, fmt.Errorf("failed to queue NFT burn job: %w", err)
+			log.Error().Err(err).
+				Str("job_id", burnJob.ID).
+				Str("user_id", burnJob.OwnerUserID).
+				Msg("Failed to publish NFT burn job, but transaction is recorded")
+
+			// Note: We don't return error here because transactions are already recorded
+			// The batch processor failure doesn't mean the burn failed
+
+			// Mark corresponding transaction as failed since it cannot be processed
+			if updateErr := s.markTransactionAsFailed(context.Background(), transactionID.String(), "queue_publish_failed"); updateErr != nil {
+				log.Error().Err(updateErr).
+					Str("job_id", burnJob.ID).
+					Msg("Failed to mark transaction as failed")
+			}
 		}
 
 		processedCount++
@@ -502,7 +652,67 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 		Int("transfer_count", len(request.TransferOperations)).
 		Msg("Processing NFT batch transfer request")
 
-	// Validate collection exists and is enabled
+	// 1. 幂等性检查 - 检查 OperationID 是否已经存在
+	// Validate operation_id format - it should be a valid UUID
+	mainOperationID, err := uuid.Parse(request.OperationID)
+	if err != nil {
+		// Return a validation error for invalid UUID format
+		return nil, nil, NFTError{
+			Type:    ErrorTypeValidation,
+			Message: fmt.Sprintf("operation_id must be a valid UUID format (e.g., 550e8400-e29b-41d4-a716-446655440000): %s", request.OperationID),
+		}
+	}
+
+	existingTx, err := models.Transactions(
+		models.TransactionWhere.OperationID.EQ(null.StringFrom(mainOperationID.String())),
+	).One(ctx, s.db)
+
+	if err == nil && existingTx != nil {
+		// OperationID 已存在，返回已有结果
+		log.Info().
+			Str("operation_id", request.OperationID).
+			Str("existing_tx_id", existingTx.TXID).
+			Msg("Operation already processed, returning existing result")
+
+		// 统计已处理的记录数
+		processedCount, err := models.Transactions(
+			models.TransactionWhere.OperationID.EQ(null.StringFrom(mainOperationID.String())),
+		).Count(ctx, s.db)
+		if err != nil {
+			log.Warn().Err(err).Msg("Failed to count existing transactions")
+			processedCount = int64(len(request.TransferOperations)) // fallback
+		}
+
+		// 返回已有结果
+		status := existingTx.Status.String
+		if status == "" {
+			status = "recorded"
+		}
+
+		response := &BatchTransferResponse{
+			OperationID:    request.OperationID,
+			ProcessedCount: int(processedCount),
+			Status:         status,
+		}
+
+		// Build batch info for idempotent response
+		batchInfo := &BatchInfo{
+			BatchID:              generateBatchID(),
+			QueuedTransactions:   int(processedCount),
+			EstimatedProcessTime: "5-10 minutes",
+			Priority:             getPriority(request.BatchPreferences),
+		}
+
+		return response, batchInfo, nil
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		// 数据库查询错误（非记录不存在）
+		return nil, nil, fmt.Errorf("failed to check operation idempotency: %w", err)
+	}
+
+	// OperationID 不存在，继续正常处理
+	log.Debug().Str("operation_id", request.OperationID).Msg("New operation, proceeding with processing")
+
+	// 2. Validate collection exists and is enabled
 	collection, err := s.GetCollection(ctx, request.CollectionID)
 	if err != nil {
 		return nil, nil, err
@@ -580,14 +790,14 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 			}
 		}
 
-		// Create transaction record
+		// Create transaction record with operation_id for idempotency
 		transactionID := uuid.New()
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO transactions (
-				transaction_id, user_id, chain_id, tx_type, status, amount,
+				transaction_id, operation_id, user_id, chain_id, tx_type, status, amount,
 				collection_id, nft_token_id, related_user_id, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-		`, transactionID, transferOp.FromUserID, request.ChainID, "nft_transfer", "recorded",
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+		`, transactionID, mainOperationID.String(), transferOp.FromUserID, request.ChainID, "nft_transfer", "recorded",
 			"1", request.CollectionID, transferOp.TokenID, transferOp.ToUserID)
 
 		if err != nil {
@@ -623,7 +833,34 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 
 		// Queue the job for batch processing
 		if err := s.batchProcessor.PublishNFTTransfer(ctx, transferJob); err != nil {
-			return nil, nil, fmt.Errorf("failed to queue NFT transfer job: %w", err)
+			log.Error().Err(err).
+				Str("job_id", transferJob.ID).
+				Str("from_user_id", transferJob.FromUserID).
+				Str("to_user_id", transferJob.ToUserID).
+				Msg("Failed to publish NFT transfer job, but transaction is recorded")
+
+			// Note: We don't return error here because transactions are already recorded
+			// The batch processor failure doesn't mean the transfer failed
+
+			// Mark corresponding transaction as failed since it cannot be processed
+			if updateErr := s.markTransactionAsFailed(context.Background(), transactionID.String(), "queue_publish_failed"); updateErr != nil {
+				log.Error().Err(updateErr).
+					Str("job_id", transferJob.ID).
+					Msg("Failed to mark transaction as failed")
+			}
+
+			// Also unlock the NFT since the transfer failed to queue
+			_, unlockErr := tx.ExecContext(ctx, `
+				UPDATE nft_assets
+				SET is_locked = false
+				WHERE collection_id = $1 AND token_id = $2
+			`, request.CollectionID, transferOp.TokenID)
+			if unlockErr != nil {
+				log.Error().Err(unlockErr).
+					Str("collection_id", request.CollectionID).
+					Str("token_id", transferOp.TokenID).
+					Msg("Failed to unlock NFT after transfer queue failure")
+			}
 		}
 
 		processedCount++
@@ -677,18 +914,184 @@ func (s *service) GetCollection(ctx context.Context, collectionID string) (*Coll
 }
 
 func (s *service) GetCollectionsByChain(ctx context.Context, chainID int64) ([]*Collection, error) {
-	// TODO: Implement
-	return nil, fmt.Errorf("not implemented")
+	log.Debug().Int64("chain_id", chainID).Msg("Getting collections by chain")
+
+	// Query collections for the specified chain
+	collections, err := models.NFTCollections(
+		models.NFTCollectionWhere.ChainID.EQ(chainID),
+		models.NFTCollectionWhere.IsEnabled.EQ(null.BoolFrom(true)),
+		qm.OrderBy(models.NFTCollectionColumns.Name+" ASC"),
+	).All(ctx, s.db)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return []*Collection{}, nil // Return empty slice if no collections found
+		}
+		return nil, fmt.Errorf("failed to query collections for chain %d: %w", chainID, err)
+	}
+
+	// Convert database models to service models
+	var result []*Collection
+	for _, dbCollection := range collections {
+		collection := &Collection{
+			ID:              dbCollection.ID,
+			CollectionID:    dbCollection.CollectionID,
+			ChainID:         dbCollection.ChainID,
+			ContractAddress: dbCollection.ContractAddress,
+			Name:            dbCollection.Name,
+			Symbol:          dbCollection.Symbol,
+			ContractType:    dbCollection.ContractType,
+			BaseURI:         dbCollection.BaseURI.String,
+			IsEnabled:       dbCollection.IsEnabled.Bool,
+			CreatedAt:       dbCollection.CreatedAt.Time,
+		}
+		result = append(result, collection)
+	}
+
+	log.Debug().
+		Int64("chain_id", chainID).
+		Int("collection_count", len(result)).
+		Msg("Collections retrieved successfully")
+
+	return result, nil
 }
 
 func (s *service) GetNFTAsset(ctx context.Context, collectionID, tokenID string) (*NFTAsset, error) {
-	// TODO: Implement
-	return nil, fmt.Errorf("not implemented")
+	log.Debug().
+		Str("collection_id", collectionID).
+		Str("token_id", tokenID).
+		Msg("Getting NFT asset")
+
+	// Query NFT asset with collection relationship
+	nftAsset, err := models.NFTAssets(
+		models.NFTAssetWhere.CollectionID.EQ(collectionID),
+		models.NFTAssetWhere.TokenID.EQ(tokenID),
+		qm.Load(models.NFTAssetRels.Collection),
+	).One(ctx, s.db)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, NFTError{
+				Type:    ErrorTypeNFTNotFound,
+				Message: fmt.Sprintf("NFT asset with collection_id %s and token_id %s not found", collectionID, tokenID),
+			}
+		}
+		return nil, fmt.Errorf("failed to query NFT asset: %w", err)
+	}
+
+	// Convert database model to service model
+	result := &NFTAsset{
+		ID:           nftAsset.ID,
+		CollectionID: nftAsset.CollectionID,
+		TokenID:      nftAsset.TokenID,
+		OwnerUserID:  nftAsset.OwnerUserID,
+		ChainID:      nftAsset.ChainID,
+		MetadataURI:  nftAsset.MetadataURI.String,
+		Name:         nftAsset.Name.String,
+		Description:  nftAsset.Description.String,
+		ImageURL:     nftAsset.ImageURL.String,
+		IsBurned:     nftAsset.IsBurned.Bool,
+		IsMinted:     nftAsset.IsMinted.Bool,
+		IsLocked:     nftAsset.IsLocked.Bool,
+		CreatedAt:    nftAsset.CreatedAt.Time,
+	}
+
+	// Parse attributes JSON if available
+	if nftAsset.Attributes.Valid && len(nftAsset.Attributes.JSON) > 0 {
+		var metadata NFTMetadata
+		if err := json.Unmarshal(nftAsset.Attributes.JSON, &metadata); err != nil {
+			log.Warn().Err(err).
+				Str("collection_id", collectionID).
+				Str("token_id", tokenID).
+				Msg("Failed to parse NFT attributes JSON")
+		} else {
+			result.Attributes = &metadata
+		}
+	}
+
+	log.Debug().
+		Str("collection_id", collectionID).
+		Str("token_id", tokenID).
+		Str("owner_user_id", result.OwnerUserID).
+		Bool("is_minted", result.IsMinted).
+		Bool("is_burned", result.IsBurned).
+		Msg("NFT asset retrieved successfully")
+
+	return result, nil
 }
 
 func (s *service) GetUserNFTAssets(ctx context.Context, userID string, chainID *int64) ([]*NFTAsset, error) {
-	// TODO: Implement
-	return nil, fmt.Errorf("not implemented")
+	log.Debug().
+		Str("user_id", userID).
+		Interface("chain_id", chainID).
+		Msg("Getting user NFT assets")
+
+	// Build query conditions
+	queryMods := []qm.QueryMod{
+		models.NFTAssetWhere.OwnerUserID.EQ(userID),
+		models.NFTAssetWhere.IsBurned.EQ(null.BoolFrom(false)), // Only include non-burned NFTs
+		qm.Load(models.NFTAssetRels.Collection),
+		qm.OrderBy(models.NFTAssetColumns.ChainID + " ASC, " + models.NFTAssetColumns.CollectionID + " ASC, " + models.NFTAssetColumns.TokenID + " ASC"),
+	}
+
+	// Add chain filter if specified
+	if chainID != nil {
+		queryMods = append(queryMods, models.NFTAssetWhere.ChainID.EQ(*chainID))
+	}
+
+	// Query user's NFT assets
+	nftAssets, err := models.NFTAssets(queryMods...).All(ctx, s.db)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return []*NFTAsset{}, nil // Return empty slice if no NFTs found
+		}
+		return nil, fmt.Errorf("failed to query user NFT assets: %w", err)
+	}
+
+	// Convert database models to service models
+	var result []*NFTAsset
+	for _, dbAsset := range nftAssets {
+		nftAsset := &NFTAsset{
+			ID:           dbAsset.ID,
+			CollectionID: dbAsset.CollectionID,
+			TokenID:      dbAsset.TokenID,
+			OwnerUserID:  dbAsset.OwnerUserID,
+			ChainID:      dbAsset.ChainID,
+			MetadataURI:  dbAsset.MetadataURI.String,
+			Name:         dbAsset.Name.String,
+			Description:  dbAsset.Description.String,
+			ImageURL:     dbAsset.ImageURL.String,
+			IsBurned:     dbAsset.IsBurned.Bool,
+			IsMinted:     dbAsset.IsMinted.Bool,
+			IsLocked:     dbAsset.IsLocked.Bool,
+			CreatedAt:    dbAsset.CreatedAt.Time,
+		}
+
+		// Parse attributes JSON if available
+		if dbAsset.Attributes.Valid && len(dbAsset.Attributes.JSON) > 0 {
+			var metadata NFTMetadata
+			if err := json.Unmarshal(dbAsset.Attributes.JSON, &metadata); err != nil {
+				log.Warn().Err(err).
+					Str("user_id", userID).
+					Str("collection_id", dbAsset.CollectionID).
+					Str("token_id", dbAsset.TokenID).
+					Msg("Failed to parse NFT attributes JSON")
+			} else {
+				nftAsset.Attributes = &metadata
+			}
+		}
+
+		result = append(result, nftAsset)
+	}
+
+	log.Debug().
+		Str("user_id", userID).
+		Interface("chain_id", chainID).
+		Int("nft_count", len(result)).
+		Msg("User NFT assets retrieved successfully")
+
+	return result, nil
 }
 
 // Helper functions
@@ -738,4 +1141,158 @@ func getPriority(prefs *BatchPreferences) string {
 		return *prefs.Priority
 	}
 	return "normal"
+}
+
+// markTransactionAsFailed marks a transaction as failed in the database and sends notification
+func (s *service) markTransactionAsFailed(ctx context.Context, txID string, failureReason string) error {
+	// Get transaction details before updating
+	tx, err := models.Transactions(
+		models.TransactionWhere.TXID.EQ(txID),
+	).One(ctx, s.db)
+	if err != nil {
+		return fmt.Errorf("failed to fetch transaction for notification: %w", err)
+	}
+
+	query := `
+		UPDATE transactions 
+		SET 
+			status = 'failed',
+			failure_reason = $2,
+			updated_at = NOW()
+		WHERE tx_id = $1`
+
+	_, err = s.db.ExecContext(ctx, query, txID, failureReason)
+	if err != nil {
+		return fmt.Errorf("failed to mark transaction as failed: %w", err)
+	}
+
+	// Send transaction status change notification
+	s.sendTransactionFailedNotification(ctx, tx, failureReason)
+
+	log.Info().
+		Str("tx_id", txID).
+		Str("failure_reason", failureReason).
+		Msg("NFT transaction marked as failed")
+
+	return nil
+}
+
+// sendTransactionFailedNotification sends notification when transaction fails
+func (s *service) sendTransactionFailedNotification(ctx context.Context, tx *models.Transaction, failureReason string) {
+	if s.batchProcessor == nil {
+		return // No notification processor available, skip silently
+	}
+
+	// Build notification data following the established patterns from the notification guide
+	notificationData := map[string]interface{}{
+		"type":           "transaction_status_changed",
+		"transaction_id": tx.TXID,
+		"user_id":        tx.UserID,
+		"old_status":     "pending", // Assuming original status was pending
+		"new_status":     "failed",
+		"failure_reason": failureReason,
+		"chain_id":       tx.ChainID,
+		"tx_type":        tx.TXType,
+		"timestamp":      time.Now().Unix(), // Use Unix timestamp for consistency
+	}
+
+	// Add NFT-specific fields if available
+	if tx.CollectionID.Valid {
+		notificationData["collection_id"] = tx.CollectionID.String
+	}
+	if tx.NftTokenID.Valid {
+		notificationData["nft_token_id"] = tx.NftTokenID.String
+	}
+	if tx.RelatedUserID.Valid {
+		notificationData["related_user_id"] = tx.RelatedUserID.String
+	}
+	if tx.BusinessType != "" {
+		notificationData["business_type"] = tx.BusinessType
+	}
+
+	notification := queue.NotificationJob{
+		ID:        uuid.New().String(),
+		JobType:   queue.JobTypeNotification,
+		UserID:    tx.UserID,
+		EventType: "transaction_status_changed", // Keep this for routing purposes
+		Data:      notificationData,
+		Priority:  queue.PriorityHigh, // High priority for failure notifications
+		CreatedAt: time.Now(),
+	}
+
+	if err := s.batchProcessor.PublishNotification(ctx, notification); err != nil {
+		log.Warn().Err(err).
+			Str("transaction_id", tx.TXID).
+			Str("user_id", tx.UserID).
+			Str("failure_reason", failureReason).
+			Msg("Failed to send NFT transaction failed notification")
+	}
+
+	// For transfers, also send notification to the recipient if different from sender
+	if tx.TXType == "nft_transfer" && tx.RelatedUserID.Valid && tx.RelatedUserID.String != tx.UserID {
+		recipientNotification := queue.NotificationJob{
+			ID:        uuid.New().String(),
+			JobType:   queue.JobTypeNotification,
+			UserID:    tx.RelatedUserID.String,
+			EventType: "transaction_status_changed",
+			Data:      notificationData,
+			Priority:  queue.PriorityHigh,
+			CreatedAt: time.Now(),
+		}
+
+		if err := s.batchProcessor.PublishNotification(ctx, recipientNotification); err != nil {
+			log.Warn().Err(err).
+				Str("transaction_id", tx.TXID).
+				Str("recipient_user_id", tx.RelatedUserID.String).
+				Str("failure_reason", failureReason).
+				Msg("Failed to send NFT transaction failed notification to recipient")
+		}
+	}
+}
+
+// sendNFTOperationFailedNotification sends notification for NFT operation failures
+func (s *service) sendNFTOperationFailedNotification(ctx context.Context, userID, operationType, collectionID, tokenID string, chainID int64, failureReason string, extraData map[string]interface{}) {
+	if s.batchProcessor == nil {
+		return // No notification processor available, skip silently
+	}
+
+	// Build notification data for NFT operation failures
+	notificationData := map[string]interface{}{
+		"type":           "nft_operation_failed",
+		"user_id":        userID,
+		"operation_type": operationType, // "mint", "burn", "transfer"
+		"collection_id":  collectionID,
+		"chain_id":       chainID,
+		"failure_reason": failureReason,
+		"timestamp":      time.Now().Unix(),
+	}
+
+	// Add token_id if provided
+	if tokenID != "" {
+		notificationData["nft_token_id"] = tokenID
+	}
+
+	// Add any extra data provided
+	for k, v := range extraData {
+		notificationData[k] = v
+	}
+
+	notification := queue.NotificationJob{
+		ID:        uuid.New().String(),
+		JobType:   queue.JobTypeNotification,
+		UserID:    userID,
+		EventType: "nft_operation_failed",
+		Data:      notificationData,
+		Priority:  queue.PriorityHigh, // High priority for failure notifications
+		CreatedAt: time.Now(),
+	}
+
+	if err := s.batchProcessor.PublishNotification(ctx, notification); err != nil {
+		log.Warn().Err(err).
+			Str("user_id", userID).
+			Str("operation_type", operationType).
+			Str("collection_id", collectionID).
+			Str("failure_reason", failureReason).
+			Msg("Failed to send NFT operation failed notification")
+	}
 }
