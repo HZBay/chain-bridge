@@ -168,7 +168,7 @@ func (l *PaymentEventListener) syncHistoricalEvents(ctx context.Context) {
 	}
 
 	// Batch size for historical sync (stay under RPC limits)
-	const batchSize = 500
+	const batchSize = 10
 	fromBlock := l.config.StartBlock
 
 	for fromBlock <= currentBlock {
@@ -280,7 +280,7 @@ func (l *PaymentEventListener) pollForNewEvents(ctx context.Context) error {
 	}
 
 	// Split large ranges into batches to avoid RPC limits (max 500 blocks)
-	const maxBlockRange = 500
+	const maxBlockRange = 10
 
 	for batchStart := fromBlock; batchStart <= currentBlock; batchStart += maxBlockRange {
 		batchEnd := batchStart + maxBlockRange - 1
