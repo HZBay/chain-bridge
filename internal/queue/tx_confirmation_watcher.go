@@ -946,7 +946,7 @@ func (w *TxConfirmationWatcher) finalizeNFTAssetsForBatch(tx *sql.Tx, batch Pend
 }
 
 // finalizeNFTForMint finalizes NFT asset after successful mint
-func (w *TxConfirmationWatcher) finalizeNFTForMint(tx *sql.Tx, op BatchOperation, chainID int64) error {
+func (w *TxConfirmationWatcher) finalizeNFTForMint(tx *sql.Tx, op BatchOperation, _ int64) error {
 	if !op.CollectionID.Valid || !op.NFTTokenID.Valid {
 		return fmt.Errorf("NFT mint operation missing collection_id or nft_token_id")
 	}
@@ -969,7 +969,7 @@ func (w *TxConfirmationWatcher) finalizeNFTForMint(tx *sql.Tx, op BatchOperation
 }
 
 // finalizeNFTForBurn finalizes NFT asset after successful burn
-func (w *TxConfirmationWatcher) finalizeNFTForBurn(tx *sql.Tx, op BatchOperation, chainID int64) error {
+func (w *TxConfirmationWatcher) finalizeNFTForBurn(tx *sql.Tx, op BatchOperation, _ int64) error {
 	if !op.CollectionID.Valid || !op.NFTTokenID.Valid {
 		return fmt.Errorf("NFT burn operation missing collection_id or nft_token_id")
 	}
@@ -992,7 +992,7 @@ func (w *TxConfirmationWatcher) finalizeNFTForBurn(tx *sql.Tx, op BatchOperation
 }
 
 // finalizeNFTForTransfer finalizes NFT asset after successful transfer
-func (w *TxConfirmationWatcher) finalizeNFTForTransfer(tx *sql.Tx, op BatchOperation, chainID int64) error {
+func (w *TxConfirmationWatcher) finalizeNFTForTransfer(tx *sql.Tx, op BatchOperation, _ int64) error {
 	if !op.CollectionID.Valid || !op.NFTTokenID.Valid || !op.RelatedUserID.Valid {
 		return fmt.Errorf("NFT transfer operation missing collection_id, nft_token_id, or related_user_id")
 	}

@@ -265,7 +265,7 @@ func (u *BatchCaller) BatchTransferFrom(ctx context.Context, fromAddresses []com
 // =============================================================================
 
 // NFTBatchMint executes a batch mint operation for NFTs
-func (u *BatchCaller) NFTBatchMint(ctx context.Context, recipients []common.Address, tokenIds []*big.Int, metadataURIs []string) (*NFTBatchResult, error) {
+func (u *BatchCaller) NFTBatchMint(ctx context.Context, recipients []common.Address, tokenIDs []*big.Int, _ []string) (*NFTBatchResult, error) {
 	if u.nftContract == nil {
 		return nil, fmt.Errorf("NFT contract not available for chain %d", u.chainID)
 	}
@@ -330,7 +330,7 @@ func (u *BatchCaller) NFTBatchMint(ctx context.Context, recipients []common.Addr
 }
 
 // NFTBatchBurn executes a batch burn operation for NFTs
-func (u *BatchCaller) NFTBatchBurn(ctx context.Context, tokenIds []*big.Int) (*NFTBatchResult, error) {
+func (u *BatchCaller) NFTBatchBurn(ctx context.Context, tokenIDs []*big.Int) (*NFTBatchResult, error) {
 	if u.nftContract == nil {
 		return nil, fmt.Errorf("NFT contract not available for chain %d", u.chainID)
 	}
@@ -391,7 +391,7 @@ func (u *BatchCaller) NFTBatchBurn(ctx context.Context, tokenIds []*big.Int) (*N
 }
 
 // NFTBatchTransferFrom executes a batch transfer operation for NFTs
-func (u *BatchCaller) NFTBatchTransferFrom(ctx context.Context, fromAddresses, toAddresses []common.Address, tokenIds []*big.Int) (*NFTBatchResult, error) {
+func (u *BatchCaller) NFTBatchTransferFrom(ctx context.Context, fromAddresses, toAddresses []common.Address, tokenIDs []*big.Int) (*NFTBatchResult, error) {
 	if u.nftContract == nil {
 		return nil, fmt.Errorf("NFT contract not available for chain %d", u.chainID)
 	}
@@ -476,9 +476,8 @@ func (u *BatchCaller) waitForConfirmation(ctx context.Context, txHash common.Has
 			if err == nil {
 				if receipt.Status == 1 {
 					return receipt, nil
-				} else {
-					return nil, fmt.Errorf("transaction failed with status: %d", receipt.Status)
 				}
+				return nil, fmt.Errorf("transaction failed with status: %d", receipt.Status)
 			}
 			// Continue waiting if transaction is not mined yet
 		}
@@ -488,6 +487,9 @@ func (u *BatchCaller) waitForConfirmation(ctx context.Context, txHash common.Has
 // calculateCPOPEfficiency calculates gas efficiency for CPOP operations
 func (u *BatchCaller) calculateCPOPEfficiency(operationCount int, actualGas uint64) float64 {
 	// Estimated gas for individual operations
+	if operationCount < 0 {
+		return 0
+	}
 	estimatedIndividualGas := uint64(operationCount) * 21000 // Base transfer gas
 	if actualGas < estimatedIndividualGas {
 		return ((float64(estimatedIndividualGas - actualGas)) / float64(estimatedIndividualGas)) * 100
@@ -497,6 +499,9 @@ func (u *BatchCaller) calculateCPOPEfficiency(operationCount int, actualGas uint
 
 // calculateCPOPGasSaved calculates gas saved for CPOP operations
 func (u *BatchCaller) calculateCPOPGasSaved(operationCount int, actualGas uint64) uint64 {
+	if operationCount < 0 {
+		return 0
+	}
 	estimatedIndividualGas := uint64(operationCount) * 21000
 	if actualGas < estimatedIndividualGas {
 		return estimatedIndividualGas - actualGas

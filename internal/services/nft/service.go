@@ -197,38 +197,28 @@ const (
 
 // Error checking functions
 func IsValidationError(err error) bool {
-	if nftErr, ok := err.(NFTError); ok {
-		return nftErr.Type == ErrorTypeValidation
-	}
-	return false
+	var nftErr NFTError
+	return errors.As(err, &nftErr) && nftErr.Type == ErrorTypeValidation
 }
 
 func IsCollectionNotFoundError(err error) bool {
-	if nftErr, ok := err.(NFTError); ok {
-		return nftErr.Type == ErrorTypeCollectionNotFound
-	}
-	return false
+	var nftErr NFTError
+	return errors.As(err, &nftErr) && nftErr.Type == ErrorTypeCollectionNotFound
 }
 
 func IsChainNotSupportedError(err error) bool {
-	if nftErr, ok := err.(NFTError); ok {
-		return nftErr.Type == ErrorTypeChainNotSupported
-	}
-	return false
+	var nftErr NFTError
+	return errors.As(err, &nftErr) && nftErr.Type == ErrorTypeChainNotSupported
 }
 
 func IsNFTNotFoundError(err error) bool {
-	if nftErr, ok := err.(NFTError); ok {
-		return nftErr.Type == ErrorTypeNFTNotFound
-	}
-	return false
+	var nftErr NFTError
+	return errors.As(err, &nftErr) && nftErr.Type == ErrorTypeNFTNotFound
 }
 
 func IsOwnershipError(err error) bool {
-	if nftErr, ok := err.(NFTError); ok {
-		return nftErr.Type == ErrorTypeOwnership
-	}
-	return false
+	var nftErr NFTError
+	return errors.As(err, &nftErr) && nftErr.Type == ErrorTypeOwnership
 }
 
 // BatchMintNFTs processes a batch mint request
@@ -333,7 +323,11 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			log.Warn().Err(rollbackErr).Msg("Failed to rollback transaction")
+		}
+	}()
 
 	for _, mintOp := range request.MintOperations {
 		// Generate token ID (this could be more sophisticated)
@@ -527,7 +521,11 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			log.Warn().Err(rollbackErr).Msg("Failed to rollback transaction")
+		}
+	}()
 
 	processedCount := 0
 	batchID := generateBatchID()
@@ -543,7 +541,7 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 		`, request.CollectionID, burnOp.TokenID).Scan(&currentOwner, &isBurned, &isMinted)
 
 		if err != nil {
-			if err == sql.ErrNoRows {
+			if errors.Is(err, sql.ErrNoRows) {
 				return nil, nil, NFTError{
 					Type:    ErrorTypeNFTNotFound,
 					Message: fmt.Sprintf("NFT with token ID %s not found in collection %s", burnOp.TokenID, request.CollectionID),
@@ -737,7 +735,11 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 	if err != nil {
 		return nil, nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			log.Warn().Err(rollbackErr).Msg("Failed to rollback transaction")
+		}
+	}()
 
 	processedCount := 0
 	batchID := generateBatchID()
@@ -753,7 +755,7 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 		`, request.CollectionID, transferOp.TokenID).Scan(&currentOwner, &isBurned, &isMinted, &isLocked)
 
 		if err != nil {
-			if err == sql.ErrNoRows {
+			if errors.Is(err, sql.ErrNoRows) {
 				return nil, nil, NFTError{
 					Type:    ErrorTypeNFTNotFound,
 					Message: fmt.Sprintf("NFT with token ID %s not found in collection %s", transferOp.TokenID, request.CollectionID),
@@ -901,7 +903,7 @@ func (s *service) GetCollection(ctx context.Context, collectionID string) (*Coll
 	)
 
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return nil, NFTError{
 				Type:    ErrorTypeCollectionNotFound,
 				Message: fmt.Sprintf("Collection %s not found", collectionID),
@@ -1250,49 +1252,4 @@ func (s *service) sendTransactionFailedNotification(ctx context.Context, tx *mod
 	}
 }
 
-// sendNFTOperationFailedNotification sends notification for NFT operation failures
-func (s *service) sendNFTOperationFailedNotification(ctx context.Context, userID, operationType, collectionID, tokenID string, chainID int64, failureReason string, extraData map[string]interface{}) {
-	if s.batchProcessor == nil {
-		return // No notification processor available, skip silently
-	}
 
-	// Build notification data for NFT operation failures
-	notificationData := map[string]interface{}{
-		"type":           "nft_operation_failed",
-		"user_id":        userID,
-		"operation_type": operationType, // "mint", "burn", "transfer"
-		"collection_id":  collectionID,
-		"chain_id":       chainID,
-		"failure_reason": failureReason,
-		"timestamp":      time.Now().Unix(),
-	}
-
-	// Add token_id if provided
-	if tokenID != "" {
-		notificationData["nft_token_id"] = tokenID
-	}
-
-	// Add any extra data provided
-	for k, v := range extraData {
-		notificationData[k] = v
-	}
-
-	notification := queue.NotificationJob{
-		ID:        uuid.New().String(),
-		JobType:   queue.JobTypeNotification,
-		UserID:    userID,
-		EventType: "nft_operation_failed",
-		Data:      notificationData,
-		Priority:  queue.PriorityHigh, // High priority for failure notifications
-		CreatedAt: time.Now(),
-	}
-
-	if err := s.batchProcessor.PublishNotification(ctx, notification); err != nil {
-		log.Warn().Err(err).
-			Str("user_id", userID).
-			Str("operation_type", operationType).
-			Str("collection_id", collectionID).
-			Str("failure_reason", failureReason).
-			Msg("Failed to send NFT operation failed notification")
-	}
-}

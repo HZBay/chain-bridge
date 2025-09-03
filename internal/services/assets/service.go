@@ -551,8 +551,7 @@ func (s *service) GetUserAssets(ctx context.Context, userID string) (*types.Asse
 	var totalValueUsd float64
 
 	// Process fungible token balances
-	if userBalances != nil {
-		for _, balance := range userBalances {
+	for _, balance := range userBalances {
 			// Ensure relationships are loaded
 			if balance.R == nil || balance.R.Chain == nil || balance.R.Token == nil {
 				log.Warn().
@@ -604,7 +603,6 @@ func (s *service) GetUserAssets(ctx context.Context, userID string) (*types.Asse
 			}
 
 			assets = append(assets, assetInfo)
-		}
 	}
 
 	// Process NFT assets - group by collection

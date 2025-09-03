@@ -701,7 +701,7 @@ func (c *RabbitMQBatchConsumer) processNFTMintBatch(ctx context.Context, caller 
 		return nil, fmt.Errorf("no valid NFT mint jobs found")
 	}
 
-	recipients, tokenIds, metadataURIs, err := c.prepareNFTMintParams(ctx, mintJobs)
+	recipients, tokenIDs, metadataURIs, err := c.prepareNFTMintParams(ctx, mintJobs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare NFT mint parameters: %w", err)
 	}
@@ -740,7 +740,7 @@ func (c *RabbitMQBatchConsumer) processNFTBurnBatch(ctx context.Context, caller 
 		return nil, fmt.Errorf("no valid NFT burn jobs found")
 	}
 
-	tokenIds, err := c.prepareNFTBurnParams(ctx, burnJobs)
+	tokenIDs, err := c.prepareNFTBurnParams(ctx, burnJobs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare NFT burn parameters: %w", err)
 	}
@@ -779,7 +779,7 @@ func (c *RabbitMQBatchConsumer) processNFTTransferBatch(ctx context.Context, cal
 		return nil, fmt.Errorf("no valid NFT transfer jobs found")
 	}
 
-	fromAddresses, toAddresses, tokenIds, err := c.prepareNFTTransferParams(ctx, transferJobs)
+	fromAddresses, toAddresses, tokenIDs, err := c.prepareNFTTransferParams(ctx, transferJobs)
 	if err != nil {
 		return nil, fmt.Errorf("failed to prepare NFT transfer parameters: %w", err)
 	}
@@ -2005,7 +2005,7 @@ func (c *RabbitMQBatchConsumer) prepareNFTMintParams(ctx context.Context, jobs [
 }
 
 // prepareNFTBurnParams prepares parameters for NFT batch burn
-func (c *RabbitMQBatchConsumer) prepareNFTBurnParams(ctx context.Context, jobs []NFTBurnJob) ([]*big.Int, error) {
+func (c *RabbitMQBatchConsumer) prepareNFTBurnParams(_ context.Context, jobs []NFTBurnJob) ([]*big.Int, error) {
 	tokenIds := make([]*big.Int, len(jobs))
 
 	for i, job := range jobs {
