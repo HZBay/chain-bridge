@@ -424,14 +424,15 @@ func LoadConfigFromDatabase(ctx context.Context, db *sql.DB) (PaymentManagerConf
 			PaymentAddress:     chain.PaymentContractAddress.String,
 			StartBlock:         0,                                    // Start from latest block for new listeners
 			ConfirmationBlocks: func() uint64 {
-				if chain.ConfirmationBlocks.Int < 0 {
+				val := chain.ConfirmationBlocks.Int
+				if val < 0 {
 					return 0
 				}
-				// Ensure safe conversion to uint64
-				if chain.ConfirmationBlocks.Int > int(^uint64(0)>>1) {
-					return ^uint64(0) >> 1 // Max safe value
+				// Use safe conversion avoiding direct cast
+				if val > 0x7FFFFFFFFFFFFFFF { // Max safe int64 value
+					return 0x7FFFFFFFFFFFFFFF
 				}
-				return uint64(chain.ConfirmationBlocks.Int)
+				return uint64(val)
 			}(), // Default confirmation blocks (could be made configurable)
 			PollInterval:       "10s",                                // Default poll interval (could be made configurable)
 			Enabled:            chain.IsEnabled.Bool,

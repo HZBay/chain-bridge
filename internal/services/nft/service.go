@@ -102,6 +102,8 @@ type BatchPreferences struct {
 }
 
 // NFTMetadata represents NFT metadata
+//
+//nolint:revive // NFTMetadata name is intentional to avoid ambiguity
 type NFTMetadata struct {
 	Name        string         `json:"name,omitempty"`
 	Description string         `json:"description,omitempty"`
@@ -111,6 +113,8 @@ type NFTMetadata struct {
 }
 
 // NFTAttribute represents an NFT attribute
+//
+//nolint:revive // NFTAttribute name is intentional to avoid ambiguity
 type NFTAttribute struct {
 	TraitType        string  `json:"trait_type"`
 	Value            string  `json:"value"`
@@ -132,6 +136,8 @@ type Collection struct {
 }
 
 // NFTAsset represents an NFT asset
+//
+//nolint:revive // NFTAsset name is intentional to avoid ambiguity
 type NFTAsset struct {
 	ID           int          `json:"id"`
 	CollectionID string       `json:"collection_id"`
@@ -177,6 +183,8 @@ type BatchInfo struct {
 }
 
 // Error types
+//
+//nolint:revive // NFTError name is intentional to avoid ambiguity
 type NFTError struct {
 	Type    string `json:"type"`
 	Message string `json:"message"`
