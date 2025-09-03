@@ -21,9 +21,9 @@ import (
 
 // TxConfirmationWatcher monitors blockchain transactions for confirmations
 type TxConfirmationWatcher struct {
-	db          *sql.DB
-	unifiedCallers map[int64]*blockchain.UnifiedBatchCaller // Changed from cpopCallers
-	notificationProcessor NotificationProcessor // Added for sending success notifications
+	db                    *sql.DB
+	unifiedCallers        map[int64]*blockchain.BatchCaller // Changed from cpopCallers
+	notificationProcessor NotificationProcessor             // Added for sending success notifications
 
 	// Configuration
 	confirmationBlocks int
@@ -67,19 +67,19 @@ type BatchOperation struct {
 	Amount        decimal.Decimal `db:"amount"`
 	Direction     sql.NullString  `db:"transfer_direction"`
 	// NFT-specific fields
-	CollectionID  sql.NullString  `db:"collection_id"`
-	NFTTokenID    sql.NullString  `db:"nft_token_id"`
+	CollectionID sql.NullString `db:"collection_id"`
+	NFTTokenID   sql.NullString `db:"nft_token_id"`
 }
 
 // NewTxConfirmationWatcher creates a new transaction confirmation watcher
 func NewTxConfirmationWatcher(
 	db *sql.DB,
-	unifiedCallers map[int64]*blockchain.UnifiedBatchCaller,
+	unifiedCallers map[int64]*blockchain.BatchCaller,
 	notificationProcessor NotificationProcessor,
 ) *TxConfirmationWatcher {
 	return &TxConfirmationWatcher{
-		db:          db,
-		unifiedCallers: unifiedCallers,
+		db:                    db,
+		unifiedCallers:        unifiedCallers,
 		notificationProcessor: notificationProcessor,
 
 		// Default configuration
@@ -745,7 +745,7 @@ func (w *TxConfirmationWatcher) GetMetrics() map[string]interface{} {
 // checkTransactionConfirmation checks if a transaction has enough confirmations
 func (w *TxConfirmationWatcher) checkTransactionConfirmation(
 	ctx context.Context,
-	caller *blockchain.CPOPBatchCaller,
+	caller *blockchain.BatchCaller,
 	txHash string,
 	requiredBlocks int,
 ) (bool, int, error) {
@@ -852,7 +852,7 @@ func (w *TxConfirmationWatcher) updateConfirmationStatus(
 // WaitForConfirmation waits for a transaction to reach the specified number of confirmations
 func (w *TxConfirmationWatcher) WaitForConfirmation(
 	ctx context.Context,
-	caller *blockchain.CPOPBatchCaller,
+	caller *blockchain.BatchCaller,
 	txHash string,
 	requiredBlocks int,
 	timeout time.Duration,
@@ -1041,12 +1041,12 @@ func (w *TxConfirmationWatcher) sendSuccessNotifications(ctx context.Context, ba
 func (w *TxConfirmationWatcher) sendNFTSuccessNotification(ctx context.Context, op BatchOperation, notificationType string, chainID int64, txHash string) {
 	// Build notification data
 	notificationData := map[string]interface{}{
-		"type":         notificationType,
-		"user_id":      op.UserID,
-		"chain_id":     chainID,
-		"tx_hash":      txHash,
-		"timestamp":    time.Now().Unix(),
-		"status":       "confirmed",
+		"type":      notificationType,
+		"user_id":   op.UserID,
+		"chain_id":  chainID,
+		"tx_hash":   txHash,
+		"timestamp": time.Now().Unix(),
+		"status":    "confirmed",
 	}
 
 	// Add NFT-specific data if available

@@ -628,7 +628,7 @@ func (c *RabbitMQBatchConsumer) executeBlockchainBatch(ctx context.Context, mess
 }
 
 // processAssetAdjustBatch processes mint/burn batch
-func (c *RabbitMQBatchConsumer) processAssetAdjustBatch(ctx context.Context, caller *blockchain.UnifiedBatchCaller, jobs []BatchJob) (*blockchain.BatchResult, error) {
+func (c *RabbitMQBatchConsumer) processAssetAdjustBatch(ctx context.Context, caller *blockchain.BatchCaller, jobs []BatchJob) (*blockchain.BatchResult, error) {
 	var mintJobs, burnJobs []AssetAdjustJob
 
 	// Separate mint and burn jobs
@@ -664,7 +664,7 @@ func (c *RabbitMQBatchConsumer) processAssetAdjustBatch(ctx context.Context, cal
 }
 
 // processTransferBatch processes transfer batch using BatchTransferFrom
-func (c *RabbitMQBatchConsumer) processTransferBatch(ctx context.Context, caller *blockchain.UnifiedBatchCaller, jobs []BatchJob) (*blockchain.BatchResult, error) {
+func (c *RabbitMQBatchConsumer) processTransferBatch(ctx context.Context, caller *blockchain.BatchCaller, jobs []BatchJob) (*blockchain.BatchResult, error) {
 	var transferJobs []TransferJob
 	for _, job := range jobs {
 		if transferJob, ok := job.(TransferJob); ok {
@@ -683,8 +683,8 @@ func (c *RabbitMQBatchConsumer) processTransferBatch(ctx context.Context, caller
 	return caller.BatchTransferFrom(ctx, fromAddresses, toAddresses, amounts)
 }
 
-// processNFTMintBatch processes NFT mint batch using UnifiedBatchCaller
-func (c *RabbitMQBatchConsumer) processNFTMintBatch(ctx context.Context, caller *blockchain.UnifiedBatchCaller, jobs []BatchJob) (*blockchain.BatchResult, error) {
+// processNFTMintBatch processes NFT mint batch using BatchCaller
+func (c *RabbitMQBatchConsumer) processNFTMintBatch(ctx context.Context, caller *blockchain.BatchCaller, jobs []BatchJob) (*blockchain.BatchResult, error) {
 	// Check if NFT operations are supported on this chain
 	if !caller.IsNFTEnabled() {
 		return nil, fmt.Errorf("NFT operations not supported on chain %d", caller.GetChainID())
@@ -722,8 +722,8 @@ func (c *RabbitMQBatchConsumer) processNFTMintBatch(ctx context.Context, caller 
 	}, nil
 }
 
-// processNFTBurnBatch processes NFT burn batch using UnifiedBatchCaller
-func (c *RabbitMQBatchConsumer) processNFTBurnBatch(ctx context.Context, caller *blockchain.UnifiedBatchCaller, jobs []BatchJob) (*blockchain.BatchResult, error) {
+// processNFTBurnBatch processes NFT burn batch using BatchCaller
+func (c *RabbitMQBatchConsumer) processNFTBurnBatch(ctx context.Context, caller *blockchain.BatchCaller, jobs []BatchJob) (*blockchain.BatchResult, error) {
 	// Check if NFT operations are supported on this chain
 	if !caller.IsNFTEnabled() {
 		return nil, fmt.Errorf("NFT operations not supported on chain %d", caller.GetChainID())
@@ -761,8 +761,8 @@ func (c *RabbitMQBatchConsumer) processNFTBurnBatch(ctx context.Context, caller 
 	}, nil
 }
 
-// processNFTTransferBatch processes NFT transfer batch using UnifiedBatchCaller
-func (c *RabbitMQBatchConsumer) processNFTTransferBatch(ctx context.Context, caller *blockchain.UnifiedBatchCaller, jobs []BatchJob) (*blockchain.BatchResult, error) {
+// processNFTTransferBatch processes NFT transfer batch using BatchCaller
+func (c *RabbitMQBatchConsumer) processNFTTransferBatch(ctx context.Context, caller *blockchain.BatchCaller, jobs []BatchJob) (*blockchain.BatchResult, error) {
 	// Check if NFT operations are supported on this chain
 	if !caller.IsNFTEnabled() {
 		return nil, fmt.Errorf("NFT operations not supported on chain %d", caller.GetChainID())

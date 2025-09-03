@@ -47,7 +47,7 @@ type RabbitMQBatchConsumer struct {
 	client              *RabbitMQClient
 	db                  *sql.DB
 	batchOptimizer      *BatchOptimizer
-	cpopCallers         map[int64]*blockchain.UnifiedBatchCaller // Changed to unified callers
+	cpopCallers         map[int64]*blockchain.BatchCaller // Changed to unified callers
 	confirmationWatcher *TxConfirmationWatcher
 	batchProcessor      BatchProcessor // Added for notification publishing
 
@@ -85,7 +85,7 @@ func NewRabbitMQBatchConsumerForChain(
 	client *RabbitMQClient,
 	db *sql.DB,
 	optimizer *BatchOptimizer,
-	cpopCallers map[int64]*blockchain.UnifiedBatchCaller, // Changed to unified callers
+	cpopCallers map[int64]*blockchain.BatchCaller, // Changed to unified callers
 	confirmationWatcher *TxConfirmationWatcher,
 	batchProcessor BatchProcessor,
 	chainID int64,
