@@ -23,7 +23,7 @@ type ConsumerManager struct {
 	client              *RabbitMQClient
 	db                  *sql.DB
 	batchOptimizer      *BatchOptimizer
-	unifiedCallers      map[int64]*blockchain.UnifiedBatchCaller // Changed from cpopCallers
+	unifiedCallers      map[int64]*blockchain.BatchCaller // Changed from cpopCallers
 	confirmationWatcher *TxConfirmationWatcher
 	batchProcessor      BatchProcessor
 	config              config.Server
@@ -169,7 +169,7 @@ func (cm *ConsumerManager) setupConsumersForEnabledChains(ctx context.Context) e
 	defer cm.consumersMutex.Unlock()
 
 	// Initialize unified callers map for blockchain interactions
-	cm.unifiedCallers = make(map[int64]*blockchain.UnifiedBatchCaller)
+	cm.unifiedCallers = make(map[int64]*blockchain.BatchCaller)
 
 	// Step 3: Process each enabled chain and create necessary components
 	successfulChains := 0
@@ -233,10 +233,10 @@ func (cm *ConsumerManager) setupConsumersForEnabledChains(ctx context.Context) e
 			}
 		}
 
-		caller, err := blockchain.NewUnifiedBatchCaller(
+		caller, err := blockchain.NewBatchCaller(
 			chain.RPCURL,
 			common.HexToAddress(chain.ToeknAddress.String), // CPOP token address
-			nftContractAddr,                                // NFT contract address
+			nftContractAddr, // NFT contract address
 			auth,
 			chain.ChainID,
 		)
