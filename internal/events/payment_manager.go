@@ -422,9 +422,9 @@ func LoadConfigFromDatabase(ctx context.Context, db *sql.DB) (PaymentManagerConf
 			ChainID:            chain.ChainID,
 			RPCEndpoint:        chain.RPCURL,
 			PaymentAddress:     chain.PaymentContractAddress.String,
-			StartBlock:         0,     // Start from latest block for new listeners
-			ConfirmationBlocks: 12,    // Default confirmation blocks (could be made configurable)
-			PollInterval:       "10s", // Default poll interval (could be made configurable)
+			StartBlock:         0,                                    // Start from latest block for new listeners
+			ConfirmationBlocks: uint64(chain.ConfirmationBlocks.Int), // Default confirmation blocks (could be made configurable)
+			PollInterval:       "10s",                                // Default poll interval (could be made configurable)
 			Enabled:            chain.IsEnabled.Bool,
 		}
 
