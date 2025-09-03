@@ -706,7 +706,7 @@ func (c *RabbitMQBatchConsumer) processNFTMintBatch(ctx context.Context, caller 
 		return nil, fmt.Errorf("failed to prepare NFT mint parameters: %w", err)
 	}
 
-	nftResult, err := caller.NFTBatchMint(ctx, recipients, tokenIds, metadataURIs)
+	nftResult, err := caller.NFTBatchMint(ctx, recipients, tokenIDs, metadataURIs)
 	if err != nil {
 		return nil, err
 	}
@@ -745,7 +745,7 @@ func (c *RabbitMQBatchConsumer) processNFTBurnBatch(ctx context.Context, caller 
 		return nil, fmt.Errorf("failed to prepare NFT burn parameters: %w", err)
 	}
 
-	nftResult, err := caller.NFTBatchBurn(ctx, tokenIds)
+	nftResult, err := caller.NFTBatchBurn(ctx, tokenIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -784,7 +784,7 @@ func (c *RabbitMQBatchConsumer) processNFTTransferBatch(ctx context.Context, cal
 		return nil, fmt.Errorf("failed to prepare NFT transfer parameters: %w", err)
 	}
 
-	nftResult, err := caller.NFTBatchTransferFrom(ctx, fromAddresses, toAddresses, tokenIds)
+	nftResult, err := caller.NFTBatchTransferFrom(ctx, fromAddresses, toAddresses, tokenIDs)
 	if err != nil {
 		return nil, err
 	}
@@ -1980,7 +1980,7 @@ func (c *RabbitMQBatchConsumer) extractBlockNumber(blockNumber *big.Int) int64 {
 // prepareNFTMintParams prepares parameters for NFT batch mint
 func (c *RabbitMQBatchConsumer) prepareNFTMintParams(ctx context.Context, jobs []NFTMintJob) ([]common.Address, []*big.Int, []string, error) {
 	recipients := make([]common.Address, len(jobs))
-	tokenIds := make([]*big.Int, len(jobs))
+	tokenIDs := make([]*big.Int, len(jobs))
 	metadataURIs := make([]string, len(jobs))
 
 	for i, job := range jobs {
@@ -1996,17 +1996,17 @@ func (c *RabbitMQBatchConsumer) prepareNFTMintParams(ctx context.Context, jobs [
 		if !ok {
 			return nil, nil, nil, fmt.Errorf("invalid token ID: %s", job.TokenID)
 		}
-		tokenIds[i] = tokenID
+		tokenIDs[i] = tokenID
 
 		metadataURIs[i] = job.MetadataURI
 	}
 
-	return recipients, tokenIds, metadataURIs, nil
+	return recipients, tokenIDs, metadataURIs, nil
 }
 
 // prepareNFTBurnParams prepares parameters for NFT batch burn
 func (c *RabbitMQBatchConsumer) prepareNFTBurnParams(_ context.Context, jobs []NFTBurnJob) ([]*big.Int, error) {
-	tokenIds := make([]*big.Int, len(jobs))
+	tokenIDs := make([]*big.Int, len(jobs))
 
 	for i, job := range jobs {
 		// Convert token ID string to big.Int
@@ -2014,17 +2014,17 @@ func (c *RabbitMQBatchConsumer) prepareNFTBurnParams(_ context.Context, jobs []N
 		if !ok {
 			return nil, fmt.Errorf("invalid token ID: %s", job.TokenID)
 		}
-		tokenIds[i] = tokenID
+		tokenIDs[i] = tokenID
 	}
 
-	return tokenIds, nil
+	return tokenIDs, nil
 }
 
 // prepareNFTTransferParams prepares parameters for NFT batch transfer
 func (c *RabbitMQBatchConsumer) prepareNFTTransferParams(ctx context.Context, jobs []NFTTransferJob) ([]common.Address, []common.Address, []*big.Int, error) {
 	fromAddresses := make([]common.Address, len(jobs))
 	toAddresses := make([]common.Address, len(jobs))
-	tokenIds := make([]*big.Int, len(jobs))
+	tokenIDs := make([]*big.Int, len(jobs))
 
 	for i, job := range jobs {
 		// Convert user IDs to addresses using AA address lookup
@@ -2045,8 +2045,8 @@ func (c *RabbitMQBatchConsumer) prepareNFTTransferParams(ctx context.Context, jo
 		if !ok {
 			return nil, nil, nil, fmt.Errorf("invalid token ID: %s", job.TokenID)
 		}
-		tokenIds[i] = tokenID
+		tokenIDs[i] = tokenID
 	}
 
-	return fromAddresses, toAddresses, tokenIds, nil
+	return fromAddresses, toAddresses, tokenIDs, nil
 }
