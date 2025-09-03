@@ -177,8 +177,8 @@ func convertBatchPreferences(prefs *types.BatchPreference) *nft.BatchPreferences
 	if prefs.MaxWaitTime != "" {
 		result.MaxWaitTime = &prefs.MaxWaitTime
 	}
-	if prefs.Priority != "" {
-		result.Priority = &prefs.Priority
+	if prefs.Priority != nil && *prefs.Priority != "" {
+		result.Priority = prefs.Priority
 	}
 
 	return result
@@ -191,20 +191,9 @@ func convertBatchInfo(batchInfo *nft.BatchInfo) *types.BatchInfo {
 	}
 
 	result := &types.BatchInfo{
-		BatchID:              batchInfo.BatchID,
-		QueuedTransactions:   int64(batchInfo.QueuedTransactions),
-		EstimatedProcessTime: batchInfo.EstimatedProcessTime,
-		Priority:             batchInfo.Priority,
-	}
-
-	if batchInfo.EstimatedGasCost != nil {
-		result.EstimatedGasCost = *batchInfo.EstimatedGasCost
+		BatchID: batchInfo.BatchID,
 	}
 
 	return result
 }
 
-// Constants for NFT operations
-const (
-	MaxNFTOperationsPerRequest = 100
-)
