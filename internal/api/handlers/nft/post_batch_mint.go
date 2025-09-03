@@ -166,4 +166,3 @@ func (h *Handler) BatchMintNFTs(c echo.Context) error {
 
 	return c.JSON(http.StatusOK, compositeResponse)
 }
-

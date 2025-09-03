@@ -53,6 +53,7 @@ func AttachAllRoutes(s *api.Server) {
 		monitoring.GetQueueMetricsRoute(s),
 		monitoring.GetQueueStatsRoute(s),
 		monitoring.PostReloadPaymentEventsConfigRoute(s),
+		nft.GetNFTMetadataRoute(s),
 		nft.PostBatchBurnNFTsRoute(s),
 		nft.PostBatchMintNFTsRoute(s),
 		nft.PostBatchTransferNFTsRoute(s),

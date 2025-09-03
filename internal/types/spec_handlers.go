@@ -64,6 +64,7 @@ func (o *SwaggerSpec) initHandlerCache() {
 	o.Handlers["GET"]["/-/batches/{batch_id}"] = true
 	o.Handlers["GET"]["/-/chains/{chain_id}"] = true
 	o.Handlers["GET"]["/-/chains"] = true
+	o.Handlers["GET"]["/api/v1/meta/{token_id}"] = true
 	o.Handlers["GET"]["/-/monitoring/optimization/{chain_id}/{token_id}"] = true
 	o.Handlers["GET"]["/-/monitoring/payment-events/stats"] = true
 	o.Handlers["GET"]["/-/monitoring/queue/metrics"] = true

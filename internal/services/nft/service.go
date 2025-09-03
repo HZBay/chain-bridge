@@ -1223,7 +1223,7 @@ func convertMetadataToJSON(meta *NFTMetadata) string {
 	if meta == nil {
 		return "{}"
 	}
-	
+
 	// Create a map for JSON marshaling
 	metaMap := map[string]interface{}{
 		"name":         meta.Name,
@@ -1231,17 +1231,17 @@ func convertMetadataToJSON(meta *NFTMetadata) string {
 		"image":        meta.Image,
 		"external_url": meta.ExternalURL,
 	}
-	
+
 	if len(meta.Attributes) > 0 {
 		metaMap["attributes"] = meta.Attributes
 	}
-	
+
 	jsonData, err := json.Marshal(metaMap)
 	if err != nil {
 		log.Error().Err(err).Msg("Failed to marshal NFT metadata")
 		return "{}"
 	}
-	
+
 	return string(jsonData)
 }
 
@@ -1365,5 +1365,3 @@ func (s *service) sendTransactionFailedNotification(ctx context.Context, tx *mod
 		}
 	}
 }
-
-
