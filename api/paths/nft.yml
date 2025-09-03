@@ -3,6 +3,32 @@ info:
   title: github.com/hzbay/chain-bridge
   version: 0.1.0
 paths:
+  # NFT元数据公开接口 - 无需认证
+  /api/v1/meta/{token_id}:
+    get:
+      tags:
+        - nft
+      summary: Get NFT metadata by token ID
+      description: "获取NFT的元数据信息，支持OpenSea标准格式"
+      operationId: getNFTMetadata
+      parameters:
+        - name: token_id
+          in: path
+          description: NFT Token ID
+          required: true
+          type: string
+          example: "1"
+      responses:
+        "200":
+          description: NFT metadata retrieved successfully
+          schema:
+            $ref: "../definitions/nft.yml#/definitions/NFTStandardMetadata"
+        "404":
+          description: NFT not found
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "500":
+          $ref: "../definitions/errors.yml#/responses/InternalError"
   # 1. NFT批量铸造接口
   /api/v1/assets/nft/mint:
     post:

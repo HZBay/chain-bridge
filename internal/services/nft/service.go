@@ -30,6 +30,7 @@ type Service interface {
 	// NFT asset management
 	GetNFTAsset(ctx context.Context, collectionID, tokenID string) (*NFTAsset, error)
 	GetUserNFTAssets(ctx context.Context, userID string, chainID *int64) ([]*NFTAsset, error)
+	GetNFTMetadataByTokenID(ctx context.Context, tokenID string) (*NFTMetadata, error)
 }
 
 // service implements the NFT Service interface
@@ -217,6 +218,11 @@ func IsCollectionNotFoundError(err error) bool {
 func IsChainNotSupportedError(err error) bool {
 	var nftErr NFTError
 	return errors.As(err, &nftErr) && nftErr.Type == ErrorTypeChainNotSupported
+}
+
+func IsNotFoundError(err error) bool {
+	var nftErr NFTError
+	return errors.As(err, &nftErr) && nftErr.Type == ErrorTypeNFTNotFound
 }
 
 func IsNFTNotFoundError(err error) bool {
@@ -1102,6 +1108,106 @@ func (s *service) GetUserNFTAssets(ctx context.Context, userID string, chainID *
 		Msg("User NFT assets retrieved successfully")
 
 	return result, nil
+}
+
+// GetNFTMetadataByTokenID retrieves NFT metadata by token ID (public endpoint, no authentication required)
+func (s *service) GetNFTMetadataByTokenID(ctx context.Context, tokenID string) (*NFTMetadata, error) {
+	log.Debug().
+		Str("token_id", tokenID).
+		Msg("Getting NFT metadata by token ID")
+
+	// Validate token ID
+	if tokenID == "" {
+		return nil, NFTError{
+			Type:    ErrorTypeValidation,
+			Message: "token_id cannot be empty",
+		}
+	}
+
+	// Query NFT asset by token ID from any collection
+	// Since this is a public endpoint, we find the NFT regardless of ownership
+	nftAsset, err := models.NFTAssets(
+		models.NFTAssetWhere.TokenID.EQ(tokenID),
+		models.NFTAssetWhere.IsBurned.EQ(null.BoolFrom(false)), // Exclude burned NFTs
+		models.NFTAssetWhere.IsMinted.EQ(null.BoolFrom(true)),  // Only include minted NFTs
+	).One(ctx, s.db)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			log.Debug().
+				Str("token_id", tokenID).
+				Msg("NFT not found or not minted")
+			return nil, NFTError{
+				Type:    ErrorTypeNFTNotFound,
+				Message: fmt.Sprintf("NFT with token ID %s not found or not minted", tokenID),
+			}
+		}
+		return nil, fmt.Errorf("failed to query NFT asset: %w", err)
+	}
+
+	// Build metadata response in OpenSea standard format
+	metadata := &NFTMetadata{
+		Name:        nftAsset.Name.String,
+		Description: nftAsset.Description.String,
+		Image:       nftAsset.ImageURL.String,
+	}
+
+	// Add external URL if metadata URI is available
+	if nftAsset.MetadataURI.Valid && nftAsset.MetadataURI.String != "" {
+		metadata.ExternalURL = nftAsset.MetadataURI.String
+	}
+
+	// Parse and add attributes if available
+	if nftAsset.Attributes.Valid && len(nftAsset.Attributes.JSON) > 0 {
+		var attributesData map[string]interface{}
+		if err := json.Unmarshal(nftAsset.Attributes.JSON, &attributesData); err != nil {
+			log.Warn().Err(err).
+				Str("token_id", tokenID).
+				Msg("Failed to parse NFT attributes JSON")
+		} else {
+			// Try to extract attributes array if it exists
+			if attrs, ok := attributesData["attributes"].([]interface{}); ok {
+				for _, attr := range attrs {
+					if attrMap, ok := attr.(map[string]interface{}); ok {
+						nftAttr := NFTAttribute{}
+						if traitType, ok := attrMap["trait_type"].(string); ok {
+							nftAttr.TraitType = traitType
+						}
+						if value, ok := attrMap["value"].(string); ok {
+							nftAttr.Value = value
+						}
+						if rarity, ok := attrMap["rarity_percentage"].(float64); ok {
+							nftAttr.RarityPercentage = float32(rarity)
+						}
+						metadata.Attributes = append(metadata.Attributes, nftAttr)
+					}
+				}
+			} else {
+				// If attributes is not an array, try to use the whole JSON as attributes
+				// This handles cases where attributes might be stored differently
+				log.Debug().
+					Str("token_id", tokenID).
+					Msg("Attributes not in expected array format, using raw data")
+			}
+		}
+	}
+
+	// Set default values if fields are empty
+	if metadata.Name == "" {
+		metadata.Name = fmt.Sprintf("NFT #%s", tokenID)
+	}
+	if metadata.Description == "" {
+		metadata.Description = fmt.Sprintf("NFT with token ID %s", tokenID)
+	}
+
+	log.Debug().
+		Str("token_id", tokenID).
+		Str("name", metadata.Name).
+		Str("collection_id", nftAsset.CollectionID).
+		Bool("has_attributes", len(metadata.Attributes) > 0).
+		Msg("NFT metadata retrieved successfully")
+
+	return metadata, nil
 }
 
 // Helper functions

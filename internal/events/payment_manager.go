@@ -429,9 +429,6 @@ func LoadConfigFromDatabase(ctx context.Context, db *sql.DB) (PaymentManagerConf
 					return 0
 				}
 				// Use safe conversion avoiding direct cast
-				if val > 0x7FFFFFFFFFFFFFFF { // Max safe int64 value
-					return 0x7FFFFFFFFFFFFFFF
-				}
 				return uint64(val)
 			}(), // Default confirmation blocks (could be made configurable)
 			PollInterval:       "10s",                                // Default poll interval (could be made configurable)

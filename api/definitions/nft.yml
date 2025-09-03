@@ -64,6 +64,45 @@ definitions:
               description: "Rarity percentage"
               example: 2.5
 
+  # NFT标准元数据响应 (OpenSea兼容)
+  NFTStandardMetadata:
+    type: object
+    properties:
+      name:
+        type: string
+        description: "NFT name"
+        example: "Dave Starbelly"
+      description:
+        type: string
+        description: "NFT description"
+        example: "Friendly OpenSea Creature that enjoys long swims in the ocean."
+      image:
+        type: string
+        description: "NFT image URL"
+        example: "https://storage.googleapis.com/opensea-prod.appspot.com/puffs/3.png"
+      external_url:
+        type: string
+        description: "External URL"
+        example: "https://openseacreatures.io/3"
+      attributes:
+        type: array
+        items:
+          type: object
+          properties:
+            trait_type:
+              type: string
+              description: "Attribute type"
+              example: "Background"
+            value:
+              type: string
+              description: "Attribute value"
+              example: "Galaxy"
+            rarity_percentage:
+              type: number
+              format: float
+              description: "Rarity percentage"
+              example: 2.5
+
   # NFT物品
   NFTItem:
     type: object
