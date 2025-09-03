@@ -1200,8 +1200,8 @@ func (s *service) sendTransactionFailedNotification(ctx context.Context, tx *mod
 	if tx.CollectionID.Valid {
 		notificationData["collection_id"] = tx.CollectionID.String
 	}
-	if tx.NftTokenID.Valid {
-		notificationData["nft_token_id"] = tx.NftTokenID.String
+	if tx.NFTTokenID.Valid {
+		notificationData["nft_token_id"] = tx.NFTTokenID.String
 	}
 	if tx.RelatedUserID.Valid {
 		notificationData["related_user_id"] = tx.RelatedUserID.String
