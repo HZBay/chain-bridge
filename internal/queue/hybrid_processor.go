@@ -136,6 +136,75 @@ func (h *HybridBatchProcessor) PublishHealthCheck(ctx context.Context, job Healt
 	return err
 }
 
+// PublishNFTMint publishes an NFT mint job
+func (h *HybridBatchProcessor) PublishNFTMint(ctx context.Context, job NFTMintJob) error {
+	processor, processorType := h.selectProcessor()
+
+	startTime := time.Now()
+	err := processor.PublishNFTMint(ctx, job)
+	latency := time.Since(startTime)
+
+	// Update metrics
+	h.updateMetrics(processorType, err == nil, latency)
+
+	log.Debug().
+		Str("processor", processorType).
+		Str("job_id", job.ID).
+		Str("collection_id", job.CollectionID).
+		Str("token_id", job.TokenID).
+		Err(err).
+		Dur("latency", latency).
+		Msg("NFT mint job published")
+
+	return err
+}
+
+// PublishNFTBurn publishes an NFT burn job
+func (h *HybridBatchProcessor) PublishNFTBurn(ctx context.Context, job NFTBurnJob) error {
+	processor, processorType := h.selectProcessor()
+
+	startTime := time.Now()
+	err := processor.PublishNFTBurn(ctx, job)
+	latency := time.Since(startTime)
+
+	// Update metrics
+	h.updateMetrics(processorType, err == nil, latency)
+
+	log.Debug().
+		Str("processor", processorType).
+		Str("job_id", job.ID).
+		Str("collection_id", job.CollectionID).
+		Str("token_id", job.TokenID).
+		Err(err).
+		Dur("latency", latency).
+		Msg("NFT burn job published")
+
+	return err
+}
+
+// PublishNFTTransfer publishes an NFT transfer job
+func (h *HybridBatchProcessor) PublishNFTTransfer(ctx context.Context, job NFTTransferJob) error {
+	processor, processorType := h.selectProcessor()
+
+	startTime := time.Now()
+	err := processor.PublishNFTTransfer(ctx, job)
+	latency := time.Since(startTime)
+
+	// Update metrics
+	h.updateMetrics(processorType, err == nil, latency)
+
+	log.Debug().
+		Str("processor", processorType).
+		Str("job_id", job.ID).
+		Str("collection_id", job.CollectionID).
+		Str("token_id", job.TokenID).
+		Err(err).
+		Dur("latency", latency).
+		Msg("NFT transfer job published")
+
+	return err
+}
+
 // selectProcessor returns the RabbitMQ processor (simplified implementation)
 func (h *HybridBatchProcessor) selectProcessor() (BatchProcessor, string) {
 	// Always use RabbitMQ processor - simplified approach

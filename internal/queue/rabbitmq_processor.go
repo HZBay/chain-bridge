@@ -90,6 +90,51 @@ func (r *RabbitMQProcessor) PublishHealthCheck(ctx context.Context, job HealthCh
 	return r.client.PublishMessage(ctx, queueName, job)
 }
 
+// PublishNFTMint publishes an NFT mint job to the appropriate chain-specific queue
+func (r *RabbitMQProcessor) PublishNFTMint(ctx context.Context, job NFTMintJob) error {
+	queueName := r.client.GetQueueName(job.GetJobType(), job.GetChainID(), job.GetTokenID())
+
+	log.Debug().
+		Str("queue", queueName).
+		Str("job_id", job.GetID()).
+		Int64("chain_id", job.GetChainID()).
+		Str("collection_id", job.CollectionID).
+		Str("token_id", job.TokenID).
+		Msg("Publishing NFT mint job to chain-specific queue")
+
+	return r.client.PublishMessage(ctx, queueName, job)
+}
+
+// PublishNFTBurn publishes an NFT burn job to the appropriate chain-specific queue
+func (r *RabbitMQProcessor) PublishNFTBurn(ctx context.Context, job NFTBurnJob) error {
+	queueName := r.client.GetQueueName(job.GetJobType(), job.GetChainID(), job.GetTokenID())
+
+	log.Debug().
+		Str("queue", queueName).
+		Str("job_id", job.GetID()).
+		Int64("chain_id", job.GetChainID()).
+		Str("collection_id", job.CollectionID).
+		Str("token_id", job.TokenID).
+		Msg("Publishing NFT burn job to chain-specific queue")
+
+	return r.client.PublishMessage(ctx, queueName, job)
+}
+
+// PublishNFTTransfer publishes an NFT transfer job to the appropriate chain-specific queue
+func (r *RabbitMQProcessor) PublishNFTTransfer(ctx context.Context, job NFTTransferJob) error {
+	queueName := r.client.GetQueueName(job.GetJobType(), job.GetChainID(), job.GetTokenID())
+
+	log.Debug().
+		Str("queue", queueName).
+		Str("job_id", job.GetID()).
+		Int64("chain_id", job.GetChainID()).
+		Str("collection_id", job.CollectionID).
+		Str("token_id", job.TokenID).
+		Msg("Publishing NFT transfer job to chain-specific queue")
+
+	return r.client.PublishMessage(ctx, queueName, job)
+}
+
 // StartBatchConsumer starts the consumer manager which handles per-chain consumers
 func (r *RabbitMQProcessor) StartBatchConsumer(ctx context.Context) error {
 	log.Info().Msg("Starting RabbitMQ batch consumer with per-chain queue management")

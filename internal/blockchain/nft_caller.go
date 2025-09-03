@@ -348,3 +348,10 @@ const (
 	EstimatedNFTBurnGas     = uint64(50000)  // Estimated gas for single NFT burn
 	EstimatedNFTTransferGas = uint64(70000)  // Estimated gas for single NFT transfer
 )
+
+// weiToEther converts wei to ether as string
+func weiToEther(wei *big.Int) string {
+	ether := new(big.Float).SetInt(wei)
+	ether = ether.Quo(ether, big.NewFloat(1e18))
+	return ether.Text('f', 6) // 6 decimal places
+}

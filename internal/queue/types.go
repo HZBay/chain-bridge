@@ -25,6 +25,10 @@ const (
 	JobTypeAssetAdjust  JobType = "asset_adjust"
 	JobTypeNotification JobType = "notification"
 	JobTypeHealthCheck  JobType = "health_check"
+	// NFT batch operations
+	JobTypeNFTMint     JobType = "nft_mint"
+	JobTypeNFTBurn     JobType = "nft_burn"
+	JobTypeNFTTransfer JobType = "nft_transfer"
 )
 
 // Priority defines job priority levels
@@ -124,6 +128,77 @@ func (h HealthCheckJob) GetJobType() JobType     { return h.JobType }
 func (h HealthCheckJob) GetPriority() Priority   { return h.Priority }
 func (h HealthCheckJob) GetCreatedAt() time.Time { return h.CreatedAt }
 
+// NFTMintJob represents an NFT mint operation to be batched
+type NFTMintJob struct {
+	ID            string    `json:"id"`
+	JobType       JobType   `json:"job_type"`
+	TransactionID uuid.UUID `json:"transaction_id"`
+	ChainID       int64     `json:"chain_id"`
+	CollectionID  string    `json:"collection_id"`
+	ToUserID      string    `json:"to_user_id"`
+	TokenID       string    `json:"token_id"`
+	MetadataURI   string    `json:"metadata_uri,omitempty"`
+	BusinessType  string    `json:"business_type"`
+	ReasonType    string    `json:"reason_type"`
+	ReasonDetail  string    `json:"reason_detail,omitempty"`
+	Priority      Priority  `json:"priority"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+func (n NFTMintJob) GetID() string           { return n.ID }
+func (n NFTMintJob) GetChainID() int64       { return n.ChainID }
+func (n NFTMintJob) GetTokenID() int         { return 0 } // NFT operations don't use traditional tokenID
+func (n NFTMintJob) GetJobType() JobType     { return n.JobType }
+func (n NFTMintJob) GetPriority() Priority   { return n.Priority }
+func (n NFTMintJob) GetCreatedAt() time.Time { return n.CreatedAt }
+
+// NFTBurnJob represents an NFT burn operation to be batched
+type NFTBurnJob struct {
+	ID            string    `json:"id"`
+	JobType       JobType   `json:"job_type"`
+	TransactionID uuid.UUID `json:"transaction_id"`
+	ChainID       int64     `json:"chain_id"`
+	CollectionID  string    `json:"collection_id"`
+	OwnerUserID   string    `json:"owner_user_id"`
+	TokenID       string    `json:"token_id"`
+	BusinessType  string    `json:"business_type"`
+	ReasonType    string    `json:"reason_type"`
+	ReasonDetail  string    `json:"reason_detail,omitempty"`
+	Priority      Priority  `json:"priority"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+func (n NFTBurnJob) GetID() string           { return n.ID }
+func (n NFTBurnJob) GetChainID() int64       { return n.ChainID }
+func (n NFTBurnJob) GetTokenID() int         { return 0 } // NFT operations don't use traditional tokenID
+func (n NFTBurnJob) GetJobType() JobType     { return n.JobType }
+func (n NFTBurnJob) GetPriority() Priority   { return n.Priority }
+func (n NFTBurnJob) GetCreatedAt() time.Time { return n.CreatedAt }
+
+// NFTTransferJob represents an NFT transfer operation to be batched
+type NFTTransferJob struct {
+	ID            string    `json:"id"`
+	JobType       JobType   `json:"job_type"`
+	TransactionID uuid.UUID `json:"transaction_id"`
+	ChainID       int64     `json:"chain_id"`
+	CollectionID  string    `json:"collection_id"`
+	FromUserID    string    `json:"from_user_id"`
+	ToUserID      string    `json:"to_user_id"`
+	TokenID       string    `json:"token_id"`
+	BusinessType  string    `json:"business_type"`
+	ReasonType    string    `json:"reason_type"`
+	ReasonDetail  string    `json:"reason_detail,omitempty"`
+	Priority      Priority  `json:"priority"`
+	CreatedAt     time.Time `json:"created_at"`
+}
+
+func (n NFTTransferJob) GetID() string           { return n.ID }
+func (n NFTTransferJob) GetChainID() int64       { return n.ChainID }
+func (n NFTTransferJob) GetTokenID() int         { return 0 } // NFT operations don't use traditional tokenID
+func (n NFTTransferJob) GetJobType() JobType     { return n.JobType }
+func (n NFTTransferJob) GetPriority() Priority   { return n.Priority }
+func (n NFTTransferJob) GetCreatedAt() time.Time { return n.CreatedAt }
+
 // Stats provides statistics about queue performance
 type Stats struct {
 	QueueName       string        `json:"queue_name"`
@@ -142,6 +217,11 @@ type BatchProcessor interface {
 	PublishAssetAdjust(ctx context.Context, job AssetAdjustJob) error
 	PublishNotification(ctx context.Context, job NotificationJob) error
 	PublishHealthCheck(ctx context.Context, job HealthCheckJob) error
+
+	// NFT batch operations
+	PublishNFTMint(ctx context.Context, job NFTMintJob) error
+	PublishNFTBurn(ctx context.Context, job NFTBurnJob) error
+	PublishNFTTransfer(ctx context.Context, job NFTTransferJob) error
 
 	// Consumer management
 	StartBatchConsumer(ctx context.Context) error

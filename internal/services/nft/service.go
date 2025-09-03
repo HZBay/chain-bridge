@@ -3,6 +3,7 @@ package nft
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"time"
 
@@ -306,8 +307,30 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 			return nil, nil, fmt.Errorf("failed to create NFT asset record: %w", err)
 		}
 
-		// TODO: Queue the job for batch processing
-		// This would involve creating NFTMintJob and publishing to queue
+		// Create NFT mint job for batch processing
+		mintJob := queue.NFTMintJob{
+			ID:            uuid.New().String(),
+			JobType:       queue.JobTypeNFTMint,
+			TransactionID: transactionID,
+			ChainID:       request.ChainID,
+			CollectionID:  request.CollectionID,
+			ToUserID:      mintOp.ToUserID,
+			TokenID:       tokenID,
+			MetadataURI:   buildMetadataURI(collection.BaseURI, tokenID),
+			BusinessType:  mintOp.BusinessType,
+			ReasonType:    mintOp.ReasonType,
+			Priority:      queue.PriorityNormal,
+			CreatedAt:     time.Now(),
+		}
+
+		if mintOp.ReasonDetail != nil {
+			mintJob.ReasonDetail = *mintOp.ReasonDetail
+		}
+
+		// Queue the job for batch processing
+		if err := s.batchProcessor.PublishNFTMint(ctx, mintJob); err != nil {
+			return nil, nil, fmt.Errorf("failed to queue NFT mint job: %w", err)
+		}
 
 		processedCount++
 	}
@@ -333,33 +356,297 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 	return response, batchInfo, nil
 }
 
-// Placeholder implementations for other methods
+// BatchBurnNFTs processes a batch burn request
 func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) (*BatchBurnResponse, *BatchInfo, error) {
-	// TODO: Implement batch burn logic
-	return &BatchBurnResponse{
-			OperationID:    request.OperationID,
-			ProcessedCount: len(request.BurnOperations),
-			Status:         "recorded",
-		}, &BatchInfo{
-			BatchID:              generateBatchID(),
-			QueuedTransactions:   len(request.BurnOperations),
-			EstimatedProcessTime: "5-10 minutes",
-			Priority:             getPriority(request.BatchPreferences),
-		}, nil
+	log.Info().
+		Str("operation_id", request.OperationID).
+		Str("collection_id", request.CollectionID).
+		Int64("chain_id", request.ChainID).
+		Int("burn_count", len(request.BurnOperations)).
+		Msg("Processing NFT batch burn request")
+
+	// Validate collection exists and is enabled
+	collection, err := s.GetCollection(ctx, request.CollectionID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !collection.IsEnabled {
+		return nil, nil, NFTError{
+			Type:    ErrorTypeValidation,
+			Message: fmt.Sprintf("Collection %s is disabled", request.CollectionID),
+		}
+	}
+
+	if collection.ChainID != request.ChainID {
+		return nil, nil, NFTError{
+			Type:    ErrorTypeValidation,
+			Message: fmt.Sprintf("Collection %s is not on chain %d", request.CollectionID, request.ChainID),
+		}
+	}
+
+	// Begin database transaction
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	processedCount := 0
+	batchID := generateBatchID()
+
+	for _, burnOp := range request.BurnOperations {
+		// Validate NFT ownership
+		var currentOwner string
+		var isBurned, isMinted bool
+		err := tx.QueryRowContext(ctx, `
+			SELECT owner_user_id, is_burned, is_minted
+			FROM nft_assets
+			WHERE collection_id = $1 AND token_id = $2
+		`, request.CollectionID, burnOp.TokenID).Scan(&currentOwner, &isBurned, &isMinted)
+
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil, nil, NFTError{
+					Type:    ErrorTypeNFTNotFound,
+					Message: fmt.Sprintf("NFT with token ID %s not found in collection %s", burnOp.TokenID, request.CollectionID),
+				}
+			}
+			return nil, nil, fmt.Errorf("failed to query NFT asset: %w", err)
+		}
+
+		if !isMinted {
+			return nil, nil, NFTError{
+				Type:    ErrorTypeValidation,
+				Message: fmt.Sprintf("NFT with token ID %s is not yet minted", burnOp.TokenID),
+			}
+		}
+
+		if isBurned {
+			return nil, nil, NFTError{
+				Type:    ErrorTypeValidation,
+				Message: fmt.Sprintf("NFT with token ID %s is already burned", burnOp.TokenID),
+			}
+		}
+
+		if currentOwner != burnOp.OwnerUserID {
+			return nil, nil, NFTError{
+				Type:    ErrorTypeOwnership,
+				Message: fmt.Sprintf("User %s does not own NFT with token ID %s", burnOp.OwnerUserID, burnOp.TokenID),
+			}
+		}
+
+		// Create transaction record
+		transactionID := uuid.New()
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO transactions (
+				transaction_id, user_id, chain_id, tx_type, status, amount,
+				collection_id, nft_token_id, created_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NOW())
+		`, transactionID, burnOp.OwnerUserID, request.ChainID, "nft_burn", "recorded",
+			"1", request.CollectionID, burnOp.TokenID)
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create transaction record: %w", err)
+		}
+
+		// Create NFT burn job for batch processing
+		burnJob := queue.NFTBurnJob{
+			ID:            uuid.New().String(),
+			JobType:       queue.JobTypeNFTBurn,
+			TransactionID: transactionID,
+			ChainID:       request.ChainID,
+			CollectionID:  request.CollectionID,
+			OwnerUserID:   burnOp.OwnerUserID,
+			TokenID:       burnOp.TokenID,
+			BusinessType:  "burn",
+			ReasonType:    "user_burn",
+			Priority:      queue.PriorityNormal,
+			CreatedAt:     time.Now(),
+		}
+
+		// Queue the job for batch processing
+		if err := s.batchProcessor.PublishNFTBurn(ctx, burnJob); err != nil {
+			return nil, nil, fmt.Errorf("failed to queue NFT burn job: %w", err)
+		}
+
+		processedCount++
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	batchInfo := &BatchInfo{
+		BatchID:              batchID,
+		QueuedTransactions:   processedCount,
+		EstimatedProcessTime: "5-10 minutes",
+		Priority:             getPriority(request.BatchPreferences),
+	}
+
+	response := &BatchBurnResponse{
+		OperationID:    request.OperationID,
+		ProcessedCount: processedCount,
+		Status:         "recorded",
+	}
+
+	return response, batchInfo, nil
 }
 
+// BatchTransferNFTs processes a batch transfer request
 func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferRequest) (*BatchTransferResponse, *BatchInfo, error) {
-	// TODO: Implement batch transfer logic
-	return &BatchTransferResponse{
-			OperationID:    request.OperationID,
-			ProcessedCount: len(request.TransferOperations),
-			Status:         "recorded",
-		}, &BatchInfo{
-			BatchID:              generateBatchID(),
-			QueuedTransactions:   len(request.TransferOperations),
-			EstimatedProcessTime: "5-10 minutes",
-			Priority:             getPriority(request.BatchPreferences),
-		}, nil
+	log.Info().
+		Str("operation_id", request.OperationID).
+		Str("collection_id", request.CollectionID).
+		Int64("chain_id", request.ChainID).
+		Int("transfer_count", len(request.TransferOperations)).
+		Msg("Processing NFT batch transfer request")
+
+	// Validate collection exists and is enabled
+	collection, err := s.GetCollection(ctx, request.CollectionID)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	if !collection.IsEnabled {
+		return nil, nil, NFTError{
+			Type:    ErrorTypeValidation,
+			Message: fmt.Sprintf("Collection %s is disabled", request.CollectionID),
+		}
+	}
+
+	if collection.ChainID != request.ChainID {
+		return nil, nil, NFTError{
+			Type:    ErrorTypeValidation,
+			Message: fmt.Sprintf("Collection %s is not on chain %d", request.CollectionID, request.ChainID),
+		}
+	}
+
+	// Begin database transaction
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, nil, fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback()
+
+	processedCount := 0
+	batchID := generateBatchID()
+
+	for _, transferOp := range request.TransferOperations {
+		// Validate NFT ownership and status
+		var currentOwner string
+		var isBurned, isMinted, isLocked bool
+		err := tx.QueryRowContext(ctx, `
+			SELECT owner_user_id, is_burned, is_minted, is_locked
+			FROM nft_assets
+			WHERE collection_id = $1 AND token_id = $2 FOR UPDATE
+		`, request.CollectionID, transferOp.TokenID).Scan(&currentOwner, &isBurned, &isMinted, &isLocked)
+
+		if err != nil {
+			if err == sql.ErrNoRows {
+				return nil, nil, NFTError{
+					Type:    ErrorTypeNFTNotFound,
+					Message: fmt.Sprintf("NFT with token ID %s not found in collection %s", transferOp.TokenID, request.CollectionID),
+				}
+			}
+			return nil, nil, fmt.Errorf("failed to query NFT asset: %w", err)
+		}
+
+		if !isMinted {
+			return nil, nil, NFTError{
+				Type:    ErrorTypeValidation,
+				Message: fmt.Sprintf("NFT with token ID %s is not yet minted", transferOp.TokenID),
+			}
+		}
+
+		if isBurned {
+			return nil, nil, NFTError{
+				Type:    ErrorTypeValidation,
+				Message: fmt.Sprintf("NFT with token ID %s is burned", transferOp.TokenID),
+			}
+		}
+
+		if isLocked {
+			return nil, nil, NFTError{
+				Type:    ErrorTypeValidation,
+				Message: fmt.Sprintf("NFT with token ID %s is locked", transferOp.TokenID),
+			}
+		}
+
+		if currentOwner != transferOp.FromUserID {
+			return nil, nil, NFTError{
+				Type:    ErrorTypeOwnership,
+				Message: fmt.Sprintf("User %s does not own NFT with token ID %s", transferOp.FromUserID, transferOp.TokenID),
+			}
+		}
+
+		// Create transaction record
+		transactionID := uuid.New()
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO transactions (
+				transaction_id, user_id, chain_id, tx_type, status, amount,
+				collection_id, nft_token_id, related_user_id, created_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
+		`, transactionID, transferOp.FromUserID, request.ChainID, "nft_transfer", "recorded",
+			"1", request.CollectionID, transferOp.TokenID, transferOp.ToUserID)
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create transaction record: %w", err)
+		}
+
+		// Update NFT asset ownership temporarily (will be finalized on blockchain confirmation)
+		_, err = tx.ExecContext(ctx, `
+			UPDATE nft_assets
+			SET is_locked = true
+			WHERE collection_id = $1 AND token_id = $2
+		`, request.CollectionID, transferOp.TokenID)
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to lock NFT asset: %w", err)
+		}
+
+		// Create NFT transfer job for batch processing
+		transferJob := queue.NFTTransferJob{
+			ID:            uuid.New().String(),
+			JobType:       queue.JobTypeNFTTransfer,
+			TransactionID: transactionID,
+			ChainID:       request.ChainID,
+			CollectionID:  request.CollectionID,
+			FromUserID:    transferOp.FromUserID,
+			ToUserID:      transferOp.ToUserID,
+			TokenID:       transferOp.TokenID,
+			BusinessType:  "transfer",
+			ReasonType:    "user_transfer",
+			Priority:      queue.PriorityNormal,
+			CreatedAt:     time.Now(),
+		}
+
+		// Queue the job for batch processing
+		if err := s.batchProcessor.PublishNFTTransfer(ctx, transferJob); err != nil {
+			return nil, nil, fmt.Errorf("failed to queue NFT transfer job: %w", err)
+		}
+
+		processedCount++
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, nil, fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	batchInfo := &BatchInfo{
+		BatchID:              batchID,
+		QueuedTransactions:   processedCount,
+		EstimatedProcessTime: "5-10 minutes",
+		Priority:             getPriority(request.BatchPreferences),
+	}
+
+	response := &BatchTransferResponse{
+		OperationID:    request.OperationID,
+		ProcessedCount: processedCount,
+		Status:         "recorded",
+	}
+
+	return response, batchInfo, nil
 }
 
 func (s *service) GetCollection(ctx context.Context, collectionID string) (*Collection, error) {
@@ -417,8 +704,26 @@ func convertMetadataToJSON(meta *NFTMetadata) string {
 	if meta == nil {
 		return "{}"
 	}
-	// TODO: Implement proper JSON marshaling
-	return "{}"
+	
+	// Create a map for JSON marshaling
+	metaMap := map[string]interface{}{
+		"name":         meta.Name,
+		"description":  meta.Description,
+		"image":        meta.Image,
+		"external_url": meta.ExternalURL,
+	}
+	
+	if len(meta.Attributes) > 0 {
+		metaMap["attributes"] = meta.Attributes
+	}
+	
+	jsonData, err := json.Marshal(metaMap)
+	if err != nil {
+		log.Error().Err(err).Msg("Failed to marshal NFT metadata")
+		return "{}"
+	}
+	
+	return string(jsonData)
 }
 
 func buildMetadataURI(baseURI, tokenID string) string {

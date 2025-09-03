@@ -537,6 +537,63 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 		return fmt.Errorf("unsupported job type: %T", job)
 	}
 
+	// Handle NFT job types
+	switch j := job.(type) {
+	case NFTMintJob:
+		query = `
+			INSERT INTO transactions (
+				tx_id, operation_id, user_id, chain_id, tx_type, business_type,
+				collection_id, nft_token_id, status, batch_id, is_batch_operation,
+				reason_type, reason_detail, created_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			ON CONFLICT (tx_id) DO UPDATE SET
+				status = 'batching',
+				batch_id = EXCLUDED.batch_id,
+				is_batch_operation = TRUE`
+
+		args = []interface{}{
+			j.TransactionID, uuid.New(), j.ToUserID, j.ChainID, "nft_mint", j.BusinessType,
+			j.CollectionID, j.TokenID, "batching", batchID, true,
+			j.ReasonType, j.ReasonDetail, j.CreatedAt,
+		}
+
+	case NFTBurnJob:
+		query = `
+			INSERT INTO transactions (
+				tx_id, operation_id, user_id, chain_id, tx_type, business_type,
+				collection_id, nft_token_id, status, batch_id, is_batch_operation,
+				reason_type, reason_detail, created_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+			ON CONFLICT (tx_id) DO UPDATE SET
+				status = 'batching',
+				batch_id = EXCLUDED.batch_id,
+				is_batch_operation = TRUE`
+
+		args = []interface{}{
+			j.TransactionID, uuid.New(), j.OwnerUserID, j.ChainID, "nft_burn", j.BusinessType,
+			j.CollectionID, j.TokenID, "batching", batchID, true,
+			j.ReasonType, j.ReasonDetail, j.CreatedAt,
+		}
+
+	case NFTTransferJob:
+		query = `
+			INSERT INTO transactions (
+				tx_id, operation_id, user_id, chain_id, tx_type, business_type,
+				related_user_id, collection_id, nft_token_id, status, batch_id, is_batch_operation,
+				reason_type, reason_detail, created_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+			ON CONFLICT (tx_id) DO UPDATE SET
+				status = 'batching',
+				batch_id = EXCLUDED.batch_id,
+				is_batch_operation = TRUE`
+
+		args = []interface{}{
+			j.TransactionID, uuid.New(), j.FromUserID, j.ChainID, "nft_transfer", j.BusinessType,
+			j.ToUserID, j.CollectionID, j.TokenID, "batching", batchID, true,
+			j.ReasonType, j.ReasonDetail, j.CreatedAt,
+		}
+	}
+
 	_, err := tx.Exec(query, args...)
 	return err
 }
@@ -558,6 +615,13 @@ func (c *RabbitMQBatchConsumer) executeBlockchainBatch(ctx context.Context, mess
 		return c.processAssetAdjustBatch(ctx, caller, jobs)
 	case JobTypeTransfer:
 		return c.processTransferBatch(ctx, caller, jobs)
+	// NFT batch operations
+	case JobTypeNFTMint:
+		return c.processNFTMintBatch(ctx, group.ChainID, jobs)
+	case JobTypeNFTBurn:
+		return c.processNFTBurnBatch(ctx, group.ChainID, jobs)
+	case JobTypeNFTTransfer:
+		return c.processNFTTransferBatch(ctx, group.ChainID, jobs)
 	default:
 		return nil, fmt.Errorf("unsupported job type: %s", group.JobType)
 	}
@@ -617,6 +681,126 @@ func (c *RabbitMQBatchConsumer) processTransferBatch(ctx context.Context, caller
 		return nil, fmt.Errorf("failed to prepare transfer parameters: %w", err)
 	}
 	return caller.BatchTransferFrom(ctx, fromAddresses, toAddresses, amounts)
+}
+
+// processNFTMintBatch processes NFT mint batch using NFTBatchCaller
+func (c *RabbitMQBatchConsumer) processNFTMintBatch(ctx context.Context, chainID int64, jobs []BatchJob) (*blockchain.BatchResult, error) {
+	// Get NFT caller for this chain
+	nftCaller := c.getNFTCaller(chainID)
+	if nftCaller == nil {
+		return nil, fmt.Errorf("no NFT caller found for chain %d", chainID)
+	}
+
+	var mintJobs []NFTMintJob
+	for _, job := range jobs {
+		if mintJob, ok := job.(NFTMintJob); ok {
+			mintJobs = append(mintJobs, mintJob)
+		}
+	}
+
+	if len(mintJobs) == 0 {
+		return nil, fmt.Errorf("no valid NFT mint jobs found")
+	}
+
+	recipients, tokenIds, metadataURIs, err := c.prepareNFTMintParams(ctx, mintJobs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare NFT mint parameters: %w", err)
+	}
+
+	nftResult, err := nftCaller.BatchMint(ctx, recipients, tokenIds, metadataURIs)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert NFTBatchResult to blockchain.BatchResult
+	return &blockchain.BatchResult{
+		TxHash:      nftResult.TxHash,
+		BlockNumber: nftResult.BlockNumber,
+		GasUsed:     nftResult.GasUsed,
+		GasSaved:    nftResult.GasSaved,
+		Efficiency:  nftResult.Efficiency,
+		Status:      nftResult.Status,
+	}, nil
+}
+
+// processNFTBurnBatch processes NFT burn batch using NFTBatchCaller
+func (c *RabbitMQBatchConsumer) processNFTBurnBatch(ctx context.Context, chainID int64, jobs []BatchJob) (*blockchain.BatchResult, error) {
+	// Get NFT caller for this chain
+	nftCaller := c.getNFTCaller(chainID)
+	if nftCaller == nil {
+		return nil, fmt.Errorf("no NFT caller found for chain %d", chainID)
+	}
+
+	var burnJobs []NFTBurnJob
+	for _, job := range jobs {
+		if burnJob, ok := job.(NFTBurnJob); ok {
+			burnJobs = append(burnJobs, burnJob)
+		}
+	}
+
+	if len(burnJobs) == 0 {
+		return nil, fmt.Errorf("no valid NFT burn jobs found")
+	}
+
+	tokenIds, err := c.prepareNFTBurnParams(ctx, burnJobs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare NFT burn parameters: %w", err)
+	}
+
+	nftResult, err := nftCaller.BatchBurn(ctx, tokenIds)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert NFTBatchResult to blockchain.BatchResult
+	return &blockchain.BatchResult{
+		TxHash:      nftResult.TxHash,
+		BlockNumber: nftResult.BlockNumber,
+		GasUsed:     nftResult.GasUsed,
+		GasSaved:    nftResult.GasSaved,
+		Efficiency:  nftResult.Efficiency,
+		Status:      nftResult.Status,
+	}, nil
+}
+
+// processNFTTransferBatch processes NFT transfer batch using NFTBatchCaller
+func (c *RabbitMQBatchConsumer) processNFTTransferBatch(ctx context.Context, chainID int64, jobs []BatchJob) (*blockchain.BatchResult, error) {
+	// Get NFT caller for this chain
+	nftCaller := c.getNFTCaller(chainID)
+	if nftCaller == nil {
+		return nil, fmt.Errorf("no NFT caller found for chain %d", chainID)
+	}
+
+	var transferJobs []NFTTransferJob
+	for _, job := range jobs {
+		if transferJob, ok := job.(NFTTransferJob); ok {
+			transferJobs = append(transferJobs, transferJob)
+		}
+	}
+
+	if len(transferJobs) == 0 {
+		return nil, fmt.Errorf("no valid NFT transfer jobs found")
+	}
+
+	fromAddresses, toAddresses, tokenIds, err := c.prepareNFTTransferParams(ctx, transferJobs)
+	if err != nil {
+		return nil, fmt.Errorf("failed to prepare NFT transfer parameters: %w", err)
+	}
+
+	nftResult, err := nftCaller.BatchTransferFrom(ctx, fromAddresses, toAddresses, tokenIds)
+	if err != nil {
+		return nil, err
+	}
+
+	// Convert NFTBatchResult to blockchain.BatchResult
+	return &blockchain.BatchResult{
+		TxHash:      nftResult.TxHash,
+		BlockNumber: nftResult.BlockNumber,
+		GasUsed:     nftResult.GasUsed,
+		GasSaved:    nftResult.GasSaved,
+		Efficiency:  nftResult.Efficiency,
+		Status:      nftResult.Status,
+	}, nil
 }
 
 // prepareMintParams prepares parameters for batch mint
@@ -1792,4 +1976,87 @@ func (c *RabbitMQBatchConsumer) extractBlockNumber(blockNumber *big.Int) int64 {
 	}
 
 	return blockNumber.Int64()
+}
+
+// Helper methods for NFT parameter preparation
+
+// prepareNFTMintParams prepares parameters for NFT batch mint
+func (c *RabbitMQBatchConsumer) prepareNFTMintParams(ctx context.Context, jobs []NFTMintJob) ([]common.Address, []*big.Int, []string, error) {
+	recipients := make([]common.Address, len(jobs))
+	tokenIds := make([]*big.Int, len(jobs))
+	metadataURIs := make([]string, len(jobs))
+
+	for i, job := range jobs {
+		// Convert user ID to address (this would need proper implementation)
+		recipientAddr, err := c.getUserAddress(ctx, job.ToUserID)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to get recipient address for user %s: %w", job.ToUserID, err)
+		}
+		recipients[i] = recipientAddr
+
+		// Convert token ID string to big.Int
+		tokenID, ok := new(big.Int).SetString(job.TokenID, 10)
+		if !ok {
+			return nil, nil, nil, fmt.Errorf("invalid token ID: %s", job.TokenID)
+		}
+		tokenIds[i] = tokenID
+
+		metadataURIs[i] = job.MetadataURI
+	}
+
+	return recipients, tokenIds, metadataURIs, nil
+}
+
+// prepareNFTBurnParams prepares parameters for NFT batch burn
+func (c *RabbitMQBatchConsumer) prepareNFTBurnParams(ctx context.Context, jobs []NFTBurnJob) ([]*big.Int, error) {
+	tokenIds := make([]*big.Int, len(jobs))
+
+	for i, job := range jobs {
+		// Convert token ID string to big.Int
+		tokenID, ok := new(big.Int).SetString(job.TokenID, 10)
+		if !ok {
+			return nil, fmt.Errorf("invalid token ID: %s", job.TokenID)
+		}
+		tokenIds[i] = tokenID
+	}
+
+	return tokenIds, nil
+}
+
+// prepareNFTTransferParams prepares parameters for NFT batch transfer
+func (c *RabbitMQBatchConsumer) prepareNFTTransferParams(ctx context.Context, jobs []NFTTransferJob) ([]common.Address, []common.Address, []*big.Int, error) {
+	fromAddresses := make([]common.Address, len(jobs))
+	toAddresses := make([]common.Address, len(jobs))
+	tokenIds := make([]*big.Int, len(jobs))
+
+	for i, job := range jobs {
+		// Convert user IDs to addresses
+		fromAddr, err := c.getUserAddress(ctx, job.FromUserID)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to get from address for user %s: %w", job.FromUserID, err)
+		}
+		fromAddresses[i] = fromAddr
+
+		toAddr, err := c.getUserAddress(ctx, job.ToUserID)
+		if err != nil {
+			return nil, nil, nil, fmt.Errorf("failed to get to address for user %s: %w", job.ToUserID, err)
+		}
+		toAddresses[i] = toAddr
+
+		// Convert token ID string to big.Int
+		tokenID, ok := new(big.Int).SetString(job.TokenID, 10)
+		if !ok {
+			return nil, nil, nil, fmt.Errorf("invalid token ID: %s", job.TokenID)
+		}
+		tokenIds[i] = tokenID
+	}
+
+	return fromAddresses, toAddresses, tokenIds, nil
+}
+
+// getNFTCaller gets the NFT caller for a specific chain
+func (c *RabbitMQBatchConsumer) getNFTCaller(chainID int64) *blockchain.NFTBatchCaller {
+	// This would be implemented based on the existing pattern for cpopCallers
+	// For now, return nil - this needs to be integrated with the constructor
+	return nil
 }

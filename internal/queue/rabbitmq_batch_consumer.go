@@ -605,6 +605,28 @@ func (c *RabbitMQBatchConsumer) parseMessage(body []byte) (BatchJob, error) {
 		}
 		return job, nil
 
+	// NFT batch operations
+	case JobTypeNFTMint:
+		var job NFTMintJob
+		if err := json.Unmarshal(body, &job); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal NFT mint job: %w", err)
+		}
+		return job, nil
+
+	case JobTypeNFTBurn:
+		var job NFTBurnJob
+		if err := json.Unmarshal(body, &job); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal NFT burn job: %w", err)
+		}
+		return job, nil
+
+	case JobTypeNFTTransfer:
+		var job NFTTransferJob
+		if err := json.Unmarshal(body, &job); err != nil {
+			return nil, fmt.Errorf("failed to unmarshal NFT transfer job: %w", err)
+		}
+		return job, nil
+
 	default:
 		return nil, fmt.Errorf("unsupported job type for chain consumer: %s", jobType)
 	}
