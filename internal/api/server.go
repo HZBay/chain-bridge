@@ -23,6 +23,7 @@ import (
 	"github.com/hzbay/chain-bridge/internal/queue"
 	"github.com/hzbay/chain-bridge/internal/services/account"
 	"github.com/hzbay/chain-bridge/internal/services/chains"
+	"github.com/hzbay/chain-bridge/internal/services/nft"
 	"github.com/hzbay/chain-bridge/internal/services/tokens"
 	"github.com/labstack/echo/v4"
 	"github.com/rs/zerolog/log"
@@ -59,6 +60,7 @@ type Server struct {
 	BatchOptimizer      *queue.BatchOptimizer
 	ChainsService       chains.Service
 	TokensService       tokens.Service
+	NFTService          nft.Service
 	PaymentEventService *events.PaymentEventService
 	RabbitMQClient      *queue.RabbitMQClient
 }
@@ -105,6 +107,7 @@ func (s *Server) Ready() bool {
 		s.Auth != nil &&
 		s.Local != nil &&
 		s.AccountService != nil &&
+		s.NFTService != nil &&
 		s.BatchProcessor != nil &&
 		s.PaymentEventService != nil &&
 		s.BatchOptimizer != nil &&
@@ -155,6 +158,10 @@ func (s *Server) InitCmd() *Server {
 		log.Fatal().Err(err).Msg("Failed to initialize tokens service")
 	}
 
+	if err := s.InitNFTService(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize NFT service")
+	}
+
 	if err := s.InitBatchProcessor(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize batch processor")
 	}
@@ -203,6 +210,13 @@ func (s *Server) InitTokensService() error {
 	s.TokensService = tokens.New(s.DB)
 
 	log.Info().Msg("Tokens service initialized")
+	return nil
+}
+
+func (s *Server) InitNFTService() error {
+	s.NFTService = nft.NewService(s.DB, s.BatchProcessor)
+
+	log.Info().Msg("NFT service initialized")
 	return nil
 }
 

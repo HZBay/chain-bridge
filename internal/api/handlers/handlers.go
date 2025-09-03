@@ -10,6 +10,7 @@ import (
 	"github.com/hzbay/chain-bridge/internal/api/handlers/chains"
 	"github.com/hzbay/chain-bridge/internal/api/handlers/common"
 	"github.com/hzbay/chain-bridge/internal/api/handlers/monitoring"
+	"github.com/hzbay/chain-bridge/internal/api/handlers/nft"
 	"github.com/hzbay/chain-bridge/internal/api/handlers/push"
 	"github.com/hzbay/chain-bridge/internal/api/handlers/tokens"
 	"github.com/hzbay/chain-bridge/internal/api/handlers/transfer"
@@ -52,6 +53,8 @@ func AttachAllRoutes(s *api.Server) {
 		monitoring.GetQueueMetricsRoute(s),
 		monitoring.GetQueueStatsRoute(s),
 		monitoring.PostReloadPaymentEventsConfigRoute(s),
+		nft.PostBatchBurnNFTsRoute(s),
+		nft.PostBatchMintNFTsRoute(s),
 		push.PutUpdatePushTokenRoute(s),
 		tokens.DeleteTokenRoute(s),
 		tokens.GetTokenRoute(s),

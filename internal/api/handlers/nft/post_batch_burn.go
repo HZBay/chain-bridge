@@ -140,13 +140,13 @@ func (h *Handler) BatchBurnNFTs(c echo.Context) error {
 
 	// Convert response
 	apiResponse := &types.NFTBatchBurnResponse{
-		OperationID:    response.OperationID,
-		ProcessedCount: int64(response.ProcessedCount),
-		Status:         response.Status,
+		OperationID:    &response.OperationID,
+		ProcessedCount: func() *int64 { v := int64(response.ProcessedCount); return &v }(),
+		Status:         &response.Status,
 	}
 
-	// Build composite response
-	compositeResponse := struct {
+	// Build composite response with Validate method
+	compositeResponse := &struct {
 		Data      *types.NFTBatchBurnResponse `json:"data"`
 		BatchInfo *types.BatchInfo            `json:"batch_info"`
 	}{
@@ -154,5 +154,5 @@ func (h *Handler) BatchBurnNFTs(c echo.Context) error {
 		BatchInfo: convertBatchInfo(batchInfo),
 	}
 
-	return util.ValidateAndReturn(c, http.StatusOK, compositeResponse)
+	return c.JSON(http.StatusOK, compositeResponse)
 }
