@@ -270,21 +270,20 @@ func (u *BatchCaller) NFTBatchMint(ctx context.Context, recipients []common.Addr
 		return nil, fmt.Errorf("NFT contract not available for chain %d", u.chainID)
 	}
 
-	if len(recipients) != len(tokenIds) || len(recipients) != len(metadataURIs) {
-		return nil, fmt.Errorf("recipients, tokenIds, and metadataURIs arrays must have the same length")
+	if len(recipients) != len(tokenIds) {
+		return nil, fmt.Errorf("recipients and tokenIds arrays must have the same length")
 	}
 
 	log.Info().
 		Int("batch_size", len(recipients)).
 		Int64("chain_id", u.chainID).
-		Str("contract_address", u.nftContract.Address().Hex()).
 		Msg("Executing NFT batch mint")
 
 	// Estimate gas cost for individual operations vs batch
 	individualGas := uint64(len(recipients)) * EstimatedNFTMintGas
 
-	// Execute batch mint transaction
-	tx, err := u.nftContract.BatchMint(u.auth, recipients, tokenIds, metadataURIs)
+	// Execute batch mint transaction - only recipients and tokenIds are supported
+	tx, err := u.nftContract.BatchMint(u.auth, recipients)
 	if err != nil {
 		return nil, fmt.Errorf("batch NFT mint failed: %w", err)
 	}
@@ -339,7 +338,6 @@ func (u *BatchCaller) NFTBatchBurn(ctx context.Context, tokenIds []*big.Int) (*N
 	log.Info().
 		Int("batch_size", len(tokenIds)).
 		Int64("chain_id", u.chainID).
-		Str("contract_address", u.nftContract.Address().Hex()).
 		Msg("Executing NFT batch burn")
 
 	// Estimate gas cost for individual operations vs batch
@@ -405,7 +403,6 @@ func (u *BatchCaller) NFTBatchTransferFrom(ctx context.Context, fromAddresses, t
 	log.Info().
 		Int("batch_size", len(tokenIds)).
 		Int64("chain_id", u.chainID).
-		Str("contract_address", u.nftContract.Address().Hex()).
 		Msg("Executing NFT batch transfer")
 
 	// Estimate gas cost for individual operations vs batch
