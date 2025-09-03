@@ -24,6 +24,16 @@ const EstimatedNFTBurnGas = 150000
 // EstimatedNFTTransferGas estimated gas for individual NFT transfer operation
 const EstimatedNFTTransferGas = 100000
 
+// BatchResult represents the result of a batch operation
+type BatchResult struct {
+	TxHash      string   `json:"tx_hash"`
+	BlockNumber *big.Int `json:"block_number,omitempty"`
+	GasUsed     uint64   `json:"gas_used"`
+	GasSaved    uint64   `json:"gas_saved"`
+	Efficiency  float64  `json:"efficiency_percent"`
+	Status      string   `json:"status"` // "submitted", "confirmed", "failed"
+}
+
 // NFTBatchResult represents the result of an NFT batch operation
 type NFTBatchResult struct {
 	TxHash      string   `json:"tx_hash"`
