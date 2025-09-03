@@ -51,6 +51,9 @@ func (o *SwaggerSpec) initHandlerCache() {
 	o.Handlers["POST"]["/api/v1/auth/register"] = true
 	o.Handlers["PUT"]["/api/v1/push/token"] = true
 	o.Handlers["POST"]["/api/v1/assets/adjust"] = true
+	o.Handlers["POST"]["/api/v1/assets/nft/burn"] = true
+	o.Handlers["POST"]["/api/v1/assets/nft/mint"] = true
+	o.Handlers["POST"]["/api/v1/assets/nft/transfer"] = true
 	o.Handlers["GET"]["/-/monitoring/queue/health"] = true
 	o.Handlers["POST"]["/-/chains"] = true
 	o.Handlers["POST"]["/-/tokens"] = true

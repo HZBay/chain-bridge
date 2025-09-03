@@ -50,6 +50,9 @@ type Transaction struct {
 	ConfirmedAt        null.Time         `boil:"confirmed_at" json:"confirmed_at,omitempty" toml:"confirmed_at" yaml:"confirmed_at,omitempty"`
 	FailureReason      null.String       `boil:"failure_reason" json:"failure_reason,omitempty" toml:"failure_reason" yaml:"failure_reason,omitempty"`
 	UpdatedAt          null.Time         `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
+	CollectionID       null.String       `boil:"collection_id" json:"collection_id,omitempty" toml:"collection_id" yaml:"collection_id,omitempty"`
+	NFTTokenID         null.String       `boil:"nft_token_id" json:"nft_token_id,omitempty" toml:"nft_token_id" yaml:"nft_token_id,omitempty"`
+	NFTMetadata        null.JSON         `boil:"nft_metadata" json:"nft_metadata,omitempty" toml:"nft_metadata" yaml:"nft_metadata,omitempty"`
 
 	R *transactionR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L transactionL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -81,6 +84,9 @@ var TransactionColumns = struct {
 	ConfirmedAt        string
 	FailureReason      string
 	UpdatedAt          string
+	CollectionID       string
+	NFTTokenID         string
+	NFTMetadata        string
 }{
 	ID:                 "id",
 	TXID:               "tx_id",
@@ -107,6 +113,9 @@ var TransactionColumns = struct {
 	ConfirmedAt:        "confirmed_at",
 	FailureReason:      "failure_reason",
 	UpdatedAt:          "updated_at",
+	CollectionID:       "collection_id",
+	NFTTokenID:         "nft_token_id",
+	NFTMetadata:        "nft_metadata",
 }
 
 var TransactionTableColumns = struct {
@@ -135,6 +144,9 @@ var TransactionTableColumns = struct {
 	ConfirmedAt        string
 	FailureReason      string
 	UpdatedAt          string
+	CollectionID       string
+	NFTTokenID         string
+	NFTMetadata        string
 }{
 	ID:                 "transactions.id",
 	TXID:               "transactions.tx_id",
@@ -161,6 +173,9 @@ var TransactionTableColumns = struct {
 	ConfirmedAt:        "transactions.confirmed_at",
 	FailureReason:      "transactions.failure_reason",
 	UpdatedAt:          "transactions.updated_at",
+	CollectionID:       "transactions.collection_id",
+	NFTTokenID:         "transactions.nft_token_id",
+	NFTMetadata:        "transactions.nft_metadata",
 }
 
 // Generated where
@@ -212,6 +227,9 @@ var TransactionWhere = struct {
 	ConfirmedAt        whereHelpernull_Time
 	FailureReason      whereHelpernull_String
 	UpdatedAt          whereHelpernull_Time
+	CollectionID       whereHelpernull_String
+	NFTTokenID         whereHelpernull_String
+	NFTMetadata        whereHelpernull_JSON
 }{
 	ID:                 whereHelperint{field: "\"transactions\".\"id\""},
 	TXID:               whereHelperstring{field: "\"transactions\".\"tx_id\""},
@@ -238,6 +256,9 @@ var TransactionWhere = struct {
 	ConfirmedAt:        whereHelpernull_Time{field: "\"transactions\".\"confirmed_at\""},
 	FailureReason:      whereHelpernull_String{field: "\"transactions\".\"failure_reason\""},
 	UpdatedAt:          whereHelpernull_Time{field: "\"transactions\".\"updated_at\""},
+	CollectionID:       whereHelpernull_String{field: "\"transactions\".\"collection_id\""},
+	NFTTokenID:         whereHelpernull_String{field: "\"transactions\".\"nft_token_id\""},
+	NFTMetadata:        whereHelpernull_JSON{field: "\"transactions\".\"nft_metadata\""},
 }
 
 // TransactionRels is where relationship names are stored.
@@ -278,9 +299,9 @@ func (r *transactionR) GetToken() *SupportedToken {
 type transactionL struct{}
 
 var (
-	transactionAllColumns            = []string{"id", "tx_id", "operation_id", "user_id", "chain_id", "tx_type", "business_type", "related_user_id", "transfer_direction", "token_id", "amount", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_type", "reason_detail", "metadata", "created_at", "confirmed_at", "failure_reason", "updated_at"}
+	transactionAllColumns            = []string{"id", "tx_id", "operation_id", "user_id", "chain_id", "tx_type", "business_type", "related_user_id", "transfer_direction", "token_id", "amount", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_type", "reason_detail", "metadata", "created_at", "confirmed_at", "failure_reason", "updated_at", "collection_id", "nft_token_id", "nft_metadata"}
 	transactionColumnsWithoutDefault = []string{"tx_id", "user_id", "chain_id", "tx_type", "business_type", "token_id", "amount", "reason_type"}
-	transactionColumnsWithDefault    = []string{"id", "operation_id", "related_user_id", "transfer_direction", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_detail", "metadata", "created_at", "confirmed_at", "failure_reason", "updated_at"}
+	transactionColumnsWithDefault    = []string{"id", "operation_id", "related_user_id", "transfer_direction", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_detail", "metadata", "created_at", "confirmed_at", "failure_reason", "updated_at", "collection_id", "nft_token_id", "nft_metadata"}
 	transactionPrimaryKeyColumns     = []string{"id"}
 	transactionGeneratedColumns      = []string{}
 )

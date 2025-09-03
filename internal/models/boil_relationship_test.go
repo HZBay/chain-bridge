@@ -12,6 +12,10 @@ func TestToOne(t *testing.T) {
 	t.Run("AppUserProfileToUserUsingUser", testAppUserProfileToOneUserUsingUser)
 	t.Run("BatchToChainUsingChain", testBatchToOneChainUsingChain)
 	t.Run("BatchToSupportedTokenUsingToken", testBatchToOneSupportedTokenUsingToken)
+	t.Run("NFTAssetToNFTCollectionUsingCollection", testNFTAssetToOneNFTCollectionUsingCollection)
+	t.Run("NFTCollectionStatToNFTCollectionUsingCollection", testNFTCollectionStatToOneNFTCollectionUsingCollection)
+	t.Run("NFTCollectionToChainUsingChain", testNFTCollectionToOneChainUsingChain)
+	t.Run("NFTPriceHistoryToNFTCollectionUsingCollection", testNFTPriceHistoryToOneNFTCollectionUsingCollection)
 	t.Run("PasswordResetTokenToUserUsingUser", testPasswordResetTokenToOneUserUsingUser)
 	t.Run("PushTokenToUserUsingUser", testPushTokenToOneUserUsingUser)
 	t.Run("RefreshTokenToUserUsingUser", testRefreshTokenToOneUserUsingUser)
@@ -26,6 +30,7 @@ func TestToOne(t *testing.T) {
 // TestOneToOne tests cannot be run in parallel
 // or deadlocks can occur.
 func TestOneToOne(t *testing.T) {
+	t.Run("NFTCollectionToNFTCollectionStatUsingCollectionNFTCollectionStat", testNFTCollectionOneToOneNFTCollectionStatUsingCollectionNFTCollectionStat)
 	t.Run("UserToAppUserProfileUsingAppUserProfile", testUserOneToOneAppUserProfileUsingAppUserProfile)
 }
 
@@ -33,10 +38,13 @@ func TestOneToOne(t *testing.T) {
 // or deadlocks can occur.
 func TestToMany(t *testing.T) {
 	t.Run("ChainToBatches", testChainToManyBatches)
+	t.Run("ChainToNFTCollections", testChainToManyNFTCollections)
 	t.Run("ChainToSupportedTokens", testChainToManySupportedTokens)
 	t.Run("ChainToTransactions", testChainToManyTransactions)
 	t.Run("ChainToUserAccounts", testChainToManyUserAccounts)
 	t.Run("ChainToUserBalances", testChainToManyUserBalances)
+	t.Run("NFTCollectionToCollectionNFTAssets", testNFTCollectionToManyCollectionNFTAssets)
+	t.Run("NFTCollectionToCollectionNFTPriceHistories", testNFTCollectionToManyCollectionNFTPriceHistories)
 	t.Run("SupportedTokenToTokenBatches", testSupportedTokenToManyTokenBatches)
 	t.Run("SupportedTokenToTokenTransactions", testSupportedTokenToManyTokenTransactions)
 	t.Run("SupportedTokenToTokenUserBalances", testSupportedTokenToManyTokenUserBalances)
@@ -53,6 +61,10 @@ func TestToOneSet(t *testing.T) {
 	t.Run("AppUserProfileToUserUsingAppUserProfile", testAppUserProfileToOneSetOpUserUsingUser)
 	t.Run("BatchToChainUsingBatches", testBatchToOneSetOpChainUsingChain)
 	t.Run("BatchToSupportedTokenUsingTokenBatches", testBatchToOneSetOpSupportedTokenUsingToken)
+	t.Run("NFTAssetToNFTCollectionUsingCollectionNFTAssets", testNFTAssetToOneSetOpNFTCollectionUsingCollection)
+	t.Run("NFTCollectionStatToNFTCollectionUsingCollectionNFTCollectionStat", testNFTCollectionStatToOneSetOpNFTCollectionUsingCollection)
+	t.Run("NFTCollectionToChainUsingNFTCollections", testNFTCollectionToOneSetOpChainUsingChain)
+	t.Run("NFTPriceHistoryToNFTCollectionUsingCollectionNFTPriceHistories", testNFTPriceHistoryToOneSetOpNFTCollectionUsingCollection)
 	t.Run("PasswordResetTokenToUserUsingPasswordResetTokens", testPasswordResetTokenToOneSetOpUserUsingUser)
 	t.Run("PushTokenToUserUsingPushTokens", testPushTokenToOneSetOpUserUsingUser)
 	t.Run("RefreshTokenToUserUsingRefreshTokens", testRefreshTokenToOneSetOpUserUsingUser)
@@ -71,6 +83,7 @@ func TestToOneRemove(t *testing.T) {}
 // TestOneToOneSet tests cannot be run in parallel
 // or deadlocks can occur.
 func TestOneToOneSet(t *testing.T) {
+	t.Run("NFTCollectionToNFTCollectionStatUsingCollectionNFTCollectionStat", testNFTCollectionOneToOneSetOpNFTCollectionStatUsingCollectionNFTCollectionStat)
 	t.Run("UserToAppUserProfileUsingAppUserProfile", testUserOneToOneSetOpAppUserProfileUsingAppUserProfile)
 }
 
@@ -82,10 +95,13 @@ func TestOneToOneRemove(t *testing.T) {}
 // or deadlocks can occur.
 func TestToManyAdd(t *testing.T) {
 	t.Run("ChainToBatches", testChainToManyAddOpBatches)
+	t.Run("ChainToNFTCollections", testChainToManyAddOpNFTCollections)
 	t.Run("ChainToSupportedTokens", testChainToManyAddOpSupportedTokens)
 	t.Run("ChainToTransactions", testChainToManyAddOpTransactions)
 	t.Run("ChainToUserAccounts", testChainToManyAddOpUserAccounts)
 	t.Run("ChainToUserBalances", testChainToManyAddOpUserBalances)
+	t.Run("NFTCollectionToCollectionNFTAssets", testNFTCollectionToManyAddOpCollectionNFTAssets)
+	t.Run("NFTCollectionToCollectionNFTPriceHistories", testNFTCollectionToManyAddOpCollectionNFTPriceHistories)
 	t.Run("SupportedTokenToTokenBatches", testSupportedTokenToManyAddOpTokenBatches)
 	t.Run("SupportedTokenToTokenTransactions", testSupportedTokenToManyAddOpTokenTransactions)
 	t.Run("SupportedTokenToTokenUserBalances", testSupportedTokenToManyAddOpTokenUserBalances)

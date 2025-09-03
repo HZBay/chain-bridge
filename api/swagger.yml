@@ -1493,6 +1493,138 @@ paths:
           examples:
             application/json:
               message: Internal server error
+  /api/v1/assets/nft/burn:
+    post:
+      security:
+      - Bearer: []
+      description: 批量销毁NFT资产
+      tags:
+      - cpop
+      summary: Batch burn NFTs
+      operationId: batchBurnNFTs
+      parameters:
+      - description: NFT batch burn request
+        name: request
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/batchBurnNFTsBody'
+      responses:
+        "200":
+          description: NFT batch burn recorded successfully
+          schema:
+            type: object
+            properties:
+              batch_info:
+                $ref: '#/definitions/batchInfo'
+              data:
+                $ref: '#/definitions/nFTBatchBurnResponse'
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: '#/definitions/apiError'
+        "401":
+          description: Unauthorized error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Unauthorized
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+  /api/v1/assets/nft/mint:
+    post:
+      security:
+      - Bearer: []
+      description: 批量铸造NFT资产
+      tags:
+      - cpop
+      summary: Batch mint NFTs
+      operationId: batchMintNFTs
+      parameters:
+      - description: NFT batch mint request
+        name: request
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/batchMintNFTsBody'
+      responses:
+        "200":
+          description: NFT batch mint recorded successfully
+          schema:
+            type: object
+            properties:
+              batch_info:
+                $ref: '#/definitions/batchInfo'
+              data:
+                $ref: '#/definitions/nFTBatchMintResponse'
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: '#/definitions/apiError'
+        "401":
+          description: Unauthorized error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Unauthorized
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
+  /api/v1/assets/nft/transfer:
+    post:
+      security:
+      - Bearer: []
+      description: 批量转账NFT资产
+      tags:
+      - cpop
+      summary: Batch transfer NFTs
+      operationId: batchTransferNFTs
+      parameters:
+      - description: NFT batch transfer request
+        name: request
+        in: body
+        required: true
+        schema:
+          $ref: '#/definitions/batchTransferNFTsBody'
+      responses:
+        "200":
+          description: NFT batch transfer recorded successfully
+          schema:
+            type: object
+            properties:
+              batch_info:
+                $ref: '#/definitions/batchInfo'
+              data:
+                $ref: '#/definitions/nFTBatchTransferResponse'
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: '#/definitions/apiError'
+        "401":
+          description: Unauthorized error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Unauthorized
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
   /api/v1/assets/transfer:
     post:
       security:
@@ -2853,6 +2985,34 @@ definitions:
         description: User identifier
         type: string
         example: user_123
+  batchBurnNFTsBody:
+    type: object
+    required:
+    - operation_id
+    - collection_id
+    - chain_id
+    - burn_operations
+    properties:
+      batch_preferences:
+        $ref: '#/definitions/batchPreference'
+      burn_operations:
+        type: array
+        items:
+          $ref: '#/definitions/nFTBurnOperation'
+      chain_id:
+        description: Chain ID
+        type: integer
+        format: int64
+        example: 11155111
+      collection_id:
+        description: Collection identifier
+        type: string
+        example: cpop_nft_collection_1
+      operation_id:
+        description: Operation ID
+        type: string
+        example: 550e8400-e29b-41d4-a716-446655440002
+    x-go-package: github.com/hzbay/chain-bridge/internal/types
   batchInfo:
     type: object
     properties:
@@ -2908,6 +3068,34 @@ definitions:
         description: Number of operations in batch
         type: integer
         example: 25
+  batchMintNFTsBody:
+    type: object
+    required:
+    - operation_id
+    - collection_id
+    - chain_id
+    - mint_operations
+    properties:
+      batch_preferences:
+        $ref: '#/definitions/batchPreference'
+      chain_id:
+        description: Chain ID
+        type: integer
+        format: int64
+        example: 11155111
+      collection_id:
+        description: Collection identifier
+        type: string
+        example: cpop_nft_collection_1
+      mint_operations:
+        type: array
+        items:
+          $ref: '#/definitions/nFTMintOperation'
+      operation_id:
+        description: Operation ID
+        type: string
+        example: 550e8400-e29b-41d4-a716-446655440001
+    x-go-package: github.com/hzbay/chain-bridge/internal/types
   batchPreference:
     type: object
     properties:
@@ -2947,6 +3135,34 @@ definitions:
         - submitted
         - confirmed
         - failed
+  batchTransferNFTsBody:
+    type: object
+    required:
+    - operation_id
+    - collection_id
+    - chain_id
+    - transfer_operations
+    properties:
+      batch_preferences:
+        $ref: '#/definitions/batchPreference'
+      chain_id:
+        description: Chain ID
+        type: integer
+        format: int64
+        example: 11155111
+      collection_id:
+        description: Collection identifier
+        type: string
+        example: cpop_nft_collection_1
+      operation_id:
+        description: Operation ID
+        type: string
+        example: 550e8400-e29b-41d4-a716-446655440003
+      transfer_operations:
+        type: array
+        items:
+          $ref: '#/definitions/nFTTransferOperation'
+    x-go-package: github.com/hzbay/chain-bridge/internal/types
   cPOPInfo:
     type: object
     properties:
@@ -3275,6 +3491,162 @@ definitions:
       key:
         description: Key of field failing validation
         type: string
+  nFTBatchBurnResponse:
+    type: object
+    required:
+    - operation_id
+    - processed_count
+    - status
+    properties:
+      operation_id:
+        description: Operation ID
+        type: string
+        example: 550e8400-e29b-41d4-a716-446655440002
+      processed_count:
+        description: Number of processed burns
+        type: integer
+        example: 1
+      status:
+        description: Processing status
+        type: string
+        example: recorded
+  nFTBatchMintResponse:
+    type: object
+    required:
+    - operation_id
+    - processed_count
+    - status
+    properties:
+      operation_id:
+        description: Operation ID
+        type: string
+        example: 550e8400-e29b-41d4-a716-446655440001
+      processed_count:
+        description: Number of processed mints
+        type: integer
+        example: 1
+      status:
+        description: Processing status
+        type: string
+        example: recorded
+  nFTBatchTransferResponse:
+    type: object
+    required:
+    - operation_id
+    - processed_count
+    - status
+    properties:
+      operation_id:
+        description: Operation ID
+        type: string
+        example: 550e8400-e29b-41d4-a716-446655440003
+      processed_count:
+        description: Number of processed transfers
+        type: integer
+        example: 1
+      status:
+        description: Processing status
+        type: string
+        example: recorded
+  nFTBurnOperation:
+    type: object
+    required:
+    - owner_user_id
+    - token_id
+    properties:
+      owner_user_id:
+        description: Owner user ID
+        type: string
+        example: user123
+      token_id:
+        description: NFT Token ID
+        type: string
+        example: "1"
+  nFTMetadata:
+    type: object
+    properties:
+      attributes:
+        type: array
+        items:
+          type: object
+          properties:
+            rarity_percentage:
+              description: Rarity percentage
+              type: number
+              format: float
+              example: 2.5
+            trait_type:
+              description: Attribute type
+              type: string
+              example: Background
+            value:
+              description: Attribute value
+              type: string
+              example: Galaxy
+      description:
+        description: NFT description
+        type: string
+        example: Token Description
+      external_url:
+        description: External URL
+        type: string
+        example: https://example.com/token/1
+      image:
+        description: NFT image URL
+        type: string
+        example: https://example.com/token-image.png
+      name:
+        description: NFT name
+        type: string
+        example: Token Name
+  nFTMintOperation:
+    type: object
+    required:
+    - to_user_id
+    - business_type
+    - reason_type
+    properties:
+      business_type:
+        description: Business type
+        type: string
+        enum:
+        - reward
+        - gas_fee
+        - consumption
+        - refund
+      meta:
+        $ref: '#/definitions/nFTMetadata'
+      reason_detail:
+        description: Detailed reason
+        type: string
+        example: Level 10 achievement
+      reason_type:
+        description: Reason type
+        type: string
+        example: achievement_unlock
+      to_user_id:
+        description: Recipient user ID
+        type: string
+        example: user123
+  nFTTransferOperation:
+    type: object
+    required:
+    - from_user_id
+    - to_user_id
+    - token_id
+    properties:
+      from_user_id:
+        description: Sender user ID
+        type: string
+        example: user123
+      to_user_id:
+        description: Recipient user ID
+        type: string
+        example: user456
+      token_id:
+        description: NFT Token ID
+        type: string
+        example: "1"
   nullableBool:
     type: boolean
     x-go-type:

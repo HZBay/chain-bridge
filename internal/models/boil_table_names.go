@@ -8,6 +8,10 @@ var TableNames = struct {
 	AppUserProfiles     string
 	Batches             string
 	Chains              string
+	NFTAssets           string
+	NFTCollectionStats  string
+	NFTCollections      string
+	NFTPriceHistory     string
 	PasswordResetTokens string
 	PushTokens          string
 	RefreshTokens       string
@@ -21,6 +25,10 @@ var TableNames = struct {
 	AppUserProfiles:     "app_user_profiles",
 	Batches:             "batches",
 	Chains:              "chains",
+	NFTAssets:           "nft_assets",
+	NFTCollectionStats:  "nft_collection_stats",
+	NFTCollections:      "nft_collections",
+	NFTPriceHistory:     "nft_price_history",
 	PasswordResetTokens: "password_reset_tokens",
 	PushTokens:          "push_tokens",
 	RefreshTokens:       "refresh_tokens",

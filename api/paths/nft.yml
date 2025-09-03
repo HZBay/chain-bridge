@@ -1,0 +1,112 @@
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths:
+  # 1. NFT批量铸造接口
+  /api/v1/assets/nft/mint:
+    post:
+      tags:
+        - cpop
+      summary: Batch mint NFTs
+      description: "批量铸造NFT资产"
+      operationId: batchMintNFTs
+      security:
+        - Bearer: []
+      parameters:
+        - name: request
+          in: body
+          description: NFT batch mint request
+          required: true
+          schema:
+            $ref: "../definitions/nft.yml#/definitions/BatchMintNFTsBody"
+      responses:
+        "200":
+          description: NFT batch mint recorded successfully
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: "../definitions/nft.yml#/definitions/NFTBatchMintResponse"
+              batch_info:
+                $ref: "../definitions/assets.yml#/definitions/BatchInfo"
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "401":
+          $ref: "../definitions/errors.yml#/responses/UnauthorizedError"
+        "500":
+          $ref: "../definitions/errors.yml#/responses/InternalError"
+
+  # 2. NFT批量销毁接口
+  /api/v1/assets/nft/burn:
+    post:
+      tags:
+        - cpop
+      summary: Batch burn NFTs
+      description: "批量销毁NFT资产"
+      operationId: batchBurnNFTs
+      security:
+        - Bearer: []
+      parameters:
+        - name: request
+          in: body
+          description: NFT batch burn request
+          required: true
+          schema:
+            $ref: "../definitions/nft.yml#/definitions/BatchBurnNFTsBody"
+      responses:
+        "200":
+          description: NFT batch burn recorded successfully
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: "../definitions/nft.yml#/definitions/NFTBatchBurnResponse"
+              batch_info:
+                $ref: "../definitions/assets.yml#/definitions/BatchInfo"
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "401":
+          $ref: "../definitions/errors.yml#/responses/UnauthorizedError"
+        "500":
+          $ref: "../definitions/errors.yml#/responses/InternalError"
+
+  # 3. NFT批量转账接口
+  /api/v1/assets/nft/transfer:
+    post:
+      tags:
+        - cpop
+      summary: Batch transfer NFTs
+      description: "批量转账NFT资产"
+      operationId: batchTransferNFTs
+      security:
+        - Bearer: []
+      parameters:
+        - name: request
+          in: body
+          description: NFT batch transfer request
+          required: true
+          schema:
+            $ref: "../definitions/nft.yml#/definitions/BatchTransferNFTsBody"
+      responses:
+        "200":
+          description: NFT batch transfer recorded successfully
+          schema:
+            type: object
+            properties:
+              data:
+                $ref: "../definitions/nft.yml#/definitions/NFTBatchTransferResponse"
+              batch_info:
+                $ref: "../definitions/assets.yml#/definitions/BatchInfo"
+        "400":
+          description: Invalid request parameters
+          schema:
+            $ref: "../definitions/errors.yml#/definitions/APIError"
+        "401":
+          $ref: "../definitions/errors.yml#/responses/UnauthorizedError"
+        "500":
+          $ref: "../definitions/errors.yml#/responses/InternalError"

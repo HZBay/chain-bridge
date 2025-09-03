@@ -1,0 +1,308 @@
+# ChainBridge NFT Data Models
+# NFT相关的数据模型定义
+
+swagger: "2.0"
+info:
+  title: github.com/hzbay/chain-bridge
+  version: 0.1.0
+paths: {}
+definitions:
+  # NFT属性
+  NFTAttribute:
+    type: object
+    properties:
+      trait_type:
+        type: string
+        description: "Attribute type"
+        example: "Background"
+      value:
+        type: string
+        description: "Attribute value"
+        example: "Galaxy"
+      rarity_percentage:
+        type: number
+        format: float
+        description: "Rarity percentage"
+        example: 2.5
+
+  # NFT元数据
+  NFTMetadata:
+    type: object
+    properties:
+      name:
+        type: string
+        description: "NFT name"
+        example: "Token Name"
+      description:
+        type: string
+        description: "NFT description"
+        example: "Token Description"
+      image:
+        type: string
+        description: "NFT image URL"
+        example: "https://example.com/token-image.png"
+      external_url:
+        type: string
+        description: "External URL"
+        example: "https://example.com/token/1"
+      attributes:
+        type: array
+        items:
+          type: object
+          properties:
+            trait_type:
+              type: string
+              description: "Attribute type"
+              example: "Background"
+            value:
+              type: string
+              description: "Attribute value"
+              example: "Galaxy"
+            rarity_percentage:
+              type: number
+              format: float
+              description: "Rarity percentage"
+              example: 2.5
+
+  # NFT物品
+  NFTItem:
+    type: object
+    properties:
+      token_id:
+        type: string
+        description: "NFT Token ID"
+        example: "1"
+      meta:
+        $ref: "#/definitions/NFTMetadata"
+
+  # NFT集合信息
+  NFTCollectionInfo:
+    type: object
+    properties:
+      collection_id:
+        type: string
+        description: "Collection identifier"
+        example: "cpop_nft_collection_1"
+      collection_name:
+        type: string
+        description: "Collection name"
+        example: "CPOP Genesis NFTs"
+      contract_address:
+        type: string
+        description: "Contract address"
+        example: "0x1234567890123456789012345678901234567890"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      chain_name:
+        type: string
+        description: "Chain name"
+        example: "BSC"
+      total_count:
+        type: integer
+        description: "Total NFTs owned"
+        example: 5
+      floor_price_usd:
+        type: number
+        format: float
+        description: "Floor price in USD"
+        example: 100.0
+      total_value_usd:
+        type: number
+        format: float
+        description: "Total value in USD"
+        example: 500.0
+      items:
+        type: array
+        items:
+          $ref: "#/definitions/NFTItem"
+
+  # NFT铸造操作
+  NFTMintOperation:
+    type: object
+    required: [to_user_id, business_type, reason_type]
+    properties:
+      to_user_id:
+        type: string
+        description: "Recipient user ID"
+        example: "user123"
+      business_type:
+        type: string
+        enum: [reward, gas_fee, consumption, refund]
+        description: "Business type"
+      reason_type:
+        type: string
+        description: "Reason type"
+        example: "achievement_unlock"
+      reason_detail:
+        type: string
+        description: "Detailed reason"
+        example: "Level 10 achievement"
+      meta:
+        $ref: "#/definitions/NFTMetadata"
+
+  # NFT铸造请求体
+  BatchMintNFTsBody:
+    type: object
+    required: [operation_id, collection_id, chain_id, mint_operations]
+    properties:
+      operation_id:
+        type: string
+        description: "Operation ID"
+        example: "550e8400-e29b-41d4-a716-446655440001"
+      collection_id:
+        type: string
+        description: "Collection identifier"
+        example: "cpop_nft_collection_1"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 11155111
+      mint_operations:
+        type: array
+        items:
+          $ref: "#/definitions/NFTMintOperation"
+      batch_preferences:
+        $ref: "../definitions/assets.yml#/definitions/BatchPreference"
+    x-go-package: github.com/hzbay/chain-bridge/internal/types
+
+  # NFT铸造响应
+  NFTBatchMintResponse:
+    type: object
+    required: [operation_id, processed_count, status]
+    properties:
+      operation_id:
+        type: string
+        description: "Operation ID"
+        example: "550e8400-e29b-41d4-a716-446655440001"
+      processed_count:
+        type: integer
+        description: "Number of processed mints"
+        example: 1
+      status:
+        type: string
+        description: "Processing status"
+        example: "recorded"
+
+  # NFT销毁操作
+  NFTBurnOperation:
+    type: object
+    required: [owner_user_id, token_id]
+    properties:
+      owner_user_id:
+        type: string
+        description: "Owner user ID"
+        example: "user123"
+      token_id:
+        type: string
+        description: "NFT Token ID"
+        example: "1"
+
+  # NFT销毁请求体
+  BatchBurnNFTsBody:
+    type: object
+    required: [operation_id, collection_id, chain_id, burn_operations]
+    properties:
+      operation_id:
+        type: string
+        description: "Operation ID"
+        example: "550e8400-e29b-41d4-a716-446655440002"
+      collection_id:
+        type: string
+        description: "Collection identifier"
+        example: "cpop_nft_collection_1"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 11155111
+      burn_operations:
+        type: array
+        items:
+          $ref: "#/definitions/NFTBurnOperation"
+      batch_preferences:
+        $ref: "../definitions/assets.yml#/definitions/BatchPreference"
+    x-go-package: github.com/hzbay/chain-bridge/internal/types
+
+  # NFT销毁响应
+  NFTBatchBurnResponse:
+    type: object
+    required: [operation_id, processed_count, status]
+    properties:
+      operation_id:
+        type: string
+        description: "Operation ID"
+        example: "550e8400-e29b-41d4-a716-446655440002"
+      processed_count:
+        type: integer
+        description: "Number of processed burns"
+        example: 1
+      status:
+        type: string
+        description: "Processing status"
+        example: "recorded"
+
+  # NFT转账操作
+  NFTTransferOperation:
+    type: object
+    required: [from_user_id, to_user_id, token_id]
+    properties:
+      from_user_id:
+        type: string
+        description: "Sender user ID"
+        example: "user123"
+      to_user_id:
+        type: string
+        description: "Recipient user ID"
+        example: "user456"
+      token_id:
+        type: string
+        description: "NFT Token ID"
+        example: "1"
+
+  # NFT转账请求体
+  BatchTransferNFTsBody:
+    type: object
+    required: [operation_id, collection_id, chain_id, transfer_operations]
+    properties:
+      operation_id:
+        type: string
+        description: "Operation ID"
+        example: "550e8400-e29b-41d4-a716-446655440003"
+      collection_id:
+        type: string
+        description: "Collection identifier"
+        example: "cpop_nft_collection_1"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 11155111
+      transfer_operations:
+        type: array
+        items:
+          $ref: "#/definitions/NFTTransferOperation"
+      batch_preferences:
+        $ref: "../definitions/assets.yml#/definitions/BatchPreference"
+    x-go-package: github.com/hzbay/chain-bridge/internal/types
+
+  # NFT转账响应
+  NFTBatchTransferResponse:
+    type: object
+    required: [operation_id, processed_count, status]
+    properties:
+      operation_id:
+        type: string
+        description: "Operation ID"
+        example: "550e8400-e29b-41d4-a716-446655440003"
+      processed_count:
+        type: integer
+        description: "Number of processed transfers"
+        example: 1
+      status:
+        type: string
+        description: "Processing status"
+        example: "recorded"

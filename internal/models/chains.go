@@ -46,142 +46,160 @@ type Chain struct {
 	PaymentContractAddress null.String `boil:"payment_contract_address" json:"payment_contract_address,omitempty" toml:"payment_contract_address" yaml:"payment_contract_address,omitempty"`
 	// Token address for chains
 	ToeknAddress null.String `boil:"toekn_address" json:"toekn_address,omitempty" toml:"toekn_address" yaml:"toekn_address,omitempty"`
+	// Official NFT contract address for the chain
+	OfficialNFTContractAddress null.String `boil:"official_nft_contract_address" json:"official_nft_contract_address,omitempty" toml:"official_nft_contract_address" yaml:"official_nft_contract_address,omitempty"`
+	// Number of confirmation blocks required for payment events
+	ConfirmationBlocks null.Int `boil:"confirmation_blocks" json:"confirmation_blocks,omitempty" toml:"confirmation_blocks" yaml:"confirmation_blocks,omitempty"`
 
 	R *chainR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L chainL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var ChainColumns = struct {
-	ChainID                 string
-	Name                    string
-	ShortName               string
-	RPCURL                  string
-	ExplorerURL             string
-	EntryPointAddress       string
-	CpopTokenAddress        string
-	MasterAggregatorAddress string
-	AccountManagerAddress   string
-	OptimalBatchSize        string
-	MaxBatchSize            string
-	MinBatchSize            string
-	IsEnabled               string
-	CreatedAt               string
-	MaxWaitTimeMS           string
-	ConsumerCount           string
-	PaymentContractAddress  string
-	ToeknAddress            string
+	ChainID                    string
+	Name                       string
+	ShortName                  string
+	RPCURL                     string
+	ExplorerURL                string
+	EntryPointAddress          string
+	CpopTokenAddress           string
+	MasterAggregatorAddress    string
+	AccountManagerAddress      string
+	OptimalBatchSize           string
+	MaxBatchSize               string
+	MinBatchSize               string
+	IsEnabled                  string
+	CreatedAt                  string
+	MaxWaitTimeMS              string
+	ConsumerCount              string
+	PaymentContractAddress     string
+	ToeknAddress               string
+	OfficialNFTContractAddress string
+	ConfirmationBlocks         string
 }{
-	ChainID:                 "chain_id",
-	Name:                    "name",
-	ShortName:               "short_name",
-	RPCURL:                  "rpc_url",
-	ExplorerURL:             "explorer_url",
-	EntryPointAddress:       "entry_point_address",
-	CpopTokenAddress:        "cpop_token_address",
-	MasterAggregatorAddress: "master_aggregator_address",
-	AccountManagerAddress:   "account_manager_address",
-	OptimalBatchSize:        "optimal_batch_size",
-	MaxBatchSize:            "max_batch_size",
-	MinBatchSize:            "min_batch_size",
-	IsEnabled:               "is_enabled",
-	CreatedAt:               "created_at",
-	MaxWaitTimeMS:           "max_wait_time_ms",
-	ConsumerCount:           "consumer_count",
-	PaymentContractAddress:  "payment_contract_address",
-	ToeknAddress:            "toekn_address",
+	ChainID:                    "chain_id",
+	Name:                       "name",
+	ShortName:                  "short_name",
+	RPCURL:                     "rpc_url",
+	ExplorerURL:                "explorer_url",
+	EntryPointAddress:          "entry_point_address",
+	CpopTokenAddress:           "cpop_token_address",
+	MasterAggregatorAddress:    "master_aggregator_address",
+	AccountManagerAddress:      "account_manager_address",
+	OptimalBatchSize:           "optimal_batch_size",
+	MaxBatchSize:               "max_batch_size",
+	MinBatchSize:               "min_batch_size",
+	IsEnabled:                  "is_enabled",
+	CreatedAt:                  "created_at",
+	MaxWaitTimeMS:              "max_wait_time_ms",
+	ConsumerCount:              "consumer_count",
+	PaymentContractAddress:     "payment_contract_address",
+	ToeknAddress:               "toekn_address",
+	OfficialNFTContractAddress: "official_nft_contract_address",
+	ConfirmationBlocks:         "confirmation_blocks",
 }
 
 var ChainTableColumns = struct {
-	ChainID                 string
-	Name                    string
-	ShortName               string
-	RPCURL                  string
-	ExplorerURL             string
-	EntryPointAddress       string
-	CpopTokenAddress        string
-	MasterAggregatorAddress string
-	AccountManagerAddress   string
-	OptimalBatchSize        string
-	MaxBatchSize            string
-	MinBatchSize            string
-	IsEnabled               string
-	CreatedAt               string
-	MaxWaitTimeMS           string
-	ConsumerCount           string
-	PaymentContractAddress  string
-	ToeknAddress            string
+	ChainID                    string
+	Name                       string
+	ShortName                  string
+	RPCURL                     string
+	ExplorerURL                string
+	EntryPointAddress          string
+	CpopTokenAddress           string
+	MasterAggregatorAddress    string
+	AccountManagerAddress      string
+	OptimalBatchSize           string
+	MaxBatchSize               string
+	MinBatchSize               string
+	IsEnabled                  string
+	CreatedAt                  string
+	MaxWaitTimeMS              string
+	ConsumerCount              string
+	PaymentContractAddress     string
+	ToeknAddress               string
+	OfficialNFTContractAddress string
+	ConfirmationBlocks         string
 }{
-	ChainID:                 "chains.chain_id",
-	Name:                    "chains.name",
-	ShortName:               "chains.short_name",
-	RPCURL:                  "chains.rpc_url",
-	ExplorerURL:             "chains.explorer_url",
-	EntryPointAddress:       "chains.entry_point_address",
-	CpopTokenAddress:        "chains.cpop_token_address",
-	MasterAggregatorAddress: "chains.master_aggregator_address",
-	AccountManagerAddress:   "chains.account_manager_address",
-	OptimalBatchSize:        "chains.optimal_batch_size",
-	MaxBatchSize:            "chains.max_batch_size",
-	MinBatchSize:            "chains.min_batch_size",
-	IsEnabled:               "chains.is_enabled",
-	CreatedAt:               "chains.created_at",
-	MaxWaitTimeMS:           "chains.max_wait_time_ms",
-	ConsumerCount:           "chains.consumer_count",
-	PaymentContractAddress:  "chains.payment_contract_address",
-	ToeknAddress:            "chains.toekn_address",
+	ChainID:                    "chains.chain_id",
+	Name:                       "chains.name",
+	ShortName:                  "chains.short_name",
+	RPCURL:                     "chains.rpc_url",
+	ExplorerURL:                "chains.explorer_url",
+	EntryPointAddress:          "chains.entry_point_address",
+	CpopTokenAddress:           "chains.cpop_token_address",
+	MasterAggregatorAddress:    "chains.master_aggregator_address",
+	AccountManagerAddress:      "chains.account_manager_address",
+	OptimalBatchSize:           "chains.optimal_batch_size",
+	MaxBatchSize:               "chains.max_batch_size",
+	MinBatchSize:               "chains.min_batch_size",
+	IsEnabled:                  "chains.is_enabled",
+	CreatedAt:                  "chains.created_at",
+	MaxWaitTimeMS:              "chains.max_wait_time_ms",
+	ConsumerCount:              "chains.consumer_count",
+	PaymentContractAddress:     "chains.payment_contract_address",
+	ToeknAddress:               "chains.toekn_address",
+	OfficialNFTContractAddress: "chains.official_nft_contract_address",
+	ConfirmationBlocks:         "chains.confirmation_blocks",
 }
 
 // Generated where
 
 var ChainWhere = struct {
-	ChainID                 whereHelperint64
-	Name                    whereHelperstring
-	ShortName               whereHelperstring
-	RPCURL                  whereHelperstring
-	ExplorerURL             whereHelpernull_String
-	EntryPointAddress       whereHelpernull_String
-	CpopTokenAddress        whereHelpernull_String
-	MasterAggregatorAddress whereHelpernull_String
-	AccountManagerAddress   whereHelpernull_String
-	OptimalBatchSize        whereHelpernull_Int
-	MaxBatchSize            whereHelpernull_Int
-	MinBatchSize            whereHelpernull_Int
-	IsEnabled               whereHelpernull_Bool
-	CreatedAt               whereHelpernull_Time
-	MaxWaitTimeMS           whereHelpernull_Int
-	ConsumerCount           whereHelpernull_Int
-	PaymentContractAddress  whereHelpernull_String
-	ToeknAddress            whereHelpernull_String
+	ChainID                    whereHelperint64
+	Name                       whereHelperstring
+	ShortName                  whereHelperstring
+	RPCURL                     whereHelperstring
+	ExplorerURL                whereHelpernull_String
+	EntryPointAddress          whereHelpernull_String
+	CpopTokenAddress           whereHelpernull_String
+	MasterAggregatorAddress    whereHelpernull_String
+	AccountManagerAddress      whereHelpernull_String
+	OptimalBatchSize           whereHelpernull_Int
+	MaxBatchSize               whereHelpernull_Int
+	MinBatchSize               whereHelpernull_Int
+	IsEnabled                  whereHelpernull_Bool
+	CreatedAt                  whereHelpernull_Time
+	MaxWaitTimeMS              whereHelpernull_Int
+	ConsumerCount              whereHelpernull_Int
+	PaymentContractAddress     whereHelpernull_String
+	ToeknAddress               whereHelpernull_String
+	OfficialNFTContractAddress whereHelpernull_String
+	ConfirmationBlocks         whereHelpernull_Int
 }{
-	ChainID:                 whereHelperint64{field: "\"chains\".\"chain_id\""},
-	Name:                    whereHelperstring{field: "\"chains\".\"name\""},
-	ShortName:               whereHelperstring{field: "\"chains\".\"short_name\""},
-	RPCURL:                  whereHelperstring{field: "\"chains\".\"rpc_url\""},
-	ExplorerURL:             whereHelpernull_String{field: "\"chains\".\"explorer_url\""},
-	EntryPointAddress:       whereHelpernull_String{field: "\"chains\".\"entry_point_address\""},
-	CpopTokenAddress:        whereHelpernull_String{field: "\"chains\".\"cpop_token_address\""},
-	MasterAggregatorAddress: whereHelpernull_String{field: "\"chains\".\"master_aggregator_address\""},
-	AccountManagerAddress:   whereHelpernull_String{field: "\"chains\".\"account_manager_address\""},
-	OptimalBatchSize:        whereHelpernull_Int{field: "\"chains\".\"optimal_batch_size\""},
-	MaxBatchSize:            whereHelpernull_Int{field: "\"chains\".\"max_batch_size\""},
-	MinBatchSize:            whereHelpernull_Int{field: "\"chains\".\"min_batch_size\""},
-	IsEnabled:               whereHelpernull_Bool{field: "\"chains\".\"is_enabled\""},
-	CreatedAt:               whereHelpernull_Time{field: "\"chains\".\"created_at\""},
-	MaxWaitTimeMS:           whereHelpernull_Int{field: "\"chains\".\"max_wait_time_ms\""},
-	ConsumerCount:           whereHelpernull_Int{field: "\"chains\".\"consumer_count\""},
-	PaymentContractAddress:  whereHelpernull_String{field: "\"chains\".\"payment_contract_address\""},
-	ToeknAddress:            whereHelpernull_String{field: "\"chains\".\"toekn_address\""},
+	ChainID:                    whereHelperint64{field: "\"chains\".\"chain_id\""},
+	Name:                       whereHelperstring{field: "\"chains\".\"name\""},
+	ShortName:                  whereHelperstring{field: "\"chains\".\"short_name\""},
+	RPCURL:                     whereHelperstring{field: "\"chains\".\"rpc_url\""},
+	ExplorerURL:                whereHelpernull_String{field: "\"chains\".\"explorer_url\""},
+	EntryPointAddress:          whereHelpernull_String{field: "\"chains\".\"entry_point_address\""},
+	CpopTokenAddress:           whereHelpernull_String{field: "\"chains\".\"cpop_token_address\""},
+	MasterAggregatorAddress:    whereHelpernull_String{field: "\"chains\".\"master_aggregator_address\""},
+	AccountManagerAddress:      whereHelpernull_String{field: "\"chains\".\"account_manager_address\""},
+	OptimalBatchSize:           whereHelpernull_Int{field: "\"chains\".\"optimal_batch_size\""},
+	MaxBatchSize:               whereHelpernull_Int{field: "\"chains\".\"max_batch_size\""},
+	MinBatchSize:               whereHelpernull_Int{field: "\"chains\".\"min_batch_size\""},
+	IsEnabled:                  whereHelpernull_Bool{field: "\"chains\".\"is_enabled\""},
+	CreatedAt:                  whereHelpernull_Time{field: "\"chains\".\"created_at\""},
+	MaxWaitTimeMS:              whereHelpernull_Int{field: "\"chains\".\"max_wait_time_ms\""},
+	ConsumerCount:              whereHelpernull_Int{field: "\"chains\".\"consumer_count\""},
+	PaymentContractAddress:     whereHelpernull_String{field: "\"chains\".\"payment_contract_address\""},
+	ToeknAddress:               whereHelpernull_String{field: "\"chains\".\"toekn_address\""},
+	OfficialNFTContractAddress: whereHelpernull_String{field: "\"chains\".\"official_nft_contract_address\""},
+	ConfirmationBlocks:         whereHelpernull_Int{field: "\"chains\".\"confirmation_blocks\""},
 }
 
 // ChainRels is where relationship names are stored.
 var ChainRels = struct {
 	Batches         string
+	NFTCollections  string
 	SupportedTokens string
 	Transactions    string
 	UserAccounts    string
 	UserBalances    string
 }{
 	Batches:         "Batches",
+	NFTCollections:  "NFTCollections",
 	SupportedTokens: "SupportedTokens",
 	Transactions:    "Transactions",
 	UserAccounts:    "UserAccounts",
@@ -191,6 +209,7 @@ var ChainRels = struct {
 // chainR is where relationships are stored.
 type chainR struct {
 	Batches         BatchSlice          `boil:"Batches" json:"Batches" toml:"Batches" yaml:"Batches"`
+	NFTCollections  NFTCollectionSlice  `boil:"NFTCollections" json:"NFTCollections" toml:"NFTCollections" yaml:"NFTCollections"`
 	SupportedTokens SupportedTokenSlice `boil:"SupportedTokens" json:"SupportedTokens" toml:"SupportedTokens" yaml:"SupportedTokens"`
 	Transactions    TransactionSlice    `boil:"Transactions" json:"Transactions" toml:"Transactions" yaml:"Transactions"`
 	UserAccounts    UserAccountSlice    `boil:"UserAccounts" json:"UserAccounts" toml:"UserAccounts" yaml:"UserAccounts"`
@@ -207,6 +226,13 @@ func (r *chainR) GetBatches() BatchSlice {
 		return nil
 	}
 	return r.Batches
+}
+
+func (r *chainR) GetNFTCollections() NFTCollectionSlice {
+	if r == nil {
+		return nil
+	}
+	return r.NFTCollections
 }
 
 func (r *chainR) GetSupportedTokens() SupportedTokenSlice {
@@ -241,9 +267,9 @@ func (r *chainR) GetUserBalances() UserBalanceSlice {
 type chainL struct{}
 
 var (
-	chainAllColumns            = []string{"chain_id", "name", "short_name", "rpc_url", "explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "account_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at", "max_wait_time_ms", "consumer_count", "payment_contract_address", "toekn_address"}
+	chainAllColumns            = []string{"chain_id", "name", "short_name", "rpc_url", "explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "account_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at", "max_wait_time_ms", "consumer_count", "payment_contract_address", "toekn_address", "official_nft_contract_address", "confirmation_blocks"}
 	chainColumnsWithoutDefault = []string{"chain_id", "name", "short_name", "rpc_url"}
-	chainColumnsWithDefault    = []string{"explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "account_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at", "max_wait_time_ms", "consumer_count", "payment_contract_address", "toekn_address"}
+	chainColumnsWithDefault    = []string{"explorer_url", "entry_point_address", "cpop_token_address", "master_aggregator_address", "account_manager_address", "optimal_batch_size", "max_batch_size", "min_batch_size", "is_enabled", "created_at", "max_wait_time_ms", "consumer_count", "payment_contract_address", "toekn_address", "official_nft_contract_address", "confirmation_blocks"}
 	chainPrimaryKeyColumns     = []string{"chain_id"}
 	chainGeneratedColumns      = []string{}
 )
@@ -351,6 +377,20 @@ func (o *Chain) Batches(mods ...qm.QueryMod) batchQuery {
 	)
 
 	return Batches(queryMods...)
+}
+
+// NFTCollections retrieves all the nft_collection's NFTCollections with an executor.
+func (o *Chain) NFTCollections(mods ...qm.QueryMod) nftCollectionQuery {
+	var queryMods []qm.QueryMod
+	if len(mods) != 0 {
+		queryMods = append(queryMods, mods...)
+	}
+
+	queryMods = append(queryMods,
+		qm.Where("\"nft_collections\".\"chain_id\"=?", o.ChainID),
+	)
+
+	return NFTCollections(queryMods...)
 }
 
 // SupportedTokens retrieves all the supported_token's SupportedTokens with an executor.
@@ -505,6 +545,112 @@ func (chainL) LoadBatches(ctx context.Context, e boil.ContextExecutor, singular 
 				local.R.Batches = append(local.R.Batches, foreign)
 				if foreign.R == nil {
 					foreign.R = &batchR{}
+				}
+				foreign.R.Chain = local
+				break
+			}
+		}
+	}
+
+	return nil
+}
+
+// LoadNFTCollections allows an eager lookup of values, cached into the
+// loaded structs of the objects. This is for a 1-M or N-M relationship.
+func (chainL) LoadNFTCollections(ctx context.Context, e boil.ContextExecutor, singular bool, maybeChain interface{}, mods queries.Applicator) error {
+	var slice []*Chain
+	var object *Chain
+
+	if singular {
+		var ok bool
+		object, ok = maybeChain.(*Chain)
+		if !ok {
+			object = new(Chain)
+			ok = queries.SetFromEmbeddedStruct(&object, &maybeChain)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", object, maybeChain))
+			}
+		}
+	} else {
+		s, ok := maybeChain.(*[]*Chain)
+		if ok {
+			slice = *s
+		} else {
+			ok = queries.SetFromEmbeddedStruct(&slice, maybeChain)
+			if !ok {
+				return errors.New(fmt.Sprintf("failed to set %T from embedded struct %T", slice, maybeChain))
+			}
+		}
+	}
+
+	args := make(map[interface{}]struct{})
+	if singular {
+		if object.R == nil {
+			object.R = &chainR{}
+		}
+		args[object.ChainID] = struct{}{}
+	} else {
+		for _, obj := range slice {
+			if obj.R == nil {
+				obj.R = &chainR{}
+			}
+			args[obj.ChainID] = struct{}{}
+		}
+	}
+
+	if len(args) == 0 {
+		return nil
+	}
+
+	argsSlice := make([]interface{}, len(args))
+	i := 0
+	for arg := range args {
+		argsSlice[i] = arg
+		i++
+	}
+
+	query := NewQuery(
+		qm.From(`nft_collections`),
+		qm.WhereIn(`nft_collections.chain_id in ?`, argsSlice...),
+	)
+	if mods != nil {
+		mods.Apply(query)
+	}
+
+	results, err := query.QueryContext(ctx, e)
+	if err != nil {
+		return errors.Wrap(err, "failed to eager load nft_collections")
+	}
+
+	var resultSlice []*NFTCollection
+	if err = queries.Bind(results, &resultSlice); err != nil {
+		return errors.Wrap(err, "failed to bind eager loaded slice nft_collections")
+	}
+
+	if err = results.Close(); err != nil {
+		return errors.Wrap(err, "failed to close results in eager load on nft_collections")
+	}
+	if err = results.Err(); err != nil {
+		return errors.Wrap(err, "error occurred during iteration of eager loaded relations for nft_collections")
+	}
+
+	if singular {
+		object.R.NFTCollections = resultSlice
+		for _, foreign := range resultSlice {
+			if foreign.R == nil {
+				foreign.R = &nftCollectionR{}
+			}
+			foreign.R.Chain = object
+		}
+		return nil
+	}
+
+	for _, foreign := range resultSlice {
+		for _, local := range slice {
+			if local.ChainID == foreign.ChainID {
+				local.R.NFTCollections = append(local.R.NFTCollections, foreign)
+				if foreign.R == nil {
+					foreign.R = &nftCollectionR{}
 				}
 				foreign.R.Chain = local
 				break
@@ -983,6 +1129,59 @@ func (o *Chain) AddBatches(ctx context.Context, exec boil.ContextExecutor, inser
 	for _, rel := range related {
 		if rel.R == nil {
 			rel.R = &batchR{
+				Chain: o,
+			}
+		} else {
+			rel.R.Chain = o
+		}
+	}
+	return nil
+}
+
+// AddNFTCollections adds the given related objects to the existing relationships
+// of the chain, optionally inserting them as new records.
+// Appends related to o.R.NFTCollections.
+// Sets related.R.Chain appropriately.
+func (o *Chain) AddNFTCollections(ctx context.Context, exec boil.ContextExecutor, insert bool, related ...*NFTCollection) error {
+	var err error
+	for _, rel := range related {
+		if insert {
+			rel.ChainID = o.ChainID
+			if err = rel.Insert(ctx, exec, boil.Infer()); err != nil {
+				return errors.Wrap(err, "failed to insert into foreign table")
+			}
+		} else {
+			updateQuery := fmt.Sprintf(
+				"UPDATE \"nft_collections\" SET %s WHERE %s",
+				strmangle.SetParamNames("\"", "\"", 1, []string{"chain_id"}),
+				strmangle.WhereClause("\"", "\"", 2, nftCollectionPrimaryKeyColumns),
+			)
+			values := []interface{}{o.ChainID, rel.ID}
+
+			if boil.IsDebug(ctx) {
+				writer := boil.DebugWriterFrom(ctx)
+				fmt.Fprintln(writer, updateQuery)
+				fmt.Fprintln(writer, values)
+			}
+			if _, err = exec.ExecContext(ctx, updateQuery, values...); err != nil {
+				return errors.Wrap(err, "failed to update foreign table")
+			}
+
+			rel.ChainID = o.ChainID
+		}
+	}
+
+	if o.R == nil {
+		o.R = &chainR{
+			NFTCollections: related,
+		}
+	} else {
+		o.R.NFTCollections = append(o.R.NFTCollections, related...)
+	}
+
+	for _, rel := range related {
+		if rel.R == nil {
+			rel.R = &nftCollectionR{
 				Chain: o,
 			}
 		} else {

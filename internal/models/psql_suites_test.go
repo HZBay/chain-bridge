@@ -14,6 +14,14 @@ func TestUpsert(t *testing.T) {
 
 	t.Run("Chains", testChainsUpsert)
 
+	t.Run("NFTAssets", testNFTAssetsUpsert)
+
+	t.Run("NFTCollectionStats", testNFTCollectionStatsUpsert)
+
+	t.Run("NFTCollections", testNFTCollectionsUpsert)
+
+	t.Run("NFTPriceHistories", testNFTPriceHistoriesUpsert)
+
 	t.Run("PasswordResetTokens", testPasswordResetTokensUpsert)
 
 	t.Run("PushTokens", testPushTokensUpsert)

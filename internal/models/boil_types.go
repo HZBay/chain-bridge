@@ -53,9 +53,12 @@ func makeCacheKey(cols boil.Columns, nzDefaults []string) string {
 
 // Enum values for BatchType
 const (
-	BatchTypeMint     string = "mint"
-	BatchTypeBurn     string = "burn"
-	BatchTypeTransfer string = "transfer"
+	BatchTypeMint        string = "mint"
+	BatchTypeBurn        string = "burn"
+	BatchTypeTransfer    string = "transfer"
+	BatchTypeNFTMint     string = "nft_mint"
+	BatchTypeNFTBurn     string = "nft_burn"
+	BatchTypeNFTTransfer string = "nft_transfer"
 )
 
 func AllBatchType() []string {
@@ -63,6 +66,9 @@ func AllBatchType() []string {
 		BatchTypeMint,
 		BatchTypeBurn,
 		BatchTypeTransfer,
+		BatchTypeNFTMint,
+		BatchTypeNFTBurn,
+		BatchTypeNFTTransfer,
 	}
 }
 
@@ -83,9 +89,12 @@ func AllNetworkCondition() []string {
 
 // Enum values for CpopOperationType
 const (
-	CpopOperationTypeBatchMint     string = "batch_mint"
-	CpopOperationTypeBatchBurn     string = "batch_burn"
-	CpopOperationTypeBatchTransfer string = "batch_transfer"
+	CpopOperationTypeBatchMint        string = "batch_mint"
+	CpopOperationTypeBatchBurn        string = "batch_burn"
+	CpopOperationTypeBatchTransfer    string = "batch_transfer"
+	CpopOperationTypeBatchNFTMint     string = "batch_nft_mint"
+	CpopOperationTypeBatchNFTBurn     string = "batch_nft_burn"
+	CpopOperationTypeBatchNFTTransfer string = "batch_nft_transfer"
 )
 
 func AllCpopOperationType() []string {
@@ -93,6 +102,9 @@ func AllCpopOperationType() []string {
 		CpopOperationTypeBatchMint,
 		CpopOperationTypeBatchBurn,
 		CpopOperationTypeBatchTransfer,
+		CpopOperationTypeBatchNFTMint,
+		CpopOperationTypeBatchNFTBurn,
+		CpopOperationTypeBatchNFTTransfer,
 	}
 }
 
@@ -141,9 +153,12 @@ func AllTokenType() []string {
 
 // Enum values for TXType
 const (
-	TXTypeMint     string = "mint"
-	TXTypeBurn     string = "burn"
-	TXTypeTransfer string = "transfer"
+	TXTypeMint        string = "mint"
+	TXTypeBurn        string = "burn"
+	TXTypeTransfer    string = "transfer"
+	TXTypeNFTMint     string = "nft_mint"
+	TXTypeNFTBurn     string = "nft_burn"
+	TXTypeNFTTransfer string = "nft_transfer"
 )
 
 func AllTXType() []string {
@@ -151,6 +166,9 @@ func AllTXType() []string {
 		TXTypeMint,
 		TXTypeBurn,
 		TXTypeTransfer,
+		TXTypeNFTMint,
+		TXTypeNFTBurn,
+		TXTypeNFTTransfer,
 	}
 }
 

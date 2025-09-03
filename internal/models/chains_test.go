@@ -431,6 +431,84 @@ func testChainToManyBatches(t *testing.T) {
 	}
 }
 
+func testChainToManyNFTCollections(t *testing.T) {
+	var err error
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Chain
+	var b, c NFTCollection
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, chainDBTypes, true, chainColumnsWithDefault...); err != nil {
+		t.Errorf("Unable to randomize Chain struct: %s", err)
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	if err = randomize.Struct(seed, &b, nftCollectionDBTypes, false, nftCollectionColumnsWithDefault...); err != nil {
+		t.Fatal(err)
+	}
+	if err = randomize.Struct(seed, &c, nftCollectionDBTypes, false, nftCollectionColumnsWithDefault...); err != nil {
+		t.Fatal(err)
+	}
+
+	b.ChainID = a.ChainID
+	c.ChainID = a.ChainID
+
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	check, err := a.NFTCollections().All(ctx, tx)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bFound, cFound := false, false
+	for _, v := range check {
+		if v.ChainID == b.ChainID {
+			bFound = true
+		}
+		if v.ChainID == c.ChainID {
+			cFound = true
+		}
+	}
+
+	if !bFound {
+		t.Error("expected to find b")
+	}
+	if !cFound {
+		t.Error("expected to find c")
+	}
+
+	slice := ChainSlice{&a}
+	if err = a.L.LoadNFTCollections(ctx, tx, false, (*[]*Chain)(&slice), nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(a.R.NFTCollections); got != 2 {
+		t.Error("number of eager loaded records wrong, got:", got)
+	}
+
+	a.R.NFTCollections = nil
+	if err = a.L.LoadNFTCollections(ctx, tx, true, &a, nil); err != nil {
+		t.Fatal(err)
+	}
+	if got := len(a.R.NFTCollections); got != 2 {
+		t.Error("number of eager loaded records wrong, got:", got)
+	}
+
+	if t.Failed() {
+		t.Logf("%#v", check)
+	}
+}
+
 func testChainToManySupportedTokens(t *testing.T) {
 	var err error
 	ctx := context.Background()
@@ -818,6 +896,81 @@ func testChainToManyAddOpBatches(t *testing.T) {
 		}
 	}
 }
+func testChainToManyAddOpNFTCollections(t *testing.T) {
+	var err error
+
+	ctx := context.Background()
+	tx := MustTx(boil.BeginTx(ctx, nil))
+	defer func() { _ = tx.Rollback() }()
+
+	var a Chain
+	var b, c, d, e NFTCollection
+
+	seed := randomize.NewSeed()
+	if err = randomize.Struct(seed, &a, chainDBTypes, false, strmangle.SetComplement(chainPrimaryKeyColumns, chainColumnsWithoutDefault)...); err != nil {
+		t.Fatal(err)
+	}
+	foreigners := []*NFTCollection{&b, &c, &d, &e}
+	for _, x := range foreigners {
+		if err = randomize.Struct(seed, x, nftCollectionDBTypes, false, strmangle.SetComplement(nftCollectionPrimaryKeyColumns, nftCollectionColumnsWithoutDefault)...); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if err := a.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = b.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+	if err = c.Insert(ctx, tx, boil.Infer()); err != nil {
+		t.Fatal(err)
+	}
+
+	foreignersSplitByInsertion := [][]*NFTCollection{
+		{&b, &c},
+		{&d, &e},
+	}
+
+	for i, x := range foreignersSplitByInsertion {
+		err = a.AddNFTCollections(ctx, tx, i != 0, x...)
+		if err != nil {
+			t.Fatal(err)
+		}
+
+		first := x[0]
+		second := x[1]
+
+		if a.ChainID != first.ChainID {
+			t.Error("foreign key was wrong value", a.ChainID, first.ChainID)
+		}
+		if a.ChainID != second.ChainID {
+			t.Error("foreign key was wrong value", a.ChainID, second.ChainID)
+		}
+
+		if first.R.Chain != &a {
+			t.Error("relationship was not added properly to the foreign slice")
+		}
+		if second.R.Chain != &a {
+			t.Error("relationship was not added properly to the foreign slice")
+		}
+
+		if a.R.NFTCollections[i*2] != first {
+			t.Error("relationship struct slice not set to correct value")
+		}
+		if a.R.NFTCollections[i*2+1] != second {
+			t.Error("relationship struct slice not set to correct value")
+		}
+
+		count, err := a.NFTCollections().Count(ctx, tx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if want := int64((i + 1) * 2); count != want {
+			t.Error("want", want, "got", count)
+		}
+	}
+}
 func testChainToManyAddOpSupportedTokens(t *testing.T) {
 	var err error
 
@@ -1193,7 +1346,7 @@ func testChainsSelect(t *testing.T) {
 }
 
 var (
-	chainDBTypes = map[string]string{`ChainID`: `bigint`, `Name`: `character varying`, `ShortName`: `character varying`, `RPCURL`: `character varying`, `ExplorerURL`: `character varying`, `EntryPointAddress`: `character`, `CpopTokenAddress`: `character`, `MasterAggregatorAddress`: `character`, `AccountManagerAddress`: `character`, `OptimalBatchSize`: `integer`, `MaxBatchSize`: `integer`, `MinBatchSize`: `integer`, `IsEnabled`: `boolean`, `CreatedAt`: `timestamp with time zone`, `MaxWaitTimeMS`: `integer`, `ConsumerCount`: `integer`, `PaymentContractAddress`: `character`, `ToeknAddress`: `character`}
+	chainDBTypes = map[string]string{`ChainID`: `bigint`, `Name`: `character varying`, `ShortName`: `character varying`, `RPCURL`: `character varying`, `ExplorerURL`: `character varying`, `EntryPointAddress`: `character`, `CpopTokenAddress`: `character`, `MasterAggregatorAddress`: `character`, `AccountManagerAddress`: `character`, `OptimalBatchSize`: `integer`, `MaxBatchSize`: `integer`, `MinBatchSize`: `integer`, `IsEnabled`: `boolean`, `CreatedAt`: `timestamp with time zone`, `MaxWaitTimeMS`: `integer`, `ConsumerCount`: `integer`, `PaymentContractAddress`: `character`, `ToeknAddress`: `character`, `OfficialNFTContractAddress`: `character`, `ConfirmationBlocks`: `integer`}
 	_            = bytes.MinRead
 )
 
