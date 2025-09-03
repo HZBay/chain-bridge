@@ -1,5 +1,4 @@
 package nft
-package nft
 
 import (
 	"github.com/hzbay/chain-bridge/internal/services/nft"
