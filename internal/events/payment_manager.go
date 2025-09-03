@@ -427,6 +427,10 @@ func LoadConfigFromDatabase(ctx context.Context, db *sql.DB) (PaymentManagerConf
 				if chain.ConfirmationBlocks.Int < 0 {
 					return 0
 				}
+				// Ensure safe conversion to uint64
+				if chain.ConfirmationBlocks.Int > int(^uint64(0)>>1) {
+					return ^uint64(0) >> 1 // Max safe value
+				}
 				return uint64(chain.ConfirmationBlocks.Int)
 			}(), // Default confirmation blocks (could be made configurable)
 			PollInterval:       "10s",                                // Default poll interval (could be made configurable)
