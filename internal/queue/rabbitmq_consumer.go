@@ -1984,8 +1984,8 @@ func (c *RabbitMQBatchConsumer) prepareNFTMintParams(ctx context.Context, jobs [
 	metadataURIs := make([]string, len(jobs))
 
 	for i, job := range jobs {
-		// Convert user ID to address (this would need proper implementation)
-		recipientAddr, err := c.getUserAddress(ctx, job.ToUserID)
+		// Convert user ID to address using AA address lookup
+		recipientAddr, err := c.getUserAAAddress(ctx, job.ToUserID, job.ChainID)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to get recipient address for user %s: %w", job.ToUserID, err)
 		}
@@ -2027,14 +2027,14 @@ func (c *RabbitMQBatchConsumer) prepareNFTTransferParams(ctx context.Context, jo
 	tokenIds := make([]*big.Int, len(jobs))
 
 	for i, job := range jobs {
-		// Convert user IDs to addresses
-		fromAddr, err := c.getUserAddress(ctx, job.FromUserID)
+		// Convert user IDs to addresses using AA address lookup
+		fromAddr, err := c.getUserAAAddress(ctx, job.FromUserID, job.ChainID)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to get from address for user %s: %w", job.FromUserID, err)
 		}
 		fromAddresses[i] = fromAddr
 
-		toAddr, err := c.getUserAddress(ctx, job.ToUserID)
+		toAddr, err := c.getUserAAAddress(ctx, job.ToUserID, job.ChainID)
 		if err != nil {
 			return nil, nil, nil, fmt.Errorf("failed to get to address for user %s: %w", job.ToUserID, err)
 		}
