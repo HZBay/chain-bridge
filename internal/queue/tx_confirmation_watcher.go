@@ -61,6 +61,7 @@ type PendingBatch struct {
 // BatchOperation represents an operation within a batch
 type BatchOperation struct {
 	TxID          string          `db:"tx_id"`
+	OperationID   sql.NullString  `db:"operation_id"`
 	UserID        string          `db:"user_id"`
 	RelatedUserID sql.NullString  `db:"related_user_id"`
 	TxType        string          `db:"tx_type"`
@@ -278,7 +279,7 @@ func (w *TxConfirmationWatcher) getPendingBatches(ctx context.Context) ([]Pendin
 func (w *TxConfirmationWatcher) getBatchOperations(ctx context.Context, batchID string) ([]BatchOperation, error) {
 	query := `
 		SELECT 
-			tx_id, user_id, related_user_id, tx_type, 
+			tx_id, operation_id, user_id, related_user_id, tx_type, 
 			amount, transfer_direction, collection_id, nft_token_id
 		FROM transactions 
 		WHERE batch_id = $1 
@@ -295,6 +296,7 @@ func (w *TxConfirmationWatcher) getBatchOperations(ctx context.Context, batchID 
 		var op BatchOperation
 		err := rows.Scan(
 			&op.TxID,
+			&op.OperationID,
 			&op.UserID,
 			&op.RelatedUserID,
 			&op.TxType,
@@ -947,20 +949,24 @@ func (w *TxConfirmationWatcher) finalizeNFTAssetsForBatch(tx *sql.Tx, batch Pend
 
 // finalizeNFTForMint finalizes NFT asset after successful mint
 func (w *TxConfirmationWatcher) finalizeNFTForMint(tx *sql.Tx, op BatchOperation, _ int64) error {
-	if !op.CollectionID.Valid || !op.NFTTokenID.Valid {
-		return fmt.Errorf("NFT mint operation missing collection_id or nft_token_id")
+	if !op.CollectionID.Valid {
+		return fmt.Errorf("NFT mint operation missing collection_id")
 	}
 
+	// For NFT mint operations, if token_id is still "-1", we need to get the actual token_id from blockchain result
+	// This will be handled by a separate process that extracts token IDs from the blockchain transaction receipt
+	
 	// Update NFT asset to minted status
+	// Note: token_id might still be "-1" at this point, will be updated by UpdateTokenIDAfterMinting
 	query := `
 		UPDATE nft_assets
 		SET 
 			is_minted = true,
 			is_locked = false,
-			updated_at = $4
-		WHERE collection_id = $1 AND token_id = $2 AND owner_user_id = $3`
+			updated_at = $3
+		WHERE collection_id = $1 AND owner_user_id = $2 AND operation_id = $4 AND token_id = '-1'`
 
-	_, err := tx.Exec(query, op.CollectionID.String, op.NFTTokenID.String, op.UserID, time.Now())
+	_, err := tx.Exec(query, op.CollectionID.String, op.UserID, time.Now(), op.OperationID.String)
 	if err != nil {
 		return fmt.Errorf("failed to finalize NFT mint: %w", err)
 	}
@@ -1049,6 +1055,11 @@ func (w *TxConfirmationWatcher) sendNFTSuccessNotification(ctx context.Context, 
 		"status":    "confirmed",
 	}
 
+	// Add operation_id if available
+	if op.OperationID.Valid {
+		notificationData["operation_id"] = op.OperationID.String
+	}
+
 	// Add NFT-specific data if available
 	if op.CollectionID.Valid {
 		notificationData["collection_id"] = op.CollectionID.String
@@ -1092,6 +1103,11 @@ func (w *TxConfirmationWatcher) sendNFTTransferReceivedNotification(ctx context.
 		"from_user_id": op.UserID, // Sender
 	}
 
+	// Add operation_id if available
+	if op.OperationID.Valid {
+		notificationData["operation_id"] = op.OperationID.String
+	}
+
 	// Add NFT-specific data if available
 	if op.CollectionID.Valid {
 		notificationData["collection_id"] = op.CollectionID.String
@@ -1117,4 +1133,160 @@ func (w *TxConfirmationWatcher) sendNFTTransferReceivedNotification(ctx context.
 			Str("from_user_id", op.UserID).
 			Msg("Failed to send NFT transfer received notification")
 	}
+}
+
+// extractAndUpdateNFTTokenIDs extracts token IDs from NFT batch result and updates database
+func (w *TxConfirmationWatcher) extractAndUpdateNFTTokenIDs(ctx context.Context, batchID string, nftResult *blockchain.NFTBatchResult) error {
+	if nftResult == nil || len(nftResult.TokenIDs) == 0 {
+		return nil // No token IDs to process
+	}
+
+	log.Info().
+		Str("batch_id", batchID).
+		Int("token_count", len(nftResult.TokenIDs)).
+		Msg("Extracting and updating NFT token IDs from blockchain result")
+
+	// Get mint operations from this batch that have placeholder token IDs
+	// Order by created_at to maintain the same order as blockchain minting
+	query := `
+		SELECT operation_id, user_id, collection_id 
+		FROM transactions 
+		WHERE batch_id = $1 AND tx_type = 'nft_mint' AND nft_token_id = '-1' AND operation_id IS NOT NULL
+		ORDER BY created_at ASC`
+
+	rows, err := w.db.QueryContext(ctx, query, batchID)
+	if err != nil {
+		return fmt.Errorf("failed to query mint operations: %w", err)
+	}
+	defer rows.Close()
+
+	var operations []struct {
+		OperationID  string
+		UserID       string
+		CollectionID string
+	}
+
+	for rows.Next() {
+		var op struct {
+			OperationID  string
+			UserID       string
+			CollectionID string
+		}
+		err := rows.Scan(&op.OperationID, &op.UserID, &op.CollectionID)
+		if err != nil {
+			log.Error().Err(err).Msg("Failed to scan mint operation")
+			continue
+		}
+		operations = append(operations, op)
+	}
+
+	if err = rows.Err(); err != nil {
+		return fmt.Errorf("failed to iterate mint operations: %w", err)
+	}
+
+	// Map token IDs to operations based on creation order
+	// Since we process mint operations in order (ORDER BY created_at ASC) and
+	// blockchain returns token_ids in the same minting order,
+	// we can map by index position: operations[i] -> tokenIDs[i]
+	if len(operations) != len(nftResult.TokenIDs) {
+		log.Warn().
+			Int("operations_count", len(operations)).
+			Int("token_ids_count", len(nftResult.TokenIDs)).
+			Str("batch_id", batchID).
+			Msg("Mismatch between operations and token IDs count - this should not happen")
+		// Proceed with minimum count to avoid index errors
+	}
+
+	minCount := len(operations)
+	if len(nftResult.TokenIDs) < minCount {
+		minCount = len(nftResult.TokenIDs)
+	}
+
+	// Update each operation with its corresponding token ID
+	for i := 0; i < minCount; i++ {
+		op := operations[i]
+		actualTokenID := nftResult.TokenIDs[i]
+
+		log.Debug().
+			Str("operation_id", op.OperationID).
+			Str("user_id", op.UserID).
+			Str("actual_token_id", actualTokenID).
+			Msg("Updating NFT with actual token ID")
+
+		// Update token ID directly
+		err = w.updateNFTTokenIDDirect(ctx, op.OperationID, actualTokenID, op.CollectionID)
+		if err != nil {
+			log.Error().Err(err).
+				Str("operation_id", op.OperationID).
+				Str("token_id", actualTokenID).
+				Msg("Failed to update NFT token ID")
+			continue
+		}
+	}
+
+	return nil
+}
+
+// updateNFTTokenIDDirect updates NFT token ID directly in the database
+func (w *TxConfirmationWatcher) updateNFTTokenIDDirect(ctx context.Context, operationID, actualTokenID, collectionID string) error {
+	// Begin database transaction
+	tx, err := w.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			log.Warn().Err(rollbackErr).Msg("Failed to rollback transaction")
+		}
+	}()
+
+	// Update transactions table
+	_, err = tx.ExecContext(ctx, `
+		UPDATE transactions 
+		SET nft_token_id = $1, updated_at = NOW() 
+		WHERE operation_id = $2 AND nft_token_id = '-1'
+	`, actualTokenID, operationID)
+	if err != nil {
+		return fmt.Errorf("failed to update transactions token_id: %w", err)
+	}
+
+	// Get collection info for building metadata URI
+	var baseURI string
+	err = tx.QueryRowContext(ctx, `
+		SELECT base_uri FROM nft_collections WHERE collection_id = $1
+	`, collectionID).Scan(&baseURI)
+	if err != nil {
+		return fmt.Errorf("failed to get collection base_uri: %w", err)
+	}
+
+	// Build metadata URI with actual token ID
+	metadataURI := buildMetadataURI(baseURI, actualTokenID)
+
+	// Update nft_assets table
+	_, err = tx.ExecContext(ctx, `
+		UPDATE nft_assets 
+		SET token_id = $1, metadata_uri = $2, updated_at = NOW() 
+		WHERE operation_id = $3 AND token_id = '-1'
+	`, actualTokenID, metadataURI, operationID)
+	if err != nil {
+		return fmt.Errorf("failed to update nft_assets token_id: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
+}
+
+// buildMetadataURI builds the metadata URI for an NFT
+func buildMetadataURI(baseURI, tokenID string) string {
+	if baseURI == "" {
+		return ""
+	}
+	// Ensure baseURI ends with /
+	if baseURI[len(baseURI)-1] != '/' {
+		baseURI += "/"
+	}
+	return baseURI + tokenID
 }

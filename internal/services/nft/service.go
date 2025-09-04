@@ -349,28 +349,30 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 	for _, mintOp := range request.MintOperations {
 		// Create transaction record - token_id will be set to -1 until minting is complete
 		transactionID := uuid.New()
+		// Each mint operation gets its own unique operation_id for tracking
+		individualOperationID := uuid.New()
 
-		// Insert transaction record with operation_id for idempotency
+		// Insert transaction record with individual operation_id for proper tracking
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO transactions (
 				transaction_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount, 
 				collection_id, nft_token_id, nft_metadata, created_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
-		`, transactionID, mainOperationID.String(), mintOp.ToUserID, request.ChainID, "nft_mint", mintOp.BusinessType, "pending",
+		`, transactionID, individualOperationID.String(), mintOp.ToUserID, request.ChainID, "nft_mint", mintOp.BusinessType, "pending",
 			"1", request.CollectionID, "-1", convertMetadataToJSON(mintOp.Meta))
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create transaction record: %w", err)
 		}
 
-		// Create NFT asset record (not yet minted) with operation_id for tracking
+		// Create NFT asset record (not yet minted) with individual operation_id for tracking
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO nft_assets (
 				collection_id, token_id, owner_user_id, chain_id, operation_id,
 				metadata_uri, name, description, image_url, attributes,
 				is_burned, is_minted, is_locked, created_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
-		`, request.CollectionID, "-1", mintOp.ToUserID, request.ChainID, mainOperationID.String(),
+		`, request.CollectionID, "-1", mintOp.ToUserID, request.ChainID, individualOperationID.String(),
 			"", // metadata_uri will be set after token_id is known
 			mintOp.Meta.Name, mintOp.Meta.Description, mintOp.Meta.Image,
 			convertMetadataToJSON(mintOp.Meta), false, false, false)
@@ -379,7 +381,7 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 			return nil, nil, fmt.Errorf("failed to create NFT asset record: %w", err)
 		}
 
-		// Create NFT mint job for batch processing
+		// Create NFT mint job for batch processing with individual operation_id
 		mintJob := queue.NFTMintJob{
 			ID:            uuid.New().String(),
 			JobType:       queue.JobTypeNFTMint,
@@ -393,6 +395,9 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 			ReasonType:    mintOp.ReasonType,
 			Priority:      queue.PriorityNormal,
 			CreatedAt:     time.Now(),
+			// Store both batch operation_id and individual operation_id for mapping
+			BatchOperationID:      mainOperationID.String(), // Batch-level tracking
+			IndividualOperationID: individualOperationID.String(), // Individual operation tracking
 		}
 
 		if mintOp.ReasonDetail != nil {
@@ -585,14 +590,15 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 			}
 		}
 
-		// Create transaction record with operation_id for idempotency
+		// Create transaction record with individual operation_id for proper tracking
 		transactionID := uuid.New()
+		individualOperationID := uuid.New()
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO transactions (
 				transaction_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount,
 				collection_id, nft_token_id, created_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-		`, transactionID, mainOperationID.String(), burnOp.OwnerUserID, request.ChainID, "nft_burn", "consumption", "pending",
+		`, transactionID, individualOperationID.String(), burnOp.OwnerUserID, request.ChainID, "nft_burn", "consumption", "pending",
 			"1", request.CollectionID, burnOp.TokenID)
 
 		if err != nil {
@@ -612,6 +618,9 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 			ReasonType:    "user_burn",
 			Priority:      queue.PriorityNormal,
 			CreatedAt:     time.Now(),
+			// Store both batch operation_id and individual operation_id for mapping
+			BatchOperationID:      mainOperationID.String(), // Batch-level tracking
+			IndividualOperationID: individualOperationID.String(), // Individual operation tracking
 		}
 
 		// Queue the job for batch processing
@@ -806,14 +815,15 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 			}
 		}
 
-		// Create transaction record with operation_id for idempotency
+		// Create transaction record with individual operation_id for proper tracking
 		transactionID := uuid.New()
+		individualOperationID := uuid.New()
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO transactions (
 				transaction_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount,
 				collection_id, nft_token_id, related_user_id, created_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
-		`, transactionID, mainOperationID.String(), transferOp.FromUserID, request.ChainID, "nft_transfer", "transfer", "pending",
+		`, transactionID, individualOperationID.String(), transferOp.FromUserID, request.ChainID, "nft_transfer", "transfer", "pending",
 			"1", request.CollectionID, transferOp.TokenID, transferOp.ToUserID)
 
 		if err != nil {
@@ -845,6 +855,9 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 			ReasonType:    "user_transfer",
 			Priority:      queue.PriorityNormal,
 			CreatedAt:     time.Now(),
+			// Store both batch operation_id and individual operation_id for mapping
+			BatchOperationID:      mainOperationID.String(), // Batch-level tracking
+			IndividualOperationID: individualOperationID.String(), // Individual operation tracking
 		}
 
 		// Queue the job for batch processing
