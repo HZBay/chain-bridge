@@ -1938,11 +1938,128 @@ paths:
                       - synced
                       - syncing
                       - pending
-              total_value_usd:
-                description: Total portfolio value in USD
+              nft_assets:
+                type: array
+                items:
+                  type: object
+                  required:
+                  - collection_id
+                  - collection_name
+                  - chain_id
+                  - total_count
+                  - items
+                  properties:
+                    chain_id:
+                      description: Chain ID
+                      type: integer
+                      format: int64
+                      example: 56
+                    chain_name:
+                      description: Chain name
+                      type: string
+                      example: BSC
+                    collection_id:
+                      description: Collection identifier
+                      type: string
+                      example: cpop_genesis
+                    collection_name:
+                      description: Collection name
+                      type: string
+                      example: CPOP Genesis NFTs
+                    contract_address:
+                      description: Contract address
+                      type: string
+                      example: 0x1234567890123456789012345678901234567890
+                    floor_price_usd:
+                      description: Floor price in USD
+                      type: number
+                      format: float
+                      example: 100
+                    items:
+                      type: array
+                      items:
+                        type: object
+                        required:
+                        - token_id
+                        properties:
+                          estimated_value_usd:
+                            description: Estimated value in USD
+                            type: number
+                            format: float
+                            example: 100
+                          last_transfer_date:
+                            description: Last transfer date
+                            type: string
+                            format: date-time
+                            example: "2024-01-15T10:30:00Z"
+                          meta:
+                            type: object
+                            properties:
+                              attributes:
+                                type: array
+                                items:
+                                  type: object
+                                  required:
+                                  - trait_type
+                                  - value
+                                  properties:
+                                    rarity_percentage:
+                                      description: Rarity percentage
+                                      type: number
+                                      format: float
+                                      example: 15.5
+                                    trait_type:
+                                      description: Attribute trait type
+                                      type: string
+                                      example: Background
+                                    value:
+                                      description: Attribute value
+                                      type: string
+                                      example: Blue
+                              description:
+                                description: NFT description
+                                type: string
+                                example: A rare genesis collection NFT
+                              external_url:
+                                description: External URL
+                                type: string
+                                example: https://example.com/nft/1
+                              image:
+                                description: NFT image URL
+                                type: string
+                                example: https://example.com/nft/1.png
+                              name:
+                                description: NFT name
+                                type: string
+                                example: 'Genesis Token #1'
+                          token_id:
+                            description: NFT Token ID
+                            type: string
+                            example: "1"
+                    total_count:
+                      description: Total NFT count owned by user
+                      type: integer
+                      example: 5
+                    total_value_usd:
+                      description: Total collection value in USD
+                      type: number
+                      format: float
+                      example: 500
+              nft_value_usd:
+                description: NFT assets value in USD
+                type: number
+                format: float
+                example: 500
+              token_value_usd:
+                description: Token assets value in USD
                 type: number
                 format: float
                 example: 1250.5
+              total_value_usd:
+                description: Total portfolio value in USD (tokens + NFTs)
+                type: number
+                format: float
+                example: 1750.5
               user_id:
                 description: User identifier
                 type: string
@@ -3005,11 +3122,25 @@ definitions:
         type: array
         items:
           $ref: '#/definitions/assetInfo'
-      total_value_usd:
-        description: Total portfolio value in USD
+      nft_assets:
+        type: array
+        items:
+          $ref: '#/definitions/nFTCollectionInfo'
+      nft_value_usd:
+        description: NFT assets value in USD
+        type: number
+        format: float
+        example: 500
+      token_value_usd:
+        description: Token assets value in USD
         type: number
         format: float
         example: 1250.5
+      total_value_usd:
+        description: Total portfolio value in USD (tokens + NFTs)
+        type: number
+        format: float
+        example: 1750.5
       user_id:
         description: User identifier
         type: string
@@ -3520,6 +3651,25 @@ definitions:
       key:
         description: Key of field failing validation
         type: string
+  nFTAttribute:
+    type: object
+    required:
+    - trait_type
+    - value
+    properties:
+      rarity_percentage:
+        description: Rarity percentage
+        type: number
+        format: float
+        example: 15.5
+      trait_type:
+        description: Attribute trait type
+        type: string
+        example: Background
+      value:
+        description: Attribute value
+        type: string
+        example: Blue
   nFTBatchBurnResponse:
     type: object
     required:
@@ -3587,6 +3737,96 @@ definitions:
         description: Owner user ID
         type: string
         example: user123
+      token_id:
+        description: NFT Token ID
+        type: string
+        example: "1"
+  nFTCollectionInfo:
+    type: object
+    required:
+    - collection_id
+    - collection_name
+    - chain_id
+    - total_count
+    - items
+    properties:
+      chain_id:
+        description: Chain ID
+        type: integer
+        format: int64
+        example: 56
+      chain_name:
+        description: Chain name
+        type: string
+        example: BSC
+      collection_id:
+        description: Collection identifier
+        type: string
+        example: cpop_genesis
+      collection_name:
+        description: Collection name
+        type: string
+        example: CPOP Genesis NFTs
+      contract_address:
+        description: Contract address
+        type: string
+        example: 0x1234567890123456789012345678901234567890
+      floor_price_usd:
+        description: Floor price in USD
+        type: number
+        format: float
+        example: 100
+      items:
+        type: array
+        items:
+          $ref: '#/definitions/nFTItem'
+      total_count:
+        description: Total NFT count owned by user
+        type: integer
+        example: 5
+      total_value_usd:
+        description: Total collection value in USD
+        type: number
+        format: float
+        example: 500
+  nFTItem:
+    type: object
+    required:
+    - token_id
+    properties:
+      estimated_value_usd:
+        description: Estimated value in USD
+        type: number
+        format: float
+        example: 100
+      last_transfer_date:
+        description: Last transfer date
+        type: string
+        format: date-time
+        example: "2024-01-15T10:30:00Z"
+      meta:
+        type: object
+        properties:
+          attributes:
+            type: array
+            items:
+              $ref: '#/definitions/nFTAttribute'
+          description:
+            description: NFT description
+            type: string
+            example: A rare genesis collection NFT
+          external_url:
+            description: External URL
+            type: string
+            example: https://example.com/nft/1
+          image:
+            description: NFT image URL
+            type: string
+            example: https://example.com/nft/1.png
+          name:
+            description: NFT name
+            type: string
+            example: 'Genesis Token #1'
       token_id:
         description: NFT Token ID
         type: string

@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"math/big"
 	"sort"
-	"sync"
 	"time"
 
 	"github.com/ethereum/go-ethereum"
@@ -28,17 +27,6 @@ type TxConfirmationWatcher struct {
 
 	// Configuration
 	confirmationBlocks int
-	pollInterval       time.Duration
-	maxRetries         int
-
-	// Control channels
-	stopChan chan struct{}
-	workerWg sync.WaitGroup
-
-	// Metrics
-	processedCount int64
-	failedCount    int64
-	startedAt      time.Time
 }
 
 // NotificationProcessor defines the interface for sending notifications
@@ -85,58 +73,8 @@ func NewTxConfirmationWatcher(
 		notificationProcessor: notificationProcessor,
 
 		// Default configuration
-		confirmationBlocks: 6,                // 6 blocks for confirmation
-		pollInterval:       30 * time.Second, // Check every 30 seconds
-		maxRetries:         10,               // Maximum retry attempts
-
-		stopChan: make(chan struct{}),
+		confirmationBlocks: 6, // 6 blocks for confirmation
 	}
-}
-
-// Start starts the confirmation watcher
-func (w *TxConfirmationWatcher) Start(ctx context.Context) error {
-	log.Info().
-		Int("confirmation_blocks", w.confirmationBlocks).
-		Dur("poll_interval", w.pollInterval).
-		Int("max_retries", w.maxRetries).
-		Msg("NFT confirmation watcher initialized (synchronous mode)")
-
-	w.startedAt = time.Now()
-
-	// Note: No background goroutines started in synchronous mode
-	// This watcher now only provides ProcessSingleNFTBatch method
-	// for synchronous NFT batch processing called by RabbitMQBatchConsumer
-
-	log.Info().Msg("NFT confirmation watcher initialized successfully (synchronous mode)")
-	return nil
-}
-
-// Stop stops the confirmation watcher
-func (w *TxConfirmationWatcher) Stop(_ context.Context) error {
-	log.Info().Msg("Stopping transaction confirmation watcher")
-
-	// Signal stop
-	close(w.stopChan)
-
-	// Wait for workers to finish with timeout
-	done := make(chan struct{})
-	go func() {
-		w.workerWg.Wait()
-		close(done)
-	}()
-
-	select {
-	case <-done:
-		log.Info().
-			Int64("processed", w.processedCount).
-			Int64("failed", w.failedCount).
-			Dur("uptime", time.Since(w.startedAt)).
-			Msg("Transaction confirmation watcher stopped successfully")
-	case <-time.After(30 * time.Second):
-		log.Warn().Msg("Timeout waiting for confirmation watcher to stop")
-	}
-
-	return nil
 }
 
 // getBatchOperations retrieves all operations for a specific batch
@@ -186,7 +124,11 @@ func (w *TxConfirmationWatcher) finalizeNFTBatch(ctx context.Context, batch Pend
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback()
+	defer func() {
+		if err := tx.Rollback(); err != nil {
+			log.Debug().Err(err).Msg("Transaction rollback error (expected if committed)")
+		}
+	}()
 
 	// Get batch operations for NFT finalization
 	operations, err := w.getBatchOperations(ctx, batch.BatchID)
@@ -250,21 +192,6 @@ func (w *TxConfirmationWatcher) finalizeNFTBatch(ctx context.Context, batch Pend
 		Msg("NFT batch finalized successfully")
 
 	return nil
-}
-
-// GetMetrics returns monitoring metrics for the confirmation watcher
-func (w *TxConfirmationWatcher) GetMetrics() map[string]interface{} {
-	uptime := time.Since(w.startedAt)
-
-	return map[string]interface{}{
-		"processed_count":     w.processedCount,
-		"failed_count":        w.failedCount,
-		"uptime_seconds":      uptime.Seconds(),
-		"poll_interval":       w.pollInterval.String(),
-		"confirmation_blocks": w.confirmationBlocks,
-		"max_retries":         w.maxRetries,
-		"started_at":          w.startedAt,
-	}
 }
 
 // checkTransactionConfirmation checks if a transaction has enough confirmations

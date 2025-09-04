@@ -24,8 +24,19 @@ type AssetsResponse struct {
 	// Required: true
 	Assets []*AssetInfo `json:"assets"`
 
-	// Total portfolio value in USD
+	// nft assets
+	NftAssets []*NFTCollectionInfo `json:"nft_assets"`
+
+	// NFT assets value in USD
+	// Example: 500
+	NftValueUsd float32 `json:"nft_value_usd,omitempty"`
+
+	// Token assets value in USD
 	// Example: 1250.5
+	TokenValueUsd float32 `json:"token_value_usd,omitempty"`
+
+	// Total portfolio value in USD (tokens + NFTs)
+	// Example: 1750.5
 	// Required: true
 	TotalValueUsd *float32 `json:"total_value_usd"`
 
@@ -40,6 +51,10 @@ func (m *AssetsResponse) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateAssets(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateNftAssets(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -84,6 +99,32 @@ func (m *AssetsResponse) validateAssets(formats strfmt.Registry) error {
 	return nil
 }
 
+func (m *AssetsResponse) validateNftAssets(formats strfmt.Registry) error {
+	if swag.IsZero(m.NftAssets) { // not required
+		return nil
+	}
+
+	for i := 0; i < len(m.NftAssets); i++ {
+		if swag.IsZero(m.NftAssets[i]) { // not required
+			continue
+		}
+
+		if m.NftAssets[i] != nil {
+			if err := m.NftAssets[i].Validate(formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("nft_assets" + "." + strconv.Itoa(i))
+				} else if ce, ok := err.(*errors.CompositeError); ok {
+					return ce.ValidateName("nft_assets" + "." + strconv.Itoa(i))
+				}
+				return err
+			}
+		}
+
+	}
+
+	return nil
+}
+
 func (m *AssetsResponse) validateTotalValueUsd(formats strfmt.Registry) error {
 
 	if err := validate.Required("total_value_usd", "body", m.TotalValueUsd); err != nil {
@@ -110,6 +151,10 @@ func (m *AssetsResponse) ContextValidate(ctx context.Context, formats strfmt.Reg
 		res = append(res, err)
 	}
 
+	if err := m.contextValidateNftAssets(ctx, formats); err != nil {
+		res = append(res, err)
+	}
+
 	if len(res) > 0 {
 		return errors.CompositeValidationError(res...)
 	}
@@ -126,6 +171,26 @@ func (m *AssetsResponse) contextValidateAssets(ctx context.Context, formats strf
 					return ve.ValidateName("assets" + "." + strconv.Itoa(i))
 				} else if ce, ok := err.(*errors.CompositeError); ok {
 					return ce.ValidateName("assets" + "." + strconv.Itoa(i))
+				}
+				return err
+			}
+		}
+
+	}
+
+	return nil
+}
+
+func (m *AssetsResponse) contextValidateNftAssets(ctx context.Context, formats strfmt.Registry) error {
+
+	for i := 0; i < len(m.NftAssets); i++ {
+
+		if m.NftAssets[i] != nil {
+			if err := m.NftAssets[i].ContextValidate(ctx, formats); err != nil {
+				if ve, ok := err.(*errors.Validation); ok {
+					return ve.ValidateName("nft_assets" + "." + strconv.Itoa(i))
+				} else if ce, ok := err.(*errors.CompositeError); ok {
+					return ce.ValidateName("nft_assets" + "." + strconv.Itoa(i))
 				}
 				return err
 			}
