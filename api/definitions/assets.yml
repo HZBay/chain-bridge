@@ -103,7 +103,6 @@ definitions:
         type: array
         items:
           $ref: "#/definitions/NFTAttribute"
-        description: "NFT attributes"
 
   # NFT物品
   NFTItem:
@@ -116,7 +115,6 @@ definitions:
         example: "1"
       meta:
         $ref: "#/definitions/NFTMetadata"
-        description: "NFT metadata"
       estimated_value_usd:
         type: number
         format: float
@@ -172,7 +170,6 @@ definitions:
         type: array
         items:
           $ref: "#/definitions/NFTItem"
-        description: "Individual NFT items"
 
   # 用户资产概览响应（扩展版本，包含NFT资产）
   AssetsResponse:
@@ -202,12 +199,10 @@ definitions:
         type: array
         items:
           $ref: "#/definitions/AssetInfo"
-        description: "Token assets"
       nft_assets:
         type: array
         items:
           $ref: "#/definitions/NFTCollectionInfo"
-        description: "NFT assets grouped by collection"
 
   # 资产调整项
   AssetAdjustment:
