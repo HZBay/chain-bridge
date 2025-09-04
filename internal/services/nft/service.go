@@ -356,7 +356,7 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 				transaction_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount, 
 				collection_id, nft_token_id, nft_metadata, created_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
-		`, transactionID, mainOperationID.String(), mintOp.ToUserID, request.ChainID, "nft_mint", mintOp.BusinessType, "recorded",
+		`, transactionID, mainOperationID.String(), mintOp.ToUserID, request.ChainID, "nft_mint", mintOp.BusinessType, "pending",
 			"1", request.CollectionID, tokenID, convertMetadataToJSON(mintOp.Meta))
 
 		if err != nil {
@@ -435,7 +435,7 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 	response := &BatchMintResponse{
 		OperationID:    request.OperationID,
 		ProcessedCount: processedCount,
-		Status:         "recorded",
+		Status:         "pending",
 	}
 
 	return response, batchInfo, nil
@@ -484,7 +484,7 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 		// 返回已有结果
 		status := existingTx.Status.String
 		if status == "" {
-			status = "recorded"
+			status = "pending"
 		}
 
 		response := &BatchBurnResponse{
@@ -592,7 +592,7 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 				transaction_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount,
 				collection_id, nft_token_id, created_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-		`, transactionID, mainOperationID.String(), burnOp.OwnerUserID, request.ChainID, "nft_burn", "consumption", "recorded",
+		`, transactionID, mainOperationID.String(), burnOp.OwnerUserID, request.ChainID, "nft_burn", "consumption", "pending",
 			"1", request.CollectionID, burnOp.TokenID)
 
 		if err != nil {
@@ -649,7 +649,7 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 	response := &BatchBurnResponse{
 		OperationID:    request.OperationID,
 		ProcessedCount: processedCount,
-		Status:         "recorded",
+		Status:         "pending",
 	}
 
 	return response, batchInfo, nil
@@ -698,7 +698,7 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 		// 返回已有结果
 		status := existingTx.Status.String
 		if status == "" {
-			status = "recorded"
+			status = "pending"
 		}
 
 		response := &BatchTransferResponse{
@@ -813,7 +813,7 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 				transaction_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount,
 				collection_id, nft_token_id, related_user_id, created_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
-		`, transactionID, mainOperationID.String(), transferOp.FromUserID, request.ChainID, "nft_transfer", "transfer", "recorded",
+		`, transactionID, mainOperationID.String(), transferOp.FromUserID, request.ChainID, "nft_transfer", "transfer", "pending",
 			"1", request.CollectionID, transferOp.TokenID, transferOp.ToUserID)
 
 		if err != nil {
@@ -896,7 +896,7 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 	response := &BatchTransferResponse{
 		OperationID:    request.OperationID,
 		ProcessedCount: processedCount,
-		Status:         "recorded",
+		Status:         "pending",
 	}
 
 	return response, batchInfo, nil
