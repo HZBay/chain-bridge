@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math/big"
+	"sort"
 	"sync"
 	"time"
 
@@ -22,7 +23,7 @@ import (
 // TxConfirmationWatcher monitors blockchain transactions for confirmations
 type TxConfirmationWatcher struct {
 	db                    *sql.DB
-	unifiedCallers        map[int64]*blockchain.BatchCaller // Changed from cpopCallers
+	callers               map[int64]*blockchain.BatchCaller // Changed from cpopCallers
 	notificationProcessor NotificationProcessor             // Added for sending success notifications
 
 	// Configuration
@@ -75,12 +76,12 @@ type BatchOperation struct {
 // NewTxConfirmationWatcher creates a new transaction confirmation watcher
 func NewTxConfirmationWatcher(
 	db *sql.DB,
-	unifiedCallers map[int64]*blockchain.BatchCaller,
+	callers map[int64]*blockchain.BatchCaller,
 	notificationProcessor NotificationProcessor,
 ) *TxConfirmationWatcher {
 	return &TxConfirmationWatcher{
 		db:                    db,
-		unifiedCallers:        unifiedCallers,
+		callers:               callers,
 		notificationProcessor: notificationProcessor,
 
 		// Default configuration
@@ -323,7 +324,7 @@ func (w *TxConfirmationWatcher) processBatchConfirmation(ctx context.Context, ba
 		Str("tx_hash", batch.TxHash).
 		Msg("Processing batch confirmation")
 
-	caller := w.unifiedCallers[batch.ChainID]
+	caller := w.callers[batch.ChainID]
 	if caller == nil {
 		log.Error().
 			Int64("chain_id", batch.ChainID).
@@ -423,6 +424,29 @@ func (w *TxConfirmationWatcher) confirmBatch(ctx context.Context, batch PendingB
 	err = w.finalizeNFTAssetsForBatch(tx, batch)
 	if err != nil {
 		return fmt.Errorf("failed to finalize NFT assets: %w", err)
+	}
+
+	// Extract and update NFT token IDs for mint operations
+	// This is needed because NFT mint operations start with placeholder token_id "-1"
+	// and need to be updated with actual token IDs from blockchain result
+	if batch.BatchType == "nft_mint" {
+		// Get NFT batch result from blockchain
+		nftResult, err := w.getNFTBatchResult(ctx, batch.TxHash)
+		if err != nil {
+			log.Warn().Err(err).
+				Str("batch_id", batch.BatchID).
+				Str("tx_hash", batch.TxHash).
+				Msg("Failed to get NFT batch result, token IDs will not be updated")
+		} else if nftResult != nil {
+			// Extract and update token IDs
+			err = w.extractAndUpdateNFTTokenIDs(ctx, batch.BatchID, nftResult)
+			if err != nil {
+				log.Warn().Err(err).
+					Str("batch_id", batch.BatchID).
+					Str("tx_hash", batch.TxHash).
+					Msg("Failed to extract and update NFT token IDs")
+			}
+		}
 	}
 
 	if err = tx.Commit(); err != nil {
@@ -955,7 +979,7 @@ func (w *TxConfirmationWatcher) finalizeNFTForMint(tx *sql.Tx, op BatchOperation
 
 	// For NFT mint operations, if token_id is still "-1", we need to get the actual token_id from blockchain result
 	// This will be handled by a separate process that extracts token IDs from the blockchain transaction receipt
-	
+
 	// Update NFT asset to minted status
 	// Note: token_id might still be "-1" at this point, will be updated by UpdateTokenIDAfterMinting
 	query := `
@@ -1289,4 +1313,92 @@ func buildMetadataURI(baseURI, tokenID string) string {
 		baseURI += "/"
 	}
 	return baseURI + tokenID
+}
+
+// getNFTBatchResult retrieves NFT batch result from blockchain
+func (w *TxConfirmationWatcher) getNFTBatchResult(ctx context.Context, txHash string) (*blockchain.NFTBatchResult, error) {
+	// Get the caller for the chain
+	caller, err := w.getCallerForTxHash(ctx, txHash)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get caller for tx hash: %w", err)
+	}
+
+	// Get transaction receipt to extract token IDs
+	receipt, err := caller.GetTransactionReceipt(ctx, common.HexToHash(txHash))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get transaction receipt: %w", err)
+	}
+
+	// Extract token IDs from receipt logs
+	tokenIDs, err := w.extractTokenIDsFromReceipt(receipt)
+	if err != nil {
+		return nil, fmt.Errorf("failed to extract token IDs from receipt: %w", err)
+	}
+
+	return &blockchain.NFTBatchResult{
+		TxHash:      txHash,
+		TokenIDs:    tokenIDs,
+		BlockNumber: receipt.BlockNumber,
+		Status:      "success",
+	}, nil
+}
+
+// getCallerForTxHash gets the appropriate caller for a transaction hash
+func (w *TxConfirmationWatcher) getCallerForTxHash(ctx context.Context, txHash string) (*blockchain.BatchCaller, error) {
+	// Get chain ID from batch record
+	var chainID int64
+	err := w.db.QueryRowContext(ctx, `
+		SELECT chain_id FROM batches WHERE tx_hash = $1
+	`, txHash).Scan(&chainID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to get chain ID for tx hash: %w", err)
+	}
+
+	// Get caller from the callers map
+	caller, exists := w.callers[chainID]
+	if !exists {
+		return nil, fmt.Errorf("no caller found for chain %d", chainID)
+	}
+
+	return caller, nil
+}
+
+// extractTokenIDsFromReceipt extracts token IDs from transaction receipt logs
+func (w *TxConfirmationWatcher) extractTokenIDsFromReceipt(receipt *types.Receipt) ([]string, error) {
+	var tokenIDs []string
+
+	log.Debug().
+		Str("tx_hash", receipt.TxHash.Hex()).
+		Int("logs_count", len(receipt.Logs)).
+		Msg("Extracting token IDs from transaction receipt")
+
+	// Parse Transfer events to extract token IDs
+	// Transfer event signature: Transfer(address indexed from, address indexed to, uint256 indexed tokenId)
+	transferEventSignature := common.HexToHash("0xddf252ad1be2c89b69c2b068fc378daa952ba7f163c4a11628f55a4df523b3ef")
+
+	for _, logEntry := range receipt.Logs {
+		// Check if this is a Transfer event
+		if len(logEntry.Topics) >= 4 && logEntry.Topics[0] == transferEventSignature {
+			// Extract token ID from the third indexed parameter
+			tokenID := new(big.Int).SetBytes(logEntry.Topics[3].Bytes())
+			tokenIDs = append(tokenIDs, tokenID.String())
+
+			log.Debug().
+				Str("token_id", tokenID.String()).
+				Str("from", common.BytesToAddress(logEntry.Topics[1].Bytes()).Hex()).
+				Str("to", common.BytesToAddress(logEntry.Topics[2].Bytes()).Hex()).
+				Msg("Found NFT Transfer event")
+		}
+	}
+
+	// Sort token IDs to ensure consistent order
+	sort.Strings(tokenIDs)
+
+	log.Info().
+		Str("tx_hash", receipt.TxHash.Hex()).
+		Int("token_count", len(tokenIDs)).
+		Strs("token_ids", tokenIDs).
+		Msg("Extracted token IDs from transaction receipt")
+
+	return tokenIDs, nil
 }

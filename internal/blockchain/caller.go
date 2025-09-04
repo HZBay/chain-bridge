@@ -508,3 +508,8 @@ func (u *BatchCaller) calculateCPOPGasSaved(operationCount int, actualGas uint64
 	}
 	return 0
 }
+
+// GetTransactionReceipt gets transaction receipt by hash
+func (u *BatchCaller) GetTransactionReceipt(ctx context.Context, txHash common.Hash) (*types.Receipt, error) {
+	return u.client.TransactionReceipt(ctx, txHash)
+}
