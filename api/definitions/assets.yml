@@ -60,7 +60,121 @@ definitions:
         description: "Synchronization status"
         default: synced
 
-  # 用户资产概览响应
+  # NFT属性
+  NFTAttribute:
+    type: object
+    required: [trait_type, value]
+    properties:
+      trait_type:
+        type: string
+        description: "Attribute trait type"
+        example: "Background"
+      value:
+        type: string
+        description: "Attribute value"
+        example: "Blue"
+      rarity_percentage:
+        type: number
+        format: float
+        description: "Rarity percentage"
+        example: 15.5
+
+  # NFT元数据
+  NFTMetadata:
+    type: object
+    properties:
+      name:
+        type: string
+        description: "NFT name"
+        example: "Genesis Token #1"
+      description:
+        type: string
+        description: "NFT description"
+        example: "A rare genesis collection NFT"
+      image:
+        type: string
+        description: "NFT image URL"
+        example: "https://example.com/nft/1.png"
+      external_url:
+        type: string
+        description: "External URL"
+        example: "https://example.com/nft/1"
+      attributes:
+        type: array
+        items:
+          $ref: "#/definitions/NFTAttribute"
+        description: "NFT attributes"
+
+  # NFT物品
+  NFTItem:
+    type: object
+    required: [token_id]
+    properties:
+      token_id:
+        type: string
+        description: "NFT Token ID"
+        example: "1"
+      meta:
+        $ref: "#/definitions/NFTMetadata"
+        description: "NFT metadata"
+      estimated_value_usd:
+        type: number
+        format: float
+        description: "Estimated value in USD"
+        example: 100.0
+      last_transfer_date:
+        type: string
+        format: date-time
+        description: "Last transfer date"
+        example: "2024-01-15T10:30:00Z"
+
+  # NFT集合信息
+  NFTCollectionInfo:
+    type: object
+    required: [collection_id, collection_name, chain_id, total_count, items]
+    properties:
+      collection_id:
+        type: string
+        description: "Collection identifier"
+        example: "cpop_genesis"
+      collection_name:
+        type: string
+        description: "Collection name"
+        example: "CPOP Genesis NFTs"
+      contract_address:
+        type: string
+        description: "Contract address"
+        example: "0x1234567890123456789012345678901234567890"
+      chain_id:
+        type: integer
+        format: int64
+        description: "Chain ID"
+        example: 56
+      chain_name:
+        type: string
+        description: "Chain name"
+        example: "BSC"
+      total_count:
+        type: integer
+        description: "Total NFT count owned by user"
+        example: 5
+      floor_price_usd:
+        type: number
+        format: float
+        description: "Floor price in USD"
+        example: 100.0
+      total_value_usd:
+        type: number
+        format: float
+        description: "Total collection value in USD"
+        example: 500.0
+      items:
+        type: array
+        items:
+          $ref: "#/definitions/NFTItem"
+        description: "Individual NFT items"
+
+  # 用户资产概览响应（扩展版本，包含NFT资产）
   AssetsResponse:
     type: object
     required: [user_id, total_value_usd, assets]
@@ -72,12 +186,28 @@ definitions:
       total_value_usd:
         type: number
         format: float
-        description: "Total portfolio value in USD"
+        description: "Total portfolio value in USD (tokens + NFTs)"
+        example: 1750.50
+      token_value_usd:
+        type: number
+        format: float
+        description: "Token assets value in USD"
         example: 1250.50
+      nft_value_usd:
+        type: number
+        format: float
+        description: "NFT assets value in USD"
+        example: 500.0
       assets:
         type: array
         items:
           $ref: "#/definitions/AssetInfo"
+        description: "Token assets"
+      nft_assets:
+        type: array
+        items:
+          $ref: "#/definitions/NFTCollectionInfo"
+        description: "NFT assets grouped by collection"
 
   # 资产调整项
   AssetAdjustment:
