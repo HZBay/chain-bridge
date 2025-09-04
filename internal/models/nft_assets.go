@@ -39,6 +39,7 @@ type NFTAsset struct {
 	IsLocked     null.Bool   `boil:"is_locked" json:"is_locked,omitempty" toml:"is_locked" yaml:"is_locked,omitempty"`
 	CreatedAt    null.Time   `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
 	UpdatedAt    null.Time   `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
+	OperationID  null.String `boil:"operation_id" json:"operation_id,omitempty" toml:"operation_id" yaml:"operation_id,omitempty"`
 
 	R *nftAssetR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L nftAssetL  `boil:"-" json:"-" toml:"-" yaml:"-"`
@@ -60,6 +61,7 @@ var NFTAssetColumns = struct {
 	IsLocked     string
 	CreatedAt    string
 	UpdatedAt    string
+	OperationID  string
 }{
 	ID:           "id",
 	CollectionID: "collection_id",
@@ -76,6 +78,7 @@ var NFTAssetColumns = struct {
 	IsLocked:     "is_locked",
 	CreatedAt:    "created_at",
 	UpdatedAt:    "updated_at",
+	OperationID:  "operation_id",
 }
 
 var NFTAssetTableColumns = struct {
@@ -94,6 +97,7 @@ var NFTAssetTableColumns = struct {
 	IsLocked     string
 	CreatedAt    string
 	UpdatedAt    string
+	OperationID  string
 }{
 	ID:           "nft_assets.id",
 	CollectionID: "nft_assets.collection_id",
@@ -110,6 +114,7 @@ var NFTAssetTableColumns = struct {
 	IsLocked:     "nft_assets.is_locked",
 	CreatedAt:    "nft_assets.created_at",
 	UpdatedAt:    "nft_assets.updated_at",
+	OperationID:  "nft_assets.operation_id",
 }
 
 // Generated where
@@ -154,6 +159,7 @@ var NFTAssetWhere = struct {
 	IsLocked     whereHelpernull_Bool
 	CreatedAt    whereHelpernull_Time
 	UpdatedAt    whereHelpernull_Time
+	OperationID  whereHelpernull_String
 }{
 	ID:           whereHelperint{field: "\"nft_assets\".\"id\""},
 	CollectionID: whereHelperstring{field: "\"nft_assets\".\"collection_id\""},
@@ -170,6 +176,7 @@ var NFTAssetWhere = struct {
 	IsLocked:     whereHelpernull_Bool{field: "\"nft_assets\".\"is_locked\""},
 	CreatedAt:    whereHelpernull_Time{field: "\"nft_assets\".\"created_at\""},
 	UpdatedAt:    whereHelpernull_Time{field: "\"nft_assets\".\"updated_at\""},
+	OperationID:  whereHelpernull_String{field: "\"nft_assets\".\"operation_id\""},
 }
 
 // NFTAssetRels is where relationship names are stored.
@@ -200,9 +207,9 @@ func (r *nftAssetR) GetCollection() *NFTCollection {
 type nftAssetL struct{}
 
 var (
-	nftAssetAllColumns            = []string{"id", "collection_id", "token_id", "owner_user_id", "chain_id", "metadata_uri", "name", "description", "image_url", "attributes", "is_burned", "is_minted", "is_locked", "created_at", "updated_at"}
+	nftAssetAllColumns            = []string{"id", "collection_id", "token_id", "owner_user_id", "chain_id", "metadata_uri", "name", "description", "image_url", "attributes", "is_burned", "is_minted", "is_locked", "created_at", "updated_at", "operation_id"}
 	nftAssetColumnsWithoutDefault = []string{"collection_id", "token_id", "owner_user_id", "chain_id"}
-	nftAssetColumnsWithDefault    = []string{"id", "metadata_uri", "name", "description", "image_url", "attributes", "is_burned", "is_minted", "is_locked", "created_at", "updated_at"}
+	nftAssetColumnsWithDefault    = []string{"id", "metadata_uri", "name", "description", "image_url", "attributes", "is_burned", "is_minted", "is_locked", "created_at", "updated_at", "operation_id"}
 	nftAssetPrimaryKeyColumns     = []string{"id"}
 	nftAssetGeneratedColumns      = []string{}
 )
