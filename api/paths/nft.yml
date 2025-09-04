@@ -17,7 +17,6 @@ paths:
           description: NFT Token ID
           required: true
           type: string
-          example: "1"
       responses:
         "200":
           description: NFT metadata retrieved successfully
