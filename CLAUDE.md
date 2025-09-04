@@ -446,36 +446,125 @@ make trivy                   # 安全扫描
 # 4. 在 handler 中使用 util.ValidateAndReturn() 返回类型化响应
 ```
 
-## 项目结构
+## 项目结构详解
 
+### 完整目录结构
 ```
-├── api/                     # API 定义
-│   ├── config/main.yml      # 主配置，包含所有类型引用
-│   ├── definitions/         # 类型定义
-│   │   ├── assets.yml       # 资产相关类型 (含 AssetAdjustCompleteResponse)
-│   │   ├── transfer.yml     # 转账相关类型 (含 TransferCompleteResponse)
-│   │   ├── account.yml       # 钱包相关类型
-│   │   ├── monitoring.yml   # 监控相关类型
-│   │   └── errors.yml       # 错误类型定义
-│   ├── paths/              # 路径定义
-│   │   ├── assets.yml       # 资产接口路径
-│   │   ├── transfer.yml     # 转账接口路径
-│   │   ├── account.yml       # 钱包接口路径
-│   │   ├── chains.yml       # 链配置接口路径
-│   │   └── monitoring.yml   # 监控接口路径
-│   └── swagger.yml         # 生成的完整 API
-├── internal/
-│   ├── api/handlers/       # API 处理器
-│   │   ├── chains/
-│   │   ├── monitoring/
-│   │   └── account/
-│   ├── models/            # 生成的数据库模型
-│   ├── types/             # 生成的 API 类型
-│   └── services/          # 业务逻辑
-├── migrations/            # 数据库迁移文件
-├── bin/                  # 编译后的二进制文件
-└── docker-compose.yml    # 开发环境配置
+chain-bridge/                    # 项目根目录
+├── README.md                    # 项目说明
+├── CLAUDE.md                    # 开发规范文档 (本文件)
+├── Makefile                     # 构建脚本
+├── docker-compose.yml           # 开发环境配置
+├── Dockerfile                   # 容器化配置
+├── go.mod                       # Go 模块定义
+├── go.sum                       # 依赖锁定文件
+├── main.go                      # 应用入口
+├── dbconfig.yml                 # 数据库配置
+├── sqlboiler.toml              # SQLBoiler 配置
+│
+├── api/                         # API 定义 (Swagger-First)
+│   ├── config/
+│   │   └── main.yml            # 主配置，包含所有类型引用
+│   ├── definitions/            # 数据模型定义
+│   │   ├── assets.yml          # 资产相关类型
+│   │   ├── transfer.yml        # 转账相关类型
+│   │   ├── account.yml         # 钱包相关类型
+│   │   ├── chains.yml          # 链配置类型
+│   │   ├── tokens.yml          # 代币配置类型
+│   │   ├── batch.yml           # 批处理类型
+│   │   ├── monitoring.yml      # 监控相关类型
+│   │   ├── nft.yml             # NFT 相关类型
+│   │   ├── errors.yml          # 错误类型定义
+│   │   ├── nullable.yml        # 可空类型定义
+│   │   └── chainbridge-common.yml # 通用类型定义
+│   ├── paths/                  # API 路径定义
+│   │   ├── assets.yml          # 资产接口路径
+│   │   ├── transfer.yml        # 转账接口路径
+│   │   ├── account.yml         # 钱包接口路径
+│   │   ├── chains.yml          # 链配置接口路径
+│   │   ├── tokens.yml          # 代币配置接口路径
+│   │   ├── batch.yml           # 批处理接口路径
+│   │   ├── monitoring.yml      # 监控接口路径
+│   │   ├── nft.yml             # NFT 接口路径
+│   │   └── auth.yml            # 认证接口路径
+│   ├── swagger.yml             # 生成的完整 API 文档
+│   └── templates/              # 代码生成模板
+│
+├── internal/                    # 内部代码
+│   ├── api/                    # API 层
+│   │   ├── handlers/           # HTTP 处理器
+│   │   │   ├── assets/         # 资产管理处理器
+│   │   │   ├── transfer/       # 转账处理器
+│   │   │   ├── account/        # 钱包处理器
+│   │   │   ├── chains/         # 链配置处理器
+│   │   │   ├── tokens/         # 代币配置处理器
+│   │   │   ├── batch/          # 批处理处理器
+│   │   │   ├── monitoring/     # 监控处理器
+│   │   │   ├── nft/            # NFT 处理器
+│   │   │   ├── auth/           # 认证处理器
+│   │   │   └── common/         # 通用处理器
+│   │   ├── httperrors/         # HTTP 错误处理
+│   │   └── middleware/         # 中间件
+│   ├── auth/                   # 认证模块
+│   ├── blockchain/             # 区块链集成
+│   ├── config/                 # 配置管理
+│   ├── data/                   # 数据访问层
+│   ├── events/                 # 事件系统
+│   ├── i18n/                   # 国际化
+│   ├── mailer/                 # 邮件服务
+│   ├── metrics/                # 指标收集
+│   ├── models/                 # 数据库模型 (SQLBoiler 生成)
+│   ├── push/                   # 推送服务
+│   ├── queue/                  # 消息队列
+│   ├── services/               # 业务逻辑层
+│   ├── test/                   # 测试工具
+│   ├── types/                  # API 类型 (Swagger 生成)
+│   └── util/                   # 工具函数
+│
+├── migrations/                 # 数据库迁移文件
+│   ├── README.md              # 迁移说明
+│   └── *.sql                  # 迁移脚本
+│
+├── docs/                       # 设计文档
+│   ├── README.md              # 文档索引
+│   ├── chain-bridge/          # ChainBridge 设计文档
+│   ├── batch-processing-architecture.md
+│   ├── configuration-management-architecture.md
+│   └── *.md                   # 其他设计文档
+│
+├── scripts/                    # 脚本文件
+├── test/                       # 测试数据
+├── web/                        # Web 资源
+├── bin/                        # 编译后的二进制文件
+└── tmp/                        # 临时文件
 ```
+
+### 关键目录说明
+
+#### `/api/` - API 定义层
+- **设计原则**: Swagger-First 开发模式
+- **文件组织**: 按功能模块分离定义和路径
+- **代码生成**: 通过 `make swagger` 生成 Go 类型
+
+#### `/internal/api/handlers/` - HTTP 处理器层
+- **文件组织**: 每个接口单独一个文件
+- **命名规范**: `{method}_{resource}.go`
+- **职责**: 参数验证、调用服务层、返回响应
+
+#### `/internal/services/` - 业务逻辑层
+- **设计原则**: 纯业务逻辑，不包含 HTTP 相关代码
+- **依赖注入**: 通过接口依赖，便于测试
+- **职责**: 业务规则、数据处理、外部服务调用
+
+#### `/internal/models/` - 数据模型层
+- **代码生成**: 通过 `make sql` 从数据库生成
+- **工具**: SQLBoiler ORM
+- **职责**: 数据库操作、查询构建
+
+#### `/migrations/` - 数据库迁移
+- **命名规范**: `{timestamp}-{description}.sql`
+- **工具**: sql-migrate
+- **职责**: 数据库结构变更管理
 
 ## Handler 文件组织示例
 
@@ -498,3 +587,242 @@ internal/api/handlers/
     ├── create_user_account.go
     └── get_user_account.go
 ```
+
+## 开发最佳实践
+
+### 1. 错误处理规范
+
+#### Handler 层错误处理
+```go
+func (h *Handler) Handle(c echo.Context) error {
+    // 参数验证错误 - 返回 400
+    if err := util.BindAndValidateBody(c, &request); err != nil {
+        return err
+    }
+    
+    // 业务逻辑错误 - 返回具体错误码
+    result, err := h.service.Process(ctx, &request)
+    if err != nil {
+        // 根据错误类型返回不同状态码
+        if errors.Is(err, ErrNotFound) {
+            return httperrors.NewHTTPError(http.StatusNotFound, "Resource not found")
+        }
+        if errors.Is(err, ErrValidation) {
+            return httperrors.NewHTTPValidationError(...)
+        }
+        return err
+    }
+    
+    return util.ValidateAndReturn(c, http.StatusOK, result)
+}
+```
+
+#### Service 层错误处理
+```go
+func (s *service) Process(ctx context.Context, req *Request) (*Response, error) {
+    // 业务验证
+    if err := s.validateBusinessRules(req); err != nil {
+        return nil, fmt.Errorf("business_validation: %w", err)
+    }
+    
+    // 数据库操作
+    if err := s.db.Transaction(func(tx *sql.Tx) error {
+        // 原子操作
+        return s.processInTransaction(ctx, tx, req)
+    }); err != nil {
+        return nil, fmt.Errorf("database_error: %w", err)
+    }
+    
+    return result, nil
+}
+```
+
+### 2. 日志记录规范
+
+#### 结构化日志
+```go
+log.Info().
+    Str("operation_id", *req.OperationID).
+    Int("adjustment_count", len(req.Adjustments)).
+    Msg("Processing asset adjustment request")
+
+log.Error().Err(err).
+    Str("operation_id", *req.OperationID).
+    Interface("adjustments", req.Adjustments).
+    Msg("Failed to process asset adjustments")
+```
+
+#### 日志级别使用
+- **Debug**: 详细的调试信息，仅在开发环境启用
+- **Info**: 重要的业务流程信息
+- **Warn**: 警告信息，不影响功能但需要注意
+- **Error**: 错误信息，需要关注和修复
+
+### 3. 测试规范
+
+#### 单元测试
+```go
+func TestAdjustAssets(t *testing.T) {
+    // 准备测试数据
+    req := &types.AssetAdjustRequest{
+        OperationID: swag.String("test-op-001"),
+        Adjustments: []*types.AssetAdjustment{...},
+    }
+    
+    // Mock 依赖
+    mockService := &MockAssetsService{}
+    mockService.On("AdjustAssets", mock.Anything, req).Return(response, batchInfo, nil)
+    
+    // 执行测试
+    handler := NewAdjustAssetsHandler(mockService)
+    // ... 测试逻辑
+}
+```
+
+#### 集成测试
+```go
+func TestAdjustAssetsIntegration(t *testing.T) {
+    // 使用测试数据库
+    testDB := setupTestDB(t)
+    defer cleanupTestDB(t, testDB)
+    
+    // 准备测试数据
+    seedTestData(t, testDB)
+    
+    // 执行集成测试
+    // ...
+}
+```
+
+### 4. 性能优化
+
+#### 数据库查询优化
+```go
+// 使用预编译语句
+stmt, err := db.Prepare("SELECT * FROM users WHERE id = $1")
+if err != nil {
+    return err
+}
+defer stmt.Close()
+
+// 批量操作
+batch := make([]*models.User, 0, 100)
+for _, user := range users {
+    batch = append(batch, user)
+    if len(batch) >= 100 {
+        if err := models.Users(batch...).InsertAll(ctx, db); err != nil {
+            return err
+        }
+        batch = batch[:0]
+    }
+}
+```
+
+#### 缓存策略
+```go
+// 使用 Redis 缓存
+func (s *service) GetUserAssets(ctx context.Context, userID string) (*types.AssetsResponse, error) {
+    // 尝试从缓存获取
+    cacheKey := fmt.Sprintf("user_assets:%s", userID)
+    if cached, err := s.redis.Get(ctx, cacheKey).Result(); err == nil {
+        var response types.AssetsResponse
+        if err := json.Unmarshal([]byte(cached), &response); err == nil {
+            return &response, nil
+        }
+    }
+    
+    // 从数据库获取
+    response, err := s.getUserAssetsFromDB(ctx, userID)
+    if err != nil {
+        return nil, err
+    }
+    
+    // 缓存结果
+    if data, err := json.Marshal(response); err == nil {
+        s.redis.Set(ctx, cacheKey, data, 5*time.Minute)
+    }
+    
+    return response, nil
+}
+```
+
+## 部署和运维
+
+### 1. 环境配置
+
+#### 开发环境
+```bash
+# 启动开发环境
+./docker-helper.sh --up
+make all
+
+# 运行服务
+app server --probe --migrate --seed
+```
+
+#### 生产环境
+```bash
+# 构建生产镜像
+docker build -t chain-bridge:latest .
+
+# 运行生产服务
+docker run -d \
+  --name chain-bridge \
+  -p 8080:8080 \
+  -e DATABASE_URL="postgres://..." \
+  -e REDIS_URL="redis://..." \
+  chain-bridge:latest
+```
+
+### 2. 监控和告警
+
+#### 健康检查
+```bash
+# 检查服务状态
+curl http://localhost:8080/api/v1/health/ready
+
+# 检查数据库连接
+curl http://localhost:8080/api/v1/health/healthy
+```
+
+#### 性能监控
+```bash
+# 查看队列指标
+curl http://localhost:8080/api/v1/monitoring/queue/metrics
+
+# 查看批处理统计
+curl http://localhost:8080/api/v1/monitoring/queue/stats
+```
+
+### 3. 故障排查
+
+#### 常见问题
+1. **数据库连接失败**: 检查 `DATABASE_URL` 配置
+2. **Redis 连接失败**: 检查 `REDIS_URL` 配置
+3. **区块链 RPC 失败**: 检查 `ETH_RPC_URL` 配置
+4. **批处理队列阻塞**: 检查 RabbitMQ 状态
+
+#### 日志分析
+```bash
+# 查看应用日志
+docker logs chain-bridge
+
+# 查看错误日志
+docker logs chain-bridge 2>&1 | grep ERROR
+
+# 查看批处理日志
+docker logs chain-bridge 2>&1 | grep "batch"
+```
+
+## 总结
+
+ChainBridge 项目采用现代化的 Go 开发实践，通过 Swagger-First 的 API 设计、完善的代码生成工具链、以及清晰的架构分层，为区块链应用开发提供了高效、可维护的解决方案。
+
+关键成功因素：
+1. **API 优先设计**: 确保接口的一致性和可维护性
+2. **代码生成**: 减少手工编码错误，提高开发效率
+3. **分层架构**: 清晰的职责分离，便于测试和扩展
+4. **完善的工具链**: 从开发到部署的全流程支持
+5. **详细的文档**: 降低新开发者的学习成本
+
+通过遵循本规范，可以确保项目的高质量交付和长期可维护性。

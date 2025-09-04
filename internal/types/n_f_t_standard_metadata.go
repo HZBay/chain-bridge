@@ -15,34 +15,34 @@ import (
 	"github.com/go-openapi/swag"
 )
 
-// NFTMetadata n f t metadata
+// NFTStandardMetadata OpenSea兼容的NFT元数据格式，同样支持灵活的属性处理
 //
-// swagger:model nFTMetadata
-type NFTMetadata struct {
+// swagger:model nFTStandardMetadata
+type NFTStandardMetadata struct {
 
-	// NFT属性数组 - 支持多种解析策略和数据格式
-	// Example: [{"rarity_percentage":2.5,"trait_type":"Background","value":"Galaxy"},{"trait_type":"Level","value":"10"},{"trait_type":"Rarity","value":"Legendary"}]
-	Attributes []*NFTMetadataAttributesItems0 `json:"attributes"`
+	// 灵活的属性数组，支持多种数据格式和自定义结构
+	// Example: [{"rarity_percentage":2.5,"trait_type":"Background","value":"Galaxy"},{"trait_type":"Eyes","value":"Big"},{"display_type":"boost_number","trait_type":"Aqua Power","value":40}]
+	Attributes []*NFTStandardMetadataAttributesItems0 `json:"attributes"`
 
 	// NFT description
-	// Example: Token Description
+	// Example: Friendly OpenSea Creature that enjoys long swims in the ocean.
 	Description string `json:"description,omitempty"`
 
 	// External URL
-	// Example: https://example.com/token/1
+	// Example: https://openseacreatures.io/3
 	ExternalURL string `json:"external_url,omitempty"`
 
 	// NFT image URL
-	// Example: https://example.com/token-image.png
+	// Example: https://storage.googleapis.com/opensea-prod.appspot.com/puffs/3.png
 	Image string `json:"image,omitempty"`
 
 	// NFT name
-	// Example: Token Name
+	// Example: Dave Starbelly
 	Name string `json:"name,omitempty"`
 }
 
-// Validate validates this n f t metadata
-func (m *NFTMetadata) Validate(formats strfmt.Registry) error {
+// Validate validates this n f t standard metadata
+func (m *NFTStandardMetadata) Validate(formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.validateAttributes(formats); err != nil {
@@ -55,7 +55,7 @@ func (m *NFTMetadata) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-func (m *NFTMetadata) validateAttributes(formats strfmt.Registry) error {
+func (m *NFTStandardMetadata) validateAttributes(formats strfmt.Registry) error {
 	if swag.IsZero(m.Attributes) { // not required
 		return nil
 	}
@@ -81,8 +81,8 @@ func (m *NFTMetadata) validateAttributes(formats strfmt.Registry) error {
 	return nil
 }
 
-// ContextValidate validate this n f t metadata based on the context it is used
-func (m *NFTMetadata) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+// ContextValidate validate this n f t standard metadata based on the context it is used
+func (m *NFTStandardMetadata) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	var res []error
 
 	if err := m.contextValidateAttributes(ctx, formats); err != nil {
@@ -95,7 +95,7 @@ func (m *NFTMetadata) ContextValidate(ctx context.Context, formats strfmt.Regist
 	return nil
 }
 
-func (m *NFTMetadata) contextValidateAttributes(ctx context.Context, formats strfmt.Registry) error {
+func (m *NFTStandardMetadata) contextValidateAttributes(ctx context.Context, formats strfmt.Registry) error {
 
 	for i := 0; i < len(m.Attributes); i++ {
 
@@ -116,7 +116,7 @@ func (m *NFTMetadata) contextValidateAttributes(ctx context.Context, formats str
 }
 
 // MarshalBinary interface implementation
-func (m *NFTMetadata) MarshalBinary() ([]byte, error) {
+func (m *NFTStandardMetadata) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -124,8 +124,8 @@ func (m *NFTMetadata) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *NFTMetadata) UnmarshalBinary(b []byte) error {
-	var res NFTMetadata
+func (m *NFTStandardMetadata) UnmarshalBinary(b []byte) error {
+	var res NFTStandardMetadata
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}
@@ -133,49 +133,58 @@ func (m *NFTMetadata) UnmarshalBinary(b []byte) error {
 	return nil
 }
 
-// NFTMetadataAttributesItems0 NFT属性对象，支持标准字段和自定义扩展
+// NFTStandardMetadataAttributesItems0 NFT属性对象，支持标准字段和任意自定义字段
 //
-// swagger:model NFTMetadataAttributesItems0
-type NFTMetadataAttributesItems0 struct {
+// swagger:model NFTStandardMetadataAttributesItems0
+type NFTStandardMetadataAttributesItems0 struct {
 
-	// 稀有度百分比 (也支持 rarity 字段名)
+	// 显示类型 (OpenSea扩展)
+	// Example: boost_number
+	DisplayType string `json:"display_type,omitempty"`
+
+	// 稀有度百分比
 	// Example: 2.5
 	RarityPercentage float32 `json:"rarity_percentage,omitempty"`
 
-	// 属性类型/名称 (也支持 display_type)
+	// 属性类型
 	// Example: Background
 	TraitType string `json:"trait_type,omitempty"`
 
-	// 属性值 (支持字符串、数字、布尔值等多种类型)
+	// 属性值
 	// Example: Galaxy
 	Value string `json:"value,omitempty"`
 
-	// n f t metadata attributes items0 additional properties
-	NFTMetadataAttributesItems0AdditionalProperties map[string]interface{} `json:"-"`
+	// n f t standard metadata attributes items0 additional properties
+	NFTStandardMetadataAttributesItems0AdditionalProperties map[string]interface{} `json:"-"`
 }
 
 // UnmarshalJSON unmarshals this object with additional properties from JSON
-func (m *NFTMetadataAttributesItems0) UnmarshalJSON(data []byte) error {
+func (m *NFTStandardMetadataAttributesItems0) UnmarshalJSON(data []byte) error {
 	// stage 1, bind the properties
 	var stage1 struct {
 
-		// 稀有度百分比 (也支持 rarity 字段名)
+		// 显示类型 (OpenSea扩展)
+		// Example: boost_number
+		DisplayType string `json:"display_type,omitempty"`
+
+		// 稀有度百分比
 		// Example: 2.5
 		RarityPercentage float32 `json:"rarity_percentage,omitempty"`
 
-		// 属性类型/名称 (也支持 display_type)
+		// 属性类型
 		// Example: Background
 		TraitType string `json:"trait_type,omitempty"`
 
-		// 属性值 (支持字符串、数字、布尔值等多种类型)
+		// 属性值
 		// Example: Galaxy
 		Value string `json:"value,omitempty"`
 	}
 	if err := json.Unmarshal(data, &stage1); err != nil {
 		return err
 	}
-	var rcv NFTMetadataAttributesItems0
+	var rcv NFTStandardMetadataAttributesItems0
 
+	rcv.DisplayType = stage1.DisplayType
 	rcv.RarityPercentage = stage1.RarityPercentage
 	rcv.TraitType = stage1.TraitType
 	rcv.Value = stage1.Value
@@ -187,6 +196,7 @@ func (m *NFTMetadataAttributesItems0) UnmarshalJSON(data []byte) error {
 		return err
 	}
 
+	delete(stage2, "display_type")
 	delete(stage2, "rarity_percentage")
 	delete(stage2, "trait_type")
 	delete(stage2, "value")
@@ -200,29 +210,34 @@ func (m *NFTMetadataAttributesItems0) UnmarshalJSON(data []byte) error {
 			}
 			result[k] = toadd
 		}
-		m.NFTMetadataAttributesItems0AdditionalProperties = result
+		m.NFTStandardMetadataAttributesItems0AdditionalProperties = result
 	}
 
 	return nil
 }
 
 // MarshalJSON marshals this object with additional properties into a JSON object
-func (m NFTMetadataAttributesItems0) MarshalJSON() ([]byte, error) {
+func (m NFTStandardMetadataAttributesItems0) MarshalJSON() ([]byte, error) {
 	var stage1 struct {
 
-		// 稀有度百分比 (也支持 rarity 字段名)
+		// 显示类型 (OpenSea扩展)
+		// Example: boost_number
+		DisplayType string `json:"display_type,omitempty"`
+
+		// 稀有度百分比
 		// Example: 2.5
 		RarityPercentage float32 `json:"rarity_percentage,omitempty"`
 
-		// 属性类型/名称 (也支持 display_type)
+		// 属性类型
 		// Example: Background
 		TraitType string `json:"trait_type,omitempty"`
 
-		// 属性值 (支持字符串、数字、布尔值等多种类型)
+		// 属性值
 		// Example: Galaxy
 		Value string `json:"value,omitempty"`
 	}
 
+	stage1.DisplayType = m.DisplayType
 	stage1.RarityPercentage = m.RarityPercentage
 	stage1.TraitType = m.TraitType
 	stage1.Value = m.Value
@@ -233,12 +248,12 @@ func (m NFTMetadataAttributesItems0) MarshalJSON() ([]byte, error) {
 		return nil, err
 	}
 
-	if len(m.NFTMetadataAttributesItems0AdditionalProperties) == 0 { // no additional properties
+	if len(m.NFTStandardMetadataAttributesItems0AdditionalProperties) == 0 { // no additional properties
 		return props, nil
 	}
 
 	// make JSON object for the additional properties
-	additional, err := json.Marshal(m.NFTMetadataAttributesItems0AdditionalProperties)
+	additional, err := json.Marshal(m.NFTStandardMetadataAttributesItems0AdditionalProperties)
 	if err != nil {
 		return nil, err
 	}
@@ -251,18 +266,18 @@ func (m NFTMetadataAttributesItems0) MarshalJSON() ([]byte, error) {
 	return swag.ConcatJSON(props, additional), nil
 }
 
-// Validate validates this n f t metadata attributes items0
-func (m *NFTMetadataAttributesItems0) Validate(formats strfmt.Registry) error {
+// Validate validates this n f t standard metadata attributes items0
+func (m *NFTStandardMetadataAttributesItems0) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
-// ContextValidate validates this n f t metadata attributes items0 based on context it is used
-func (m *NFTMetadataAttributesItems0) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
+// ContextValidate validates this n f t standard metadata attributes items0 based on context it is used
+func (m *NFTStandardMetadataAttributesItems0) ContextValidate(ctx context.Context, formats strfmt.Registry) error {
 	return nil
 }
 
 // MarshalBinary interface implementation
-func (m *NFTMetadataAttributesItems0) MarshalBinary() ([]byte, error) {
+func (m *NFTStandardMetadataAttributesItems0) MarshalBinary() ([]byte, error) {
 	if m == nil {
 		return nil, nil
 	}
@@ -270,8 +285,8 @@ func (m *NFTMetadataAttributesItems0) MarshalBinary() ([]byte, error) {
 }
 
 // UnmarshalBinary interface implementation
-func (m *NFTMetadataAttributesItems0) UnmarshalBinary(b []byte) error {
-	var res NFTMetadataAttributesItems0
+func (m *NFTStandardMetadataAttributesItems0) UnmarshalBinary(b []byte) error {
+	var res NFTStandardMetadataAttributesItems0
 	if err := swag.ReadJSON(b, &res); err != nil {
 		return err
 	}
