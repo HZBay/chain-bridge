@@ -1949,6 +1949,17 @@ func (c *RabbitMQBatchConsumer) sendBatchStatusNotification(ctx context.Context,
 	}
 }
 
+// isNFTOperation checks if any job in the group is an NFT operation
+func (c *RabbitMQBatchConsumer) isNFTOperation(jobs []BatchJob) bool {
+	for _, job := range jobs {
+		switch job.GetJobType() {
+		case JobTypeNFTMint, JobTypeNFTBurn, JobTypeNFTTransfer:
+			return true
+		}
+	}
+	return false
+}
+
 // mapJobTypeToBatchType maps JobType to database batch_type enum values
 func (c *RabbitMQBatchConsumer) mapJobTypeToBatchType(job BatchJob) string {
 	switch job.GetJobType() {

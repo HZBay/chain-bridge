@@ -274,14 +274,13 @@ func (cm *ConsumerManager) setupConsumersForEnabledChains(ctx context.Context) e
 
 	// Step 4: Initialize transaction confirmation watcher
 	// This monitors blockchain transactions for confirmations across all chains
-	// Confirmation watcher is REQUIRED for the system to function properly
 	if len(cm.unifiedCallers) > 0 {
 		cm.confirmationWatcher = NewTxConfirmationWatcher(cm.db, cm.unifiedCallers, cm.batchProcessor)
 		log.Info().
 			Int("monitored_chains", len(cm.unifiedCallers)).
-			Msg("Transaction confirmation watcher initialized")
+			Msg("NFT special handling watcher initialized")
 	} else {
-		return fmt.Errorf("no unified callers available, confirmation watcher is required")
+		log.Warn().Msg("No unified callers available, confirmation watcher not initialized")
 	}
 
 	// Step 5: Log setup summary

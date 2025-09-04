@@ -144,7 +144,7 @@ type NFTMintJob struct {
 	Priority      Priority  `json:"priority"`
 	CreatedAt     time.Time `json:"created_at"`
 	// Batch-level operation ID (for idempotency of the entire batch request)
-	BatchOperationID      string `json:"batch_operation_id,omitempty"`
+	BatchOperationID string `json:"batch_operation_id,omitempty"`
 	// Individual operation ID (for tracking each specific mint operation)
 	IndividualOperationID string `json:"individual_operation_id,omitempty"`
 }
@@ -171,7 +171,7 @@ type NFTBurnJob struct {
 	Priority      Priority  `json:"priority"`
 	CreatedAt     time.Time `json:"created_at"`
 	// Batch-level operation ID (for idempotency of the entire batch request)
-	BatchOperationID      string `json:"batch_operation_id,omitempty"`
+	BatchOperationID string `json:"batch_operation_id,omitempty"`
 	// Individual operation ID (for tracking each specific burn operation)
 	IndividualOperationID string `json:"individual_operation_id,omitempty"`
 }
@@ -199,7 +199,7 @@ type NFTTransferJob struct {
 	Priority      Priority  `json:"priority"`
 	CreatedAt     time.Time `json:"created_at"`
 	// Batch-level operation ID (for idempotency of the entire batch request)
-	BatchOperationID      string `json:"batch_operation_id,omitempty"`
+	BatchOperationID string `json:"batch_operation_id,omitempty"`
 	// Individual operation ID (for tracking each specific transfer operation)
 	IndividualOperationID string `json:"individual_operation_id,omitempty"`
 }

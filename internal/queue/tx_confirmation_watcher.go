@@ -20,7 +20,7 @@ import (
 	"github.com/hzbay/chain-bridge/internal/blockchain"
 )
 
-// TxConfirmationWatcher monitors blockchain transactions for confirmations
+// TxConfirmationWatcher monitors confirmed batches for NFT special handling
 type TxConfirmationWatcher struct {
 	db                    *sql.DB
 	callers               map[int64]*blockchain.BatchCaller // Changed from cpopCallers
@@ -73,7 +73,7 @@ type BatchOperation struct {
 	NFTTokenID   sql.NullString `db:"nft_token_id"`
 }
 
-// NewTxConfirmationWatcher creates a new transaction confirmation watcher
+// NewTxConfirmationWatcher creates a new NFT special handling watcher
 func NewTxConfirmationWatcher(
 	db *sql.DB,
 	callers map[int64]*blockchain.BatchCaller,
@@ -99,7 +99,7 @@ func (w *TxConfirmationWatcher) Start(ctx context.Context) error {
 		Int("confirmation_blocks", w.confirmationBlocks).
 		Dur("poll_interval", w.pollInterval).
 		Int("max_retries", w.maxRetries).
-		Msg("Starting transaction confirmation watcher")
+		Msg("Starting NFT special handling watcher")
 
 	w.startedAt = time.Now()
 
@@ -111,7 +111,7 @@ func (w *TxConfirmationWatcher) Start(ctx context.Context) error {
 	w.workerWg.Add(1)
 	go w.runCleanupLoop(ctx)
 
-	log.Info().Msg("Transaction confirmation watcher started successfully")
+	log.Info().Msg("NFT special handling watcher started successfully")
 	return nil
 }
 
@@ -195,13 +195,13 @@ func (w *TxConfirmationWatcher) processPendingBatches(ctx context.Context) {
 	}
 
 	if len(pendingBatches) == 0 {
-		log.Debug().Msg("No pending batches to process")
+		log.Debug().Msg("No pending NFT batches to process")
 		return
 	}
 
 	log.Info().
-		Int("pending_count", len(pendingBatches)).
-		Msg("Processing pending batches for confirmation")
+		Int("pending_nft_count", len(pendingBatches)).
+		Msg("Processing pending NFT batches for special handling")
 
 	for _, batch := range pendingBatches {
 		select {
@@ -215,7 +215,7 @@ func (w *TxConfirmationWatcher) processPendingBatches(ctx context.Context) {
 	}
 }
 
-// getPendingBatches retrieves all batches in submitted status
+// getPendingBatches retrieves NFT batches in submitted status
 func (w *TxConfirmationWatcher) getPendingBatches(ctx context.Context) ([]PendingBatch, error) {
 	query := `
 		SELECT 
@@ -228,6 +228,7 @@ func (w *TxConfirmationWatcher) getPendingBatches(ctx context.Context) ([]Pendin
 		AND tx_hash IS NOT NULL 
 		AND tx_hash != ''
 		AND COALESCE(retry_count, 0) < $1
+		AND batch_type IN ('nft_mint', 'nft_burn', 'nft_transfer')
 		ORDER BY submitted_at ASC
 		LIMIT 50`
 
@@ -316,112 +317,41 @@ func (w *TxConfirmationWatcher) getBatchOperations(ctx context.Context, batchID 
 	return operations, rows.Err()
 }
 
-// processBatchConfirmation processes confirmation for a single batch
-func (w *TxConfirmationWatcher) processBatchConfirmation(ctx context.Context, batch PendingBatch) {
-	log.Debug().
-		Str("batch_id", batch.BatchID).
-		Int64("chain_id", batch.ChainID).
-		Str("tx_hash", batch.TxHash).
-		Msg("Processing batch confirmation")
-
-	caller := w.callers[batch.ChainID]
-	if caller == nil {
-		log.Error().
-			Int64("chain_id", batch.ChainID).
-			Str("batch_id", batch.BatchID).
-			Msg("No unified caller found for chain")
-		w.markBatchAsFailed(ctx, batch, "no_caller_found")
-		return
-	}
-
-	// Check transaction confirmation status (simplified implementation)
-	confirmed, confirmationCount, err := w.checkTransactionConfirmation(ctx, caller, batch.TxHash, w.confirmationBlocks)
-	if err != nil {
-		log.Error().
-			Str("batch_id", batch.BatchID).
-			Str("tx_hash", batch.TxHash).
-			Err(err).
-			Msg("Failed to check transaction confirmation")
-
-		// Increment retry count
-		w.incrementBatchRetryCount(ctx, batch)
-		return
-	}
-
-	if confirmed {
-		// Transaction is confirmed
-		log.Info().
-			Str("batch_id", batch.BatchID).
-			Str("tx_hash", batch.TxHash).
-			Int("confirmations", confirmationCount).
-			Msg("Batch transaction confirmed")
-
-		err = w.confirmBatch(ctx, batch)
-		if err != nil {
-			log.Error().
-				Str("batch_id", batch.BatchID).
-				Err(err).
-				Msg("Failed to confirm batch")
-			w.failedCount++
-		} else {
-			w.processedCount++
-		}
-	} else {
-		// Check if transaction has been pending too long
-		if time.Since(batch.SubmittedAt) > 10*time.Minute {
-			log.Warn().
-				Str("batch_id", batch.BatchID).
-				Str("tx_hash", batch.TxHash).
-				Dur("pending_time", time.Since(batch.SubmittedAt)).
-				Int("confirmations", confirmationCount).
-				Msg("Batch transaction pending for too long")
-
-			// For now, just increment retry count
-			// In production, you might want more sophisticated logic
-			w.incrementBatchRetryCount(ctx, batch)
-		} else {
-			log.Debug().
-				Str("batch_id", batch.BatchID).
-				Str("tx_hash", batch.TxHash).
-				Int("confirmations", confirmationCount).
-				Int("required", w.confirmationBlocks).
-				Msg("Batch transaction not yet confirmed")
-		}
-	}
+// isNFTBatch checks if the batch type is an NFT operation
+func (w *TxConfirmationWatcher) isNFTBatch(batchType string) bool {
+	return batchType == "nft_mint" || batchType == "nft_burn" || batchType == "nft_transfer"
 }
 
-// confirmBatch confirms a successful batch transaction
-func (w *TxConfirmationWatcher) confirmBatch(ctx context.Context, batch PendingBatch) error {
+// finalizeNFTBatch performs NFT-specific finalization for confirmed batches
+func (w *TxConfirmationWatcher) finalizeNFTBatch(ctx context.Context, batch PendingBatch) error {
+	// Start database transaction
 	tx, err := w.db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer func() {
-		if err := tx.Rollback(); err != nil {
-			log.Debug().Err(err).Msg("Transaction rollback error (expected if committed)")
-		}
-	}()
+	defer tx.Rollback()
 
-	// Update batch status to confirmed
-	err = w.updateBatchToConfirmed(tx, batch.BatchID)
+	// Get batch operations for NFT finalization
+	operations, err := w.getBatchOperations(ctx, batch.BatchID)
 	if err != nil {
-		return fmt.Errorf("failed to update batch to confirmed: %w", err)
+		return fmt.Errorf("failed to get batch operations: %w", err)
 	}
 
-	// Update all associated transactions to confirmed
-	err = w.updateTransactionsToConfirmed(tx, batch.BatchID)
-	if err != nil {
-		return fmt.Errorf("failed to update transactions to confirmed: %w", err)
+	// Create PendingBatch with operations for finalization
+	pendingBatch := PendingBatch{
+		BatchID:     batch.BatchID,
+		ChainID:     batch.ChainID,
+		TokenID:     batch.TokenID,
+		TxHash:      batch.TxHash,
+		Status:      batch.Status,
+		SubmittedAt: batch.SubmittedAt,
+		RetryCount:  batch.RetryCount,
+		BatchType:   batch.BatchType,
+		Operations:  operations,
 	}
 
-	// Finalize user balances based on operations
-	err = w.finalizeUserBalancesForBatch(tx, batch)
-	if err != nil {
-		return fmt.Errorf("failed to finalize user balances: %w", err)
-	}
-
-	// Finalize NFT assets for NFT operations
-	err = w.finalizeNFTAssetsForBatch(tx, batch)
+	// Finalize NFT assets
+	err = w.finalizeNFTAssetsForBatch(tx, pendingBatch)
 	if err != nil {
 		return fmt.Errorf("failed to finalize NFT assets: %w", err)
 	}
@@ -449,260 +379,100 @@ func (w *TxConfirmationWatcher) confirmBatch(ctx context.Context, batch PendingB
 		}
 	}
 
+	// Send NFT success notifications
+	w.sendSuccessNotifications(ctx, pendingBatch)
+
+	// Commit transaction
 	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit batch confirmation: %w", err)
+		return fmt.Errorf("failed to commit transaction: %w", err)
 	}
 
 	log.Info().
 		Str("batch_id", batch.BatchID).
+		Str("batch_type", batch.BatchType).
+		Msg("NFT batch finalized successfully")
+
+	return nil
+}
+
+// processBatchConfirmation processes confirmation for a single batch
+func (w *TxConfirmationWatcher) processBatchConfirmation(ctx context.Context, batch PendingBatch) {
+	log.Debug().
+		Str("batch_id", batch.BatchID).
+		Int64("chain_id", batch.ChainID).
 		Str("tx_hash", batch.TxHash).
-		Int("operations", len(batch.Operations)).
-		Msg("Batch successfully confirmed")
+		Str("batch_type", batch.BatchType).
+		Msg("Processing batch for NFT special handling")
 
-	// Send success notifications after successful confirmation
-	w.sendSuccessNotifications(ctx, batch)
-
-	return nil
-}
-
-// updateBatchToConfirmed updates batch status to confirmed
-func (w *TxConfirmationWatcher) updateBatchToConfirmed(tx *sql.Tx, batchID string) error {
-	query := `
-		UPDATE batches 
-		SET 
-			status = 'confirmed',
-			confirmed_at = $2
-		WHERE batch_id = $1`
-
-	_, err := tx.Exec(query, batchID, time.Now())
-	if err != nil {
-		return fmt.Errorf("failed to update batch to confirmed: %w", err)
-	}
-
-	return nil
-}
-
-// updateTransactionsToConfirmed updates transactions status to confirmed
-func (w *TxConfirmationWatcher) updateTransactionsToConfirmed(tx *sql.Tx, batchID string) error {
-	query := `
-		UPDATE transactions 
-		SET 
-			status = 'confirmed',
-			confirmed_at = $2
-		WHERE batch_id = $1`
-
-	_, err := tx.Exec(query, batchID, time.Now())
-	if err != nil {
-		return fmt.Errorf("failed to update transactions to confirmed: %w", err)
-	}
-
-	return nil
-}
-
-// finalizeUserBalancesForBatch finalizes user balances for all operations in the batch
-func (w *TxConfirmationWatcher) finalizeUserBalancesForBatch(tx *sql.Tx, batch PendingBatch) error {
-	for _, op := range batch.Operations {
-		switch op.TxType {
-		case "mint":
-			err := w.finalizeBalanceForMint(tx, op, batch.ChainID, batch.TokenID)
-			if err != nil {
-				return fmt.Errorf("failed to finalize mint balance: %w", err)
-			}
-		case "burn":
-			err := w.finalizeBalanceForBurn(tx, op, batch.ChainID, batch.TokenID)
-			if err != nil {
-				return fmt.Errorf("failed to finalize burn balance: %w", err)
-			}
-		case "transfer":
-			err := w.finalizeBalanceForTransfer(tx, op, batch.ChainID, batch.TokenID)
-			if err != nil {
-				return fmt.Errorf("failed to finalize transfer balance: %w", err)
-			}
-		default:
-			log.Warn().
-				Str("tx_type", op.TxType).
-				Str("tx_id", op.TxID).
-				Msg("Unknown transaction type in batch operations")
-		}
-	}
-	return nil
-}
-
-// finalizeBalanceForMint finalizes balance after successful mint
-func (w *TxConfirmationWatcher) finalizeBalanceForMint(tx *sql.Tx, op BatchOperation, chainID int64, tokenID int) error {
-	// Add minted amount directly to confirmed_balance
-	query := `
-		INSERT INTO user_balances (user_id, chain_id, token_id, confirmed_balance, pending_balance, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, 0, $5, $5)
-		ON CONFLICT (user_id, chain_id, token_id) 
-		DO UPDATE SET 
-			confirmed_balance = user_balances.confirmed_balance + $4,
-			updated_at = $5,
-			last_change_time = $5`
-
-	_, err := tx.Exec(query, op.UserID, chainID, tokenID, op.Amount, time.Now())
-	if err != nil {
-		return fmt.Errorf("failed to finalize mint balance: %w", err)
-	}
-
-	return nil
-}
-
-// finalizeBalanceForBurn finalizes balance after successful burn
-func (w *TxConfirmationWatcher) finalizeBalanceForBurn(tx *sql.Tx, op BatchOperation, chainID int64, tokenID int) error {
-	// Clear the pending_balance (amount was frozen during batching)
-	query := `
-		UPDATE user_balances 
-		SET 
-			pending_balance = pending_balance - $4,
-			updated_at = $5,
-			last_change_time = $5
-		WHERE user_id = $1 AND chain_id = $2 AND token_id = $3`
-
-	_, err := tx.Exec(query, op.UserID, chainID, tokenID, op.Amount.Abs(), time.Now())
-	if err != nil {
-		return fmt.Errorf("failed to finalize burn balance: %w", err)
-	}
-
-	return nil
-}
-
-// finalizeBalanceForTransfer finalizes balance after successful transfer
-func (w *TxConfirmationWatcher) finalizeBalanceForTransfer(tx *sql.Tx, op BatchOperation, chainID int64, tokenID int) error {
-	if !op.RelatedUserID.Valid {
-		return fmt.Errorf("transfer operation missing related user ID")
-	}
-
-	// Check transfer direction and process accordingly
-	if op.Direction.Valid && op.Direction.String == "outgoing" {
-		// Clear sender's pending_balance (was frozen)
-		senderQuery := `
-			UPDATE user_balances 
-			SET 
-				pending_balance = pending_balance - $4,
-				updated_at = $5,
-				last_change_time = $5
-			WHERE user_id = $1 AND chain_id = $2 AND token_id = $3`
-
-		_, err := tx.Exec(senderQuery, op.UserID, chainID, tokenID, op.Amount, time.Now())
-		if err != nil {
-			return fmt.Errorf("failed to finalize sender balance: %w", err)
-		}
-
-		// Add amount to receiver's confirmed_balance
-		receiverQuery := `
-			INSERT INTO user_balances (user_id, chain_id, token_id, confirmed_balance, pending_balance, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, 0, $5, $5)
-			ON CONFLICT (user_id, chain_id, token_id) 
-			DO UPDATE SET 
-				confirmed_balance = user_balances.confirmed_balance + $4,
-				updated_at = $5,
-				last_change_time = $5`
-
-		_, err = tx.Exec(receiverQuery, op.RelatedUserID.String, chainID, tokenID, op.Amount, time.Now())
-		if err != nil {
-			return fmt.Errorf("failed to finalize receiver balance: %w", err)
-		}
-	}
-
-	return nil
-}
-
-// markBatchAsFailed marks a batch as failed
-func (w *TxConfirmationWatcher) markBatchAsFailed(ctx context.Context, batch PendingBatch, reason string) {
-	tx, err := w.db.BeginTx(ctx, nil)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to begin transaction for batch failure")
-		return
-	}
-	defer func() {
-		if err := tx.Rollback(); err != nil {
-			log.Debug().Err(err).Msg("Transaction rollback error (expected if committed)")
-		}
-	}()
-
-	// Update batch status to failed
-	batchQuery := `
-		UPDATE batches 
-		SET 
-			status = 'failed',
-			failure_reason = $2
-		WHERE batch_id = $1`
-
-	_, err = tx.Exec(batchQuery, batch.BatchID, reason)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to update batch to failed")
+	// Only process NFT batches for special handling
+	if !w.isNFTBatch(batch.BatchType) {
+		log.Debug().
+			Str("batch_id", batch.BatchID).
+			Str("batch_type", batch.BatchType).
+			Msg("Skipping non-NFT batch")
 		return
 	}
 
-	// Update transactions to failed
-	txQuery := `UPDATE transactions SET status = 'failed' WHERE batch_id = $1`
-	_, err = tx.Exec(txQuery, batch.BatchID)
-	if err != nil {
-		log.Error().Err(err).Msg("Failed to update transactions to failed")
+	caller := w.callers[batch.ChainID]
+	if caller == nil {
+		log.Error().
+			Int64("chain_id", batch.ChainID).
+			Str("batch_id", batch.BatchID).
+			Msg("No unified caller found for chain")
 		return
 	}
 
-	// Unfreeze balances for failed operations
-	for _, op := range batch.Operations {
-		err = w.unfreezeBalanceForOperation(tx, op, batch.ChainID, batch.TokenID)
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("tx_id", op.TxID).
-				Msg("Failed to unfreeze balance for failed operation")
-		}
+	// Check if the batch is already confirmed (by RabbitMQBatchConsumer)
+	confirmed, confirmationCount, err := w.checkTransactionConfirmation(ctx, caller, batch.TxHash, w.confirmationBlocks)
+	if err != nil {
+		log.Error().
+			Str("batch_id", batch.BatchID).
+			Str("tx_hash", batch.TxHash).
+			Err(err).
+			Msg("Failed to check transaction confirmation")
+		return
 	}
 
-	if err = tx.Commit(); err != nil {
-		log.Error().Err(err).Msg("Failed to commit batch failure")
-	} else {
+	if confirmed {
+		// Transaction is confirmed, perform NFT-specific finalization
 		log.Info().
 			Str("batch_id", batch.BatchID).
-			Str("reason", reason).
-			Msg("Batch marked as failed")
-		w.failedCount++
-	}
-}
+			Str("tx_hash", batch.TxHash).
+			Int("confirmations", confirmationCount).
+			Msg("NFT batch transaction confirmed, performing NFT finalization")
 
-// unfreezeBalanceForOperation unfreezes balance for a failed operation
-func (w *TxConfirmationWatcher) unfreezeBalanceForOperation(tx *sql.Tx, op BatchOperation, chainID int64, tokenID int) error {
-	switch op.TxType {
-	case "burn":
-		// Unfreeze: move from pending_balance back to confirmed_balance
-		query := `
-			UPDATE user_balances 
-			SET 
-				confirmed_balance = confirmed_balance + $4,
-				pending_balance = pending_balance - $4,
-				updated_at = $5,
-				last_change_time = $5
-			WHERE user_id = $1 AND chain_id = $2 AND token_id = $3 
-			AND pending_balance >= $4`
+		err = w.finalizeNFTBatch(ctx, batch)
+		if err != nil {
+			log.Error().
+				Str("batch_id", batch.BatchID).
+				Err(err).
+				Msg("Failed to finalize NFT batch")
+			w.failedCount++
+		} else {
+			w.processedCount++
+		}
+	} else {
+		// Check if transaction has been pending too long
+		if time.Since(batch.SubmittedAt) > 10*time.Minute {
+			log.Warn().
+				Str("batch_id", batch.BatchID).
+				Str("tx_hash", batch.TxHash).
+				Dur("pending_time", time.Since(batch.SubmittedAt)).
+				Int("confirmations", confirmationCount).
+				Msg("NFT batch transaction pending for too long")
 
-		_, err := tx.Exec(query, op.UserID, chainID, tokenID, op.Amount.Abs(), time.Now())
-		return err
-
-	case "transfer":
-		if op.Direction.Valid && op.Direction.String == "outgoing" {
-			// Unfreeze sender's balance
-			query := `
-				UPDATE user_balances 
-				SET 
-					confirmed_balance = confirmed_balance + $4,
-					pending_balance = pending_balance - $4,
-					updated_at = $5,
-					last_change_time = $5
-				WHERE user_id = $1 AND chain_id = $2 AND token_id = $3 
-				AND pending_balance >= $4`
-
-			_, err := tx.Exec(query, op.UserID, chainID, tokenID, op.Amount, time.Now())
-			return err
+			// For now, just log the warning
+			// In production, you might want more sophisticated logic
+			w.incrementBatchRetryCount(ctx, batch)
+		} else {
+			log.Debug().
+				Str("batch_id", batch.BatchID).
+				Str("tx_hash", batch.TxHash).
+				Int("confirmations", confirmationCount).
+				Int("required", w.confirmationBlocks).
+				Msg("Batch transaction not yet confirmed")
 		}
 	}
-
-	// Mint operations don't need unfreezing
-	return nil
 }
 
 // incrementBatchRetryCount increments the retry count for a batch
@@ -728,7 +498,7 @@ func (w *TxConfirmationWatcher) incrementBatchRetryCount(ctx context.Context, ba
 
 // cleanupOldFailedBatches cleans up old failed batches
 func (w *TxConfirmationWatcher) cleanupOldFailedBatches(ctx context.Context) {
-	// Mark batches that have exceeded max retries as failed
+	// Mark NFT batches that have exceeded max retries as failed
 	failedQuery := `
 		UPDATE batches 
 		SET 
@@ -736,20 +506,21 @@ func (w *TxConfirmationWatcher) cleanupOldFailedBatches(ctx context.Context) {
 			failure_reason = 'max_retries_exceeded'
 		WHERE status = 'submitted' 
 		AND COALESCE(retry_count, 0) >= $1
-		AND submitted_at < $2`
+		AND submitted_at < $2
+		AND batch_type IN ('nft_mint', 'nft_burn', 'nft_transfer')`
 
 	cutoffTime := time.Now().Add(-24 * time.Hour) // 24 hours old
 	result, err := w.db.ExecContext(ctx, failedQuery, w.maxRetries, cutoffTime)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to mark old batches as failed")
+		log.Error().Err(err).Msg("Failed to mark old NFT batches as failed")
 		return
 	}
 
 	rowsAffected, err := result.RowsAffected()
 	if err == nil && rowsAffected > 0 {
 		log.Info().
-			Int64("batches_failed", rowsAffected).
-			Msg("Marked old batches as failed due to max retries")
+			Int64("nft_batches_failed", rowsAffected).
+			Msg("Marked old NFT batches as failed due to max retries")
 	}
 }
 

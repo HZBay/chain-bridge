@@ -390,13 +390,13 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 			CollectionID:  request.CollectionID,
 			ToUserID:      mintOp.ToUserID,
 			TokenID:       "-1", // Will be updated when blockchain minting completes
-			MetadataURI:   "", // Will be built with actual token ID after minting
+			MetadataURI:   "",   // Will be built with actual token ID after minting
 			BusinessType:  mintOp.BusinessType,
 			ReasonType:    mintOp.ReasonType,
 			Priority:      queue.PriorityNormal,
 			CreatedAt:     time.Now(),
 			// Store both batch operation_id and individual operation_id for mapping
-			BatchOperationID:      mainOperationID.String(), // Batch-level tracking
+			BatchOperationID:      mainOperationID.String(),       // Batch-level tracking
 			IndividualOperationID: individualOperationID.String(), // Individual operation tracking
 		}
 
@@ -630,7 +630,7 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 			Priority:      queue.PriorityNormal,
 			CreatedAt:     time.Now(),
 			// Store both batch operation_id and individual operation_id for mapping
-			BatchOperationID:      mainOperationID.String(), // Batch-level tracking
+			BatchOperationID:      mainOperationID.String(),       // Batch-level tracking
 			IndividualOperationID: individualOperationID.String(), // Individual operation tracking
 		}
 
@@ -867,7 +867,7 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 			Priority:      queue.PriorityNormal,
 			CreatedAt:     time.Now(),
 			// Store both batch operation_id and individual operation_id for mapping
-			BatchOperationID:      mainOperationID.String(), // Batch-level tracking
+			BatchOperationID:      mainOperationID.String(),       // Batch-level tracking
 			IndividualOperationID: individualOperationID.String(), // Individual operation tracking
 		}
 
@@ -1356,7 +1356,7 @@ func convertMetadataToJSON(meta *NFTMetadata) string {
 
 	// Create a map for JSON marshaling - preserve all metadata structure
 	metaMap := map[string]interface{}{}
-	
+
 	// Add standard fields only if they have values
 	if meta.Name != "" {
 		metaMap["name"] = meta.Name
