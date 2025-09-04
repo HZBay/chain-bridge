@@ -98,103 +98,17 @@ func (c *RabbitMQBatchConsumer) processBatch(ctx context.Context, messages []*Me
 	}
 
 	isNFTBatch := c.isNFTOperation(jobs)
-	batchType := c.mapJobTypeToBatchType(jobs[0]) // Get batch type from first job
+	batchType := c.mapJobTypeToBatchType(jobs[0])
 
-	if isNFTBatch && c.confirmationWatcher != nil {
-		// NFT batch: Use TxConfirmationWatcher for special handling
-		log.Info().
-			Str("tx_hash", result.TxHash).
-			Str("batch_type", batchType).
-			Msg("Processing NFT batch confirmation")
-
-		err = c.confirmationWatcher.ProcessSingleNFTBatch(
-			ctx,
-			batchID.String(),
-			result.TxHash,
-			group.ChainID,
-			batchType,
-		)
-
-		if err != nil {
-			log.Error().Err(err).
-				Str("tx_hash", result.TxHash).
-				Msg("Failed to process NFT batch confirmation")
-			c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("NFT batch confirmation failed: %w", err))
-			return
-		}
-
-		// Complete the batch after NFT processing
-		err = c.completeSuccessfulBatch(ctx, messages, group, batchID, result, processingTime)
-		if err != nil {
-			log.Error().Err(err).
-				Str("tx_hash", result.TxHash).
-				Msg("Failed to complete NFT batch")
-			c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("NFT batch completion failed: %w", err))
-			return
-		}
-
-		// ACK messages after successful completion
-		c.ackAllMessages(messages)
-
+	if isNFTBatch {
+		err = c.processNFTBatch(ctx, messages, group, batchID, result, processingTime, batchType)
 	} else {
-		// FT batch: Handle confirmation directly
-		if c.confirmationWatcher == nil {
-			log.Error().Msg("No confirmation watcher available")
-			c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("no confirmation watcher available"))
-			return
-		}
+		err = c.processFTBatch(ctx, messages, group, batchID, result, processingTime)
+	}
 
-		// Get the appropriate caller for this chain
-		caller, exists := c.cpopCallers[group.ChainID]
-		if !exists {
-			log.Error().
-				Int64("chain_id", group.ChainID).
-				Msg("No unified caller found for chain")
-			c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("no unified caller for chain %d", group.ChainID))
-			return
-		}
-
-		confirmed, confirmations, err := c.confirmationWatcher.WaitForConfirmation(
-			ctx,
-			caller,
-			result.TxHash,
-			3,              // 3 blocks for confirmation
-			10*time.Minute, // 10 minute timeout
-		)
-
-		if err != nil {
-			log.Error().Err(err).
-				Str("tx_hash", result.TxHash).
-				Msg("Failed to wait for FT transaction confirmation")
-			c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("FT confirmation failed: %w", err))
-			return
-		}
-
-		if confirmed {
-			log.Info().
-				Str("tx_hash", result.TxHash).
-				Int("confirmations", confirmations).
-				Msg("FT transaction confirmed, completing batch")
-
-			// Complete the batch with confirmed transaction
-			err = c.completeSuccessfulBatch(ctx, messages, group, batchID, result, processingTime)
-			if err != nil {
-				log.Error().Err(err).
-					Str("tx_hash", result.TxHash).
-					Msg("Failed to complete FT batch")
-				c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("FT batch completion failed: %w", err))
-				return
-			}
-
-			// ACK messages only after successful completion
-			c.ackAllMessages(messages)
-		} else {
-			log.Error().
-				Str("tx_hash", result.TxHash).
-				Msg("FT transaction not confirmed within timeout")
-			c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("FT transaction not confirmed within timeout"))
-			return
-		}
+	if err != nil {
+		c.handleBatchFailure(ctx, messages, batchID, err)
+		return
 	}
 
 	// Step 5: Record performance metrics
@@ -2006,6 +1920,115 @@ func (c *RabbitMQBatchConsumer) isNFTOperation(jobs []BatchJob) bool {
 	return false
 }
 
+// processNFTBatch handles NFT batch confirmation and processing
+func (c *RabbitMQBatchConsumer) processNFTBatch(
+	ctx context.Context,
+	messages []*MessageWrapper,
+	group BatchGroup,
+	batchID uuid.UUID,
+	result *blockchain.BatchResult,
+	processingTime time.Duration,
+	batchType string,
+) error {
+	if c.confirmationWatcher == nil {
+		return fmt.Errorf("no confirmation watcher available for NFT batch")
+	}
+
+	log.Info().
+		Str("tx_hash", result.TxHash).
+		Str("batch_type", batchType).
+		Msg("Processing NFT batch confirmation")
+
+	// Use TxConfirmationWatcher for NFT special handling
+	err := c.confirmationWatcher.ProcessSingleNFTBatch(
+		ctx,
+		batchID.String(),
+		result.TxHash,
+		group.ChainID,
+		batchType,
+	)
+	if err != nil {
+		return fmt.Errorf("NFT batch confirmation failed: %w", err)
+	}
+
+	// Complete the batch after NFT processing
+	err = c.completeSuccessfulBatch(ctx, messages, group, batchID, result, processingTime)
+	if err != nil {
+		return fmt.Errorf("NFT batch completion failed: %w", err)
+	}
+
+	// ACK messages after successful completion
+	c.ackAllMessages(messages)
+
+	log.Info().
+		Str("tx_hash", result.TxHash).
+		Str("batch_type", batchType).
+		Msg("NFT batch processed successfully")
+
+	return nil
+}
+
+// processFTBatch handles FT batch confirmation and processing
+func (c *RabbitMQBatchConsumer) processFTBatch(
+	ctx context.Context,
+	messages []*MessageWrapper,
+	group BatchGroup,
+	batchID uuid.UUID,
+	result *blockchain.BatchResult,
+	processingTime time.Duration,
+) error {
+	if c.confirmationWatcher == nil {
+		return fmt.Errorf("no confirmation watcher available for FT batch")
+	}
+
+	// Get the appropriate caller for this chain
+	caller, exists := c.cpopCallers[group.ChainID]
+	if !exists {
+		return fmt.Errorf("no unified caller found for chain %d", group.ChainID)
+	}
+
+	log.Info().
+		Str("tx_hash", result.TxHash).
+		Msg("Processing FT batch confirmation")
+
+	// Wait for confirmation
+	confirmed, confirmations, err := c.confirmationWatcher.WaitForConfirmation(
+		ctx,
+		caller,
+		result.TxHash,
+		3,              // 3 blocks for confirmation
+		10*time.Minute, // 10 minute timeout
+	)
+	if err != nil {
+		return fmt.Errorf("FT confirmation failed: %w", err)
+	}
+
+	if !confirmed {
+		return fmt.Errorf("FT transaction not confirmed within timeout")
+	}
+
+	log.Info().
+		Str("tx_hash", result.TxHash).
+		Int("confirmations", confirmations).
+		Msg("FT transaction confirmed, completing batch")
+
+	// Complete the batch with confirmed transaction
+	err = c.completeSuccessfulBatch(ctx, messages, group, batchID, result, processingTime)
+	if err != nil {
+		return fmt.Errorf("FT batch completion failed: %w", err)
+	}
+
+	// ACK messages after successful completion
+	c.ackAllMessages(messages)
+
+	log.Info().
+		Str("tx_hash", result.TxHash).
+		Int("confirmations", confirmations).
+		Msg("FT batch processed successfully")
+
+	return nil
+}
+
 // mapJobTypeToBatchType maps JobType to database batch_type enum values
 func (c *RabbitMQBatchConsumer) mapJobTypeToBatchType(job BatchJob) string {
 	switch job.GetJobType() {
@@ -2022,6 +2045,12 @@ func (c *RabbitMQBatchConsumer) mapJobTypeToBatchType(job BatchJob) string {
 		}
 		// Fallback to mint if adjustment type is unclear
 		return "mint"
+	case JobTypeNFTMint:
+		return "nft_mint"
+	case JobTypeNFTBurn:
+		return "nft_burn"
+	case JobTypeNFTTransfer:
+		return "nft_transfer"
 	default:
 		// For unknown job types (like notifications), default to transfer
 		// This shouldn't happen in practice since notifications don't create batches

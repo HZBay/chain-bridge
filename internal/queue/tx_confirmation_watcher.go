@@ -179,11 +179,6 @@ func (w *TxConfirmationWatcher) getBatchOperations(ctx context.Context, batchID 
 	return operations, rows.Err()
 }
 
-// isNFTBatch checks if the batch type is an NFT operation
-func (w *TxConfirmationWatcher) isNFTBatch(batchType string) bool {
-	return batchType == "nft_mint" || batchType == "nft_burn" || batchType == "nft_transfer"
-}
-
 // finalizeNFTBatch performs NFT-specific finalization for confirmed batches
 func (w *TxConfirmationWatcher) finalizeNFTBatch(ctx context.Context, batch PendingBatch) error {
 	// Start database transaction
