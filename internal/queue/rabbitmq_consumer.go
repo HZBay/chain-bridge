@@ -107,7 +107,7 @@ func (c *RabbitMQBatchConsumer) processBatch(ctx context.Context, messages []*Me
 			ctx,
 			caller,
 			result.TxHash,
-			6,              // 6 blocks for confirmation
+			3,              // 6 blocks for confirmation
 			10*time.Minute, // 10 minute timeout
 		)
 
@@ -534,12 +534,6 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 			batchID, true, j.ReasonType, j.ReasonDetail, j.CreatedAt,
 		}
 
-	default:
-		return fmt.Errorf("unsupported job type: %T", job)
-	}
-
-	// Handle NFT job types
-	switch j := job.(type) {
 	case NFTMintJob:
 		query = `
 			INSERT INTO transactions (
@@ -593,6 +587,9 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 			j.ToUserID, j.CollectionID, j.TokenID, "batching", batchID, true,
 			j.ReasonType, j.ReasonDetail, j.CreatedAt,
 		}
+
+	default:
+		return fmt.Errorf("unsupported job type: %T", job)
 	}
 
 	_, err := tx.Exec(query, args...)
