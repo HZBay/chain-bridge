@@ -145,19 +145,10 @@ func (c *RabbitMQBatchConsumer) processBatch(ctx context.Context, messages []*Me
 			// Messages will be ACKed when background watcher completes the batch
 		}
 	} else {
-		// Fallback: complete immediately if no confirmation watcher available
-		log.Warn().Msg("No confirmation watcher available, completing batch immediately")
-		err = c.completeSuccessfulBatch(ctx, messages, group, batchID, result, processingTime)
-		if err != nil {
-			log.Error().Err(err).
-				Str("tx_hash", result.TxHash).
-				Msg("Failed to complete successful batch")
-			c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("batch completion failed: %w", err))
-			return
-		}
-
-		// ACK messages only after successful completion
-		c.ackAllMessages(messages)
+		// No confirmation watcher available - this should not happen in normal operation
+		log.Error().Msg("No confirmation watcher available - system misconfiguration")
+		c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("no confirmation watcher available"))
+		return
 	}
 
 	// Step 5: Record performance metrics
