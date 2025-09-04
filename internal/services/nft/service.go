@@ -31,6 +31,9 @@ type Service interface {
 	GetNFTAsset(ctx context.Context, collectionID, tokenID string) (*NFTAsset, error)
 	GetUserNFTAssets(ctx context.Context, userID string, chainID *int64) ([]*NFTAsset, error)
 	GetNFTMetadataByTokenID(ctx context.Context, tokenID string) (*NFTMetadata, error)
+
+	// Token ID management after blockchain operations
+	UpdateTokenIDAfterMinting(ctx context.Context, operationID, actualTokenID string) error
 }
 
 // service implements the NFT Service interface
@@ -344,10 +347,7 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 	}()
 
 	for _, mintOp := range request.MintOperations {
-		// Generate token ID (this could be more sophisticated)
-		tokenID := generateTokenID()
-
-		// Create transaction record
+		// Create transaction record - token_id will be set to -1 until minting is complete
 		transactionID := uuid.New()
 
 		// Insert transaction record with operation_id for idempotency
@@ -357,21 +357,21 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 				collection_id, nft_token_id, nft_metadata, created_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
 		`, transactionID, mainOperationID.String(), mintOp.ToUserID, request.ChainID, "nft_mint", mintOp.BusinessType, "pending",
-			"1", request.CollectionID, tokenID, convertMetadataToJSON(mintOp.Meta))
+			"1", request.CollectionID, "-1", convertMetadataToJSON(mintOp.Meta))
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create transaction record: %w", err)
 		}
 
-		// Create NFT asset record (not yet minted)
+		// Create NFT asset record (not yet minted) with operation_id for tracking
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO nft_assets (
-				collection_id, token_id, owner_user_id, chain_id, 
+				collection_id, token_id, owner_user_id, chain_id, operation_id,
 				metadata_uri, name, description, image_url, attributes,
 				is_burned, is_minted, is_locked, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
-		`, request.CollectionID, tokenID, mintOp.ToUserID, request.ChainID,
-			buildMetadataURI(collection.BaseURI, tokenID),
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+		`, request.CollectionID, "-1", mintOp.ToUserID, request.ChainID, mainOperationID.String(),
+			"", // metadata_uri will be set after token_id is known
 			mintOp.Meta.Name, mintOp.Meta.Description, mintOp.Meta.Image,
 			convertMetadataToJSON(mintOp.Meta), false, false, false)
 
@@ -387,8 +387,8 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 			ChainID:       request.ChainID,
 			CollectionID:  request.CollectionID,
 			ToUserID:      mintOp.ToUserID,
-			TokenID:       tokenID,
-			MetadataURI:   buildMetadataURI(collection.BaseURI, tokenID),
+			TokenID:       "-1", // Will be updated when blockchain minting completes
+			MetadataURI:   "", // Will be built with actual token ID after minting
 			BusinessType:  mintOp.BusinessType,
 			ReasonType:    mintOp.ReasonType,
 			Priority:      queue.PriorityNormal,
@@ -1503,4 +1503,72 @@ func (s *service) sendTransactionFailedNotification(ctx context.Context, tx *mod
 				Msg("Failed to send NFT transaction failed notification to recipient")
 		}
 	}
+}
+
+// UpdateTokenIDAfterMinting updates both transactions and nft_assets with actual token_id after successful blockchain minting
+func (s *service) UpdateTokenIDAfterMinting(ctx context.Context, operationID, actualTokenID string) error {
+	log.Info().
+		Str("operation_id", operationID).
+		Str("actual_token_id", actualTokenID).
+		Msg("Updating token_id after successful minting")
+
+	// Begin database transaction
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer func() {
+		if rollbackErr := tx.Rollback(); rollbackErr != nil {
+			log.Warn().Err(rollbackErr).Msg("Failed to rollback transaction")
+		}
+	}()
+
+	// Update transactions table
+	_, err = tx.ExecContext(ctx, `
+		UPDATE transactions 
+		SET nft_token_id = $1, updated_at = NOW() 
+		WHERE operation_id = $2 AND nft_token_id = '-1'
+	`, actualTokenID, operationID)
+	if err != nil {
+		return fmt.Errorf("failed to update transactions token_id: %w", err)
+	}
+
+	// Get collection info for building metadata URI
+	var collectionID string
+	var baseURI string
+	err = tx.QueryRowContext(ctx, `
+		SELECT na.collection_id, nc.base_uri 
+		FROM nft_assets na 
+		JOIN nft_collections nc ON na.collection_id = nc.collection_id 
+		WHERE na.operation_id = $1 AND na.token_id = '-1' 
+		LIMIT 1
+	`, operationID).Scan(&collectionID, &baseURI)
+	if err != nil {
+		return fmt.Errorf("failed to get collection info: %w", err)
+	}
+
+	// Build metadata URI with actual token ID
+	metadataURI := buildMetadataURI(baseURI, actualTokenID)
+
+	// Update nft_assets table
+	_, err = tx.ExecContext(ctx, `
+		UPDATE nft_assets 
+		SET token_id = $1, metadata_uri = $2, is_minted = true, updated_at = NOW() 
+		WHERE operation_id = $3 AND token_id = '-1'
+	`, actualTokenID, metadataURI, operationID)
+	if err != nil {
+		return fmt.Errorf("failed to update nft_assets token_id: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	log.Info().
+		Str("operation_id", operationID).
+		Str("actual_token_id", actualTokenID).
+		Str("metadata_uri", metadataURI).
+		Msg("Successfully updated token_id after minting")
+
+	return nil
 }
