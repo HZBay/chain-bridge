@@ -91,8 +91,59 @@ func (c *RabbitMQBatchConsumer) processBatch(ctx context.Context, messages []*Me
 
 	processingTime := time.Since(startTime)
 
-	// Step 3: Wait for blockchain confirmation using the confirmation watcher
-	if c.confirmationWatcher != nil {
+	// Step 3: Handle confirmation based on batch type
+	jobs := make([]BatchJob, len(validMessages))
+	for i, msg := range validMessages {
+		jobs[i] = msg.Job
+	}
+
+	isNFTBatch := c.isNFTOperation(jobs)
+	batchType := c.mapJobTypeToBatchType(jobs[0]) // Get batch type from first job
+
+	if isNFTBatch && c.confirmationWatcher != nil {
+		// NFT batch: Use TxConfirmationWatcher for special handling
+		log.Info().
+			Str("tx_hash", result.TxHash).
+			Str("batch_type", batchType).
+			Msg("Processing NFT batch confirmation")
+
+		err = c.confirmationWatcher.ProcessSingleNFTBatch(
+			ctx,
+			batchID.String(),
+			result.TxHash,
+			group.ChainID,
+			batchType,
+		)
+
+		if err != nil {
+			log.Error().Err(err).
+				Str("tx_hash", result.TxHash).
+				Msg("Failed to process NFT batch confirmation")
+			c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("NFT batch confirmation failed: %w", err))
+			return
+		}
+
+		// Complete the batch after NFT processing
+		err = c.completeSuccessfulBatch(ctx, messages, group, batchID, result, processingTime)
+		if err != nil {
+			log.Error().Err(err).
+				Str("tx_hash", result.TxHash).
+				Msg("Failed to complete NFT batch")
+			c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("NFT batch completion failed: %w", err))
+			return
+		}
+
+		// ACK messages after successful completion
+		c.ackAllMessages(messages)
+
+	} else {
+		// FT batch: Handle confirmation directly
+		if c.confirmationWatcher == nil {
+			log.Error().Msg("No confirmation watcher available")
+			c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("no confirmation watcher available"))
+			return
+		}
+
 		// Get the appropriate caller for this chain
 		caller, exists := c.cpopCallers[group.ChainID]
 		if !exists {
@@ -114,41 +165,36 @@ func (c *RabbitMQBatchConsumer) processBatch(ctx context.Context, messages []*Me
 		if err != nil {
 			log.Error().Err(err).
 				Str("tx_hash", result.TxHash).
-				Msg("Failed to wait for transaction confirmation")
-			// Transaction was submitted but confirmation failed
-			// Handle as batch failure to ensure proper cleanup
-			c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("confirmation failed: %w", err))
+				Msg("Failed to wait for FT transaction confirmation")
+			c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("FT confirmation failed: %w", err))
 			return
-		} else if confirmed {
+		}
+
+		if confirmed {
 			log.Info().
 				Str("tx_hash", result.TxHash).
 				Int("confirmations", confirmations).
-				Msg("Transaction confirmed, completing batch")
+				Msg("FT transaction confirmed, completing batch")
 
 			// Complete the batch with confirmed transaction
 			err = c.completeSuccessfulBatch(ctx, messages, group, batchID, result, processingTime)
 			if err != nil {
 				log.Error().Err(err).
 					Str("tx_hash", result.TxHash).
-					Msg("Failed to complete confirmed batch")
-				c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("batch completion failed: %w", err))
+					Msg("Failed to complete FT batch")
+				c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("FT batch completion failed: %w", err))
 				return
 			}
 
 			// ACK messages only after successful completion
 			c.ackAllMessages(messages)
 		} else {
-			log.Info().
+			log.Error().
 				Str("tx_hash", result.TxHash).
-				Msg("Transaction submitted but not yet confirmed, background watcher will handle completion")
-			// Don't ACK messages yet - let background watcher handle completion
-			// Messages will be ACKed when background watcher completes the batch
+				Msg("FT transaction not confirmed within timeout")
+			c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("FT transaction not confirmed within timeout"))
+			return
 		}
-	} else {
-		// No confirmation watcher available - this should not happen in normal operation
-		log.Error().Msg("No confirmation watcher available - system misconfiguration")
-		c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("no confirmation watcher available"))
-		return
 	}
 
 	// Step 5: Record performance metrics
