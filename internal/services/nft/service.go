@@ -353,10 +353,10 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 		// Insert transaction record with operation_id for idempotency
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO transactions (
-				transaction_id, operation_id, user_id, chain_id, tx_type, status, amount, 
+				transaction_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount, 
 				collection_id, nft_token_id, nft_metadata, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-		`, transactionID, mainOperationID.String(), mintOp.ToUserID, request.ChainID, "nft_mint", "recorded",
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+		`, transactionID, mainOperationID.String(), mintOp.ToUserID, request.ChainID, "nft_mint", mintOp.BusinessType, "recorded",
 			"1", request.CollectionID, tokenID, convertMetadataToJSON(mintOp.Meta))
 
 		if err != nil {
@@ -589,10 +589,10 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 		transactionID := uuid.New()
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO transactions (
-				transaction_id, operation_id, user_id, chain_id, tx_type, status, amount,
+				transaction_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount,
 				collection_id, nft_token_id, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, NOW())
-		`, transactionID, mainOperationID.String(), burnOp.OwnerUserID, request.ChainID, "nft_burn", "recorded",
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
+		`, transactionID, mainOperationID.String(), burnOp.OwnerUserID, request.ChainID, "nft_burn", "consumption", "recorded",
 			"1", request.CollectionID, burnOp.TokenID)
 
 		if err != nil {
@@ -810,10 +810,10 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 		transactionID := uuid.New()
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO transactions (
-				transaction_id, operation_id, user_id, chain_id, tx_type, status, amount,
+				transaction_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount,
 				collection_id, nft_token_id, related_user_id, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-		`, transactionID, mainOperationID.String(), transferOp.FromUserID, request.ChainID, "nft_transfer", "recorded",
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+		`, transactionID, mainOperationID.String(), transferOp.FromUserID, request.ChainID, "nft_transfer", "transfer", "recorded",
 			"1", request.CollectionID, transferOp.TokenID, transferOp.ToUserID)
 
 		if err != nil {
