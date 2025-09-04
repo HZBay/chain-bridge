@@ -38,7 +38,7 @@ func (h *Handler) GetNFTMetadata(c echo.Context) error {
 	if tokenID == "" {
 		return httperrors.NewHTTPErrorWithDetail(
 			http.StatusBadRequest,
-			"validation_error", 
+			"validation_error",
 			"Invalid Request Parameters",
 			"token_id cannot be empty",
 		)
@@ -68,7 +68,7 @@ func (h *Handler) GetNFTMetadata(c echo.Context) error {
 			return httperrors.NewHTTPErrorWithDetail(
 				http.StatusBadRequest,
 				"validation_error",
-				"Validation Error", 
+				"Validation Error",
 				err.Error(),
 			)
 		}

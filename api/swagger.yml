@@ -2517,6 +2517,35 @@ paths:
           description: GetUserInfoResponse
           schema:
             $ref: '#/definitions/getUserInfoResponse'
+  /api/v1/meta/{token_id}:
+    get:
+      description: 获取NFT的元数据信息，支持OpenSea标准格式
+      tags:
+      - nft
+      summary: Get NFT metadata by token ID
+      operationId: getNFTMetadata
+      parameters:
+      - type: string
+        description: NFT Token ID
+        name: token_id
+        in: path
+        required: true
+      responses:
+        "200":
+          description: NFT metadata retrieved successfully
+          schema:
+            $ref: '#/definitions/nFTStandardMetadata'
+        "404":
+          description: NFT not found
+          schema:
+            $ref: '#/definitions/apiError'
+        "500":
+          description: Internal server error
+          schema:
+            $ref: '#/definitions/apiError'
+          examples:
+            application/json:
+              message: Internal server error
   /api/v1/push/token:
     put:
       security:
@@ -3628,6 +3657,43 @@ definitions:
         description: Recipient user ID
         type: string
         example: user123
+  nFTStandardMetadata:
+    type: object
+    properties:
+      attributes:
+        type: array
+        items:
+          type: object
+          properties:
+            rarity_percentage:
+              description: Rarity percentage
+              type: number
+              format: float
+              example: 2.5
+            trait_type:
+              description: Attribute type
+              type: string
+              example: Background
+            value:
+              description: Attribute value
+              type: string
+              example: Galaxy
+      description:
+        description: NFT description
+        type: string
+        example: Friendly OpenSea Creature that enjoys long swims in the ocean.
+      external_url:
+        description: External URL
+        type: string
+        example: https://openseacreatures.io/3
+      image:
+        description: NFT image URL
+        type: string
+        example: https://storage.googleapis.com/opensea-prod.appspot.com/puffs/3.png
+      name:
+        description: NFT name
+        type: string
+        example: Dave Starbelly
   nFTTransferOperation:
     type: object
     required:

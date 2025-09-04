@@ -419,10 +419,10 @@ func LoadConfigFromDatabase(ctx context.Context, db *sql.DB) (PaymentManagerConf
 
 		// Create payment chain configuration
 		paymentChainCfg := PaymentChainConfig{
-			ChainID:            chain.ChainID,
-			RPCEndpoint:        chain.RPCURL,
-			PaymentAddress:     chain.PaymentContractAddress.String,
-			StartBlock:         0,                                    // Start from latest block for new listeners
+			ChainID:        chain.ChainID,
+			RPCEndpoint:    chain.RPCURL,
+			PaymentAddress: chain.PaymentContractAddress.String,
+			StartBlock:     0, // Start from latest block for new listeners
 			ConfirmationBlocks: func() uint64 {
 				val := chain.ConfirmationBlocks.Int
 				if val < 0 {
@@ -431,8 +431,8 @@ func LoadConfigFromDatabase(ctx context.Context, db *sql.DB) (PaymentManagerConf
 				// Use safe conversion avoiding direct cast
 				return uint64(val)
 			}(), // Default confirmation blocks (could be made configurable)
-			PollInterval:       "10s",                                // Default poll interval (could be made configurable)
-			Enabled:            chain.IsEnabled.Bool,
+			PollInterval: "10s", // Default poll interval (could be made configurable)
+			Enabled:      chain.IsEnabled.Bool,
 		}
 
 		paymentCfg.Chains = append(paymentCfg.Chains, paymentChainCfg)

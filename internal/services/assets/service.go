@@ -552,57 +552,57 @@ func (s *service) GetUserAssets(ctx context.Context, userID string) (*types.Asse
 
 	// Process fungible token balances
 	for _, balance := range userBalances {
-			// Ensure relationships are loaded
-			if balance.R == nil || balance.R.Chain == nil || balance.R.Token == nil {
-				log.Warn().
-					Str("user_id", userID).
-					Int64("chain_id", balance.ChainID).
-					Int("token_id", balance.TokenID).
-					Msg("Missing relationship data for user balance, skipping")
-				continue
-			}
+		// Ensure relationships are loaded
+		if balance.R == nil || balance.R.Chain == nil || balance.R.Token == nil {
+			log.Warn().
+				Str("user_id", userID).
+				Int64("chain_id", balance.ChainID).
+				Int("token_id", balance.TokenID).
+				Msg("Missing relationship data for user balance, skipping")
+			continue
+		}
 
-			chain := balance.R.Chain
-			token := balance.R.Token
+		chain := balance.R.Chain
+		token := balance.R.Token
 
-			// Skip assets with zero confirmed balance to match previous behavior
-			if balance.ConfirmedBalance.Big == nil || balance.ConfirmedBalance.Big.Sign() <= 0 {
-				log.Debug().
-					Str("user_id", userID).
-					Int64("chain_id", balance.ChainID).
-					Int("token_id", balance.TokenID).
-					Msg("Skipping asset with zero confirmed balance")
-				continue
-			}
+		// Skip assets with zero confirmed balance to match previous behavior
+		if balance.ConfirmedBalance.Big == nil || balance.ConfirmedBalance.Big.Sign() <= 0 {
+			log.Debug().
+				Str("user_id", userID).
+				Int64("chain_id", balance.ChainID).
+				Int("token_id", balance.TokenID).
+				Msg("Skipping asset with zero confirmed balance")
+			continue
+		}
 
-			// Convert balance values
-			confirmedBalance := s.formatDecimal(balance.ConfirmedBalance)
-			pendingBalance := s.formatDecimal(balance.PendingBalance)
-			lockedBalance := s.formatDecimal(balance.LockedBalance)
+		// Convert balance values
+		confirmedBalance := s.formatDecimal(balance.ConfirmedBalance)
+		pendingBalance := s.formatDecimal(balance.PendingBalance)
+		lockedBalance := s.formatDecimal(balance.LockedBalance)
 
-			// Calculate USD value (placeholder - in production would use price feeds)
-			balanceUsd := s.calculateBalanceUSD(balance.ConfirmedBalance, token.Symbol)
-			totalValueUsd += balanceUsd
+		// Calculate USD value (placeholder - in production would use price feeds)
+		balanceUsd := s.calculateBalanceUSD(balance.ConfirmedBalance, token.Symbol)
+		totalValueUsd += balanceUsd
 
-			// Determine sync status based on last sync time
-			syncStatus := s.determineSyncStatus(balance.LastSyncTime)
+		// Determine sync status based on last sync time
+		syncStatus := s.determineSyncStatus(balance.LastSyncTime)
 
-			// Build asset info for fungible token
-			assetInfo := &types.AssetInfo{
-				ChainID:          &balance.ChainID,
-				ChainName:        chain.ShortName,
-				Symbol:           &token.Symbol,
-				Name:             token.Name,
-				ContractAddress:  token.ContractAddress.String,
-				Decimals:         int64(token.Decimals),
-				ConfirmedBalance: &confirmedBalance,
-				PendingBalance:   &pendingBalance,
-				LockedBalance:    &lockedBalance,
-				BalanceUsd:       float32(balanceUsd),
-				SyncStatus:       &syncStatus,
-			}
+		// Build asset info for fungible token
+		assetInfo := &types.AssetInfo{
+			ChainID:          &balance.ChainID,
+			ChainName:        chain.ShortName,
+			Symbol:           &token.Symbol,
+			Name:             token.Name,
+			ContractAddress:  token.ContractAddress.String,
+			Decimals:         int64(token.Decimals),
+			ConfirmedBalance: &confirmedBalance,
+			PendingBalance:   &pendingBalance,
+			LockedBalance:    &lockedBalance,
+			BalanceUsd:       float32(balanceUsd),
+			SyncStatus:       &syncStatus,
+		}
 
-			assets = append(assets, assetInfo)
+		assets = append(assets, assetInfo)
 	}
 
 	// Process NFT assets - group by collection
@@ -943,7 +943,7 @@ func (s *service) calculateNFTCollectionValue(collection *NFTCollectionGroup) fl
 func (s *service) buildNFTCollectionAssetInfo(collection *NFTCollectionGroup, valueUsd float64) *types.AssetInfo {
 	// For NFT collections, we represent them differently in AssetInfo:
 	// - Symbol will be the collection symbol
-	// - Name will be the collection name 
+	// - Name will be the collection name
 	// - ConfirmedBalance will be the count of NFTs
 	// - PendingBalance will be "0" (no pending concept for NFTs in this context)
 	// - LockedBalance will be count of locked NFTs
@@ -962,9 +962,9 @@ func (s *service) buildNFTCollectionAssetInfo(collection *NFTCollectionGroup, va
 		}
 	}
 
-	confirmedBalance := fmt.Sprintf("%d", mintedCount)   // Only count minted NFTs as confirmed
+	confirmedBalance := fmt.Sprintf("%d", mintedCount)          // Only count minted NFTs as confirmed
 	pendingBalance := fmt.Sprintf("%d", totalCount-mintedCount) // Unminted NFTs as pending
-	lockedBalance := fmt.Sprintf("%d", lockedCount)     // Locked NFTs
+	lockedBalance := fmt.Sprintf("%d", lockedCount)             // Locked NFTs
 
 	// Use collection symbol or fallback to collection ID
 	symbol := collection.Collection.Symbol

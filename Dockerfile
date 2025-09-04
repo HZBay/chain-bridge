@@ -139,10 +139,11 @@ RUN go install github.com/miniscruff/changie@v1.21.0
 # https://github.com/watchexec/watchexec/releases
 RUN mkdir -p /tmp/watchexec \
     && cd /tmp/watchexec \
-    && wget https://github.com/watchexec/watchexec/releases/download/v1.25.1/watchexec-1.25.1-$(arch)-github.com/hzbay/chain-bridge-linux-musl.tar.xz \
-    && tar xf watchexec-1.25.1-$(arch)-github.com/hzbay/chain-bridge-linux-musl.tar.xz \
-    && cp watchexec-1.25.1-$(arch)-github.com/hzbay/chain-bridge-linux-musl/watchexec /usr/local/bin/watchexec \
+    && wget https://github.com/watchexec/watchexec/releases/download/v1.25.1/watchexec-1.25.1-$(arch)-unknown-linux-musl.tar.xz \
+    && tar xf watchexec-1.25.1-$(arch)-unknown-linux-musl.tar.xz \
+    && cp watchexec-1.25.1-$(arch)-unknown-linux-musl/watchexec /usr/local/bin/watchexec \
     && rm -rf /tmp/watchexec
+
 
 # yq
 # https://github.com/mikefarah/yq/releases
