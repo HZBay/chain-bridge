@@ -605,6 +605,17 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 			return nil, nil, fmt.Errorf("failed to create transaction record: %w", err)
 		}
 
+		// Lock NFT asset before burn processing
+		_, err = tx.ExecContext(ctx, `
+			UPDATE nft_assets
+			SET is_locked = true
+			WHERE collection_id = $1 AND token_id = $2
+		`, request.CollectionID, burnOp.TokenID)
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to lock NFT asset for burn: %w", err)
+		}
+
 		// Create NFT burn job for batch processing
 		burnJob := queue.NFTBurnJob{
 			ID:            uuid.New().String(),

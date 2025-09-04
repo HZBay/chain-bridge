@@ -2104,8 +2104,34 @@ func (c *RabbitMQBatchConsumer) unlockNFTAsset(tx *sql.Tx, job BatchJob) error {
 
 		return nil
 
-	case NFTMintJob, NFTBurnJob:
-		// Mint and burn operations don't lock NFTs, so no unlock needed
+	case NFTBurnJob:
+		// Unlock the NFT that was locked for burn
+		query := `
+			UPDATE nft_assets
+			SET is_locked = false
+			WHERE collection_id = $1 AND token_id = $2`
+
+		result, err := tx.Exec(query, j.CollectionID, j.TokenID)
+		if err != nil {
+			return fmt.Errorf("failed to unlock NFT asset for burn: %w", err)
+		}
+
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get affected rows for NFT unlock: %w", err)
+		}
+
+		if rowsAffected == 0 {
+			log.Debug().
+				Str("collection_id", j.CollectionID).
+				Str("token_id", j.TokenID).
+				Msg("No NFT asset found to unlock for burn")
+		}
+
+		return nil
+
+	case NFTMintJob:
+		// Mint operations don't lock NFTs before processing, so no unlock needed
 		return nil
 
 	default:
