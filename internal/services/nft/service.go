@@ -281,7 +281,7 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 		// 返回已有结果
 		status := existingTx.Status.String
 		if status == "" {
-			status = "recorded"
+			status = "pending"
 		}
 
 		response := &BatchMintResponse{

@@ -16,6 +16,7 @@ import (
 	"github.com/shopspring/decimal"
 
 	"github.com/hzbay/chain-bridge/internal/blockchain"
+	"github.com/hzbay/chain-bridge/internal/models"
 )
 
 // processBatch processes a batch of messages with blockchain operation and three-table sync
@@ -960,17 +961,24 @@ func (c *RabbitMQBatchConsumer) updateBatchToSubmitted(ctx context.Context, batc
 	var cpopOperationType string
 	switch batchType {
 	case "mint":
-		cpopOperationType = "batch_mint"
+		cpopOperationType = models.CpopOperationTypeBatchMint
 	case "burn":
-		cpopOperationType = "batch_burn"
+		cpopOperationType = models.CpopOperationTypeBatchBurn
 	case "transfer":
-		cpopOperationType = "batch_transfer"
+		cpopOperationType = models.CpopOperationTypeBatchTransfer
+	// NFT batch types
+	case "nft_mint":
+		cpopOperationType = models.CpopOperationTypeBatchNFTMint
+	case "nft_burn":
+		cpopOperationType = models.CpopOperationTypeBatchNFTBurn
+	case "nft_transfer":
+		cpopOperationType = models.CpopOperationTypeBatchNFTTransfer
 	case "asset_adjust": // Handle legacy data
 		// For legacy asset_adjust batches, determine operation type from job data
 		// Default to batch_mint for asset_adjust (most common case)
-		cpopOperationType = "batch_mint"
+		cpopOperationType = models.CpopOperationTypeBatchMint
 	default:
-		cpopOperationType = "batch_mint" // Default fallback
+		cpopOperationType = models.CpopOperationTypeBatchMint // Default fallback
 	}
 
 	// Update batch status to submitted
@@ -1390,6 +1398,12 @@ func (c *RabbitMQBatchConsumer) handleBatchFailure(ctx context.Context, messages
 					userID = job.FromUserID // Notify sender about failed transaction
 				case AssetAdjustJob:
 					userID = job.UserID
+				case NFTMintJob:
+					userID = job.ToUserID
+				case NFTBurnJob:
+					userID = job.OwnerUserID
+				case NFTTransferJob:
+					userID = job.FromUserID // Notify sender about failed transaction
 				}
 
 				if userID != "" {
