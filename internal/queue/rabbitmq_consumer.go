@@ -107,7 +107,7 @@ func (c *RabbitMQBatchConsumer) processBatch(ctx context.Context, messages []*Me
 			ctx,
 			caller,
 			result.TxHash,
-			3,              // 6 blocks for confirmation
+			3,              // 3 blocks for confirmation
 			10*time.Minute, // 10 minute timeout
 		)
 
@@ -116,7 +116,9 @@ func (c *RabbitMQBatchConsumer) processBatch(ctx context.Context, messages []*Me
 				Str("tx_hash", result.TxHash).
 				Msg("Failed to wait for transaction confirmation")
 			// Transaction was submitted but confirmation failed
-			// Let the background confirmation watcher handle it
+			// Handle as batch failure to ensure proper cleanup
+			c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("confirmation failed: %w", err))
+			return
 		} else if confirmed {
 			log.Info().
 				Str("tx_hash", result.TxHash).
@@ -129,13 +131,18 @@ func (c *RabbitMQBatchConsumer) processBatch(ctx context.Context, messages []*Me
 				log.Error().Err(err).
 					Str("tx_hash", result.TxHash).
 					Msg("Failed to complete confirmed batch")
-				c.nackAllMessages(messages)
+				c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("batch completion failed: %w", err))
 				return
 			}
+
+			// ACK messages only after successful completion
+			c.ackAllMessages(messages)
 		} else {
 			log.Info().
 				Str("tx_hash", result.TxHash).
 				Msg("Transaction submitted but not yet confirmed, background watcher will handle completion")
+			// Don't ACK messages yet - let background watcher handle completion
+			// Messages will be ACKed when background watcher completes the batch
 		}
 	} else {
 		// Fallback: complete immediately if no confirmation watcher available
@@ -145,13 +152,13 @@ func (c *RabbitMQBatchConsumer) processBatch(ctx context.Context, messages []*Me
 			log.Error().Err(err).
 				Str("tx_hash", result.TxHash).
 				Msg("Failed to complete successful batch")
-			c.nackAllMessages(messages)
+			c.handleBatchFailure(ctx, messages, batchID, fmt.Errorf("batch completion failed: %w", err))
 			return
 		}
-	}
 
-	// Step 4: ACK all messages after successful processing
-	c.ackAllMessages(messages)
+		// ACK messages only after successful completion
+		c.ackAllMessages(messages)
+	}
 
 	// Step 5: Record performance metrics
 	if c.batchOptimizer != nil {
@@ -1427,6 +1434,12 @@ func (c *RabbitMQBatchConsumer) handleBatchFailure(ctx context.Context, messages
 			if err != nil {
 				log.Error().Err(err).Msg("Failed to unfreeze user balance")
 			}
+
+			// Unlock NFT assets for failed NFT operations
+			err = c.unlockNFTAsset(tx, job)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to unlock NFT asset")
+			}
 		}
 
 		if err = tx.Commit(); err != nil {
@@ -2060,4 +2073,43 @@ func (c *RabbitMQBatchConsumer) prepareNFTTransferParams(ctx context.Context, jo
 	}
 
 	return fromAddresses, toAddresses, tokenIDs, nil
+}
+
+// unlockNFTAsset unlocks NFT assets for failed NFT operations
+func (c *RabbitMQBatchConsumer) unlockNFTAsset(tx *sql.Tx, job BatchJob) error {
+	switch j := job.(type) {
+	case NFTTransferJob:
+		// Unlock the NFT that was locked for transfer
+		query := `
+			UPDATE nft_assets
+			SET is_locked = false
+			WHERE collection_id = $1 AND token_id = $2`
+
+		result, err := tx.Exec(query, j.CollectionID, j.TokenID)
+		if err != nil {
+			return fmt.Errorf("failed to unlock NFT asset for transfer: %w", err)
+		}
+
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			return fmt.Errorf("failed to get affected rows for NFT unlock: %w", err)
+		}
+
+		if rowsAffected == 0 {
+			log.Debug().
+				Str("collection_id", j.CollectionID).
+				Str("token_id", j.TokenID).
+				Msg("No NFT asset found to unlock for transfer")
+		}
+
+		return nil
+
+	case NFTMintJob, NFTBurnJob:
+		// Mint and burn operations don't lock NFTs, so no unlock needed
+		return nil
+
+	default:
+		// Non-NFT operations don't need NFT unlock
+		return nil
+	}
 }
