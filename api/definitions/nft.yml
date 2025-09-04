@@ -7,23 +7,26 @@ info:
   version: 0.1.0
 paths: {}
 definitions:
-  # NFT属性
+  # NFT属性 - 支持灵活的属性结构
   NFTAttribute:
     type: object
+    description: "NFT属性支持多种数据类型和自定义结构"
     properties:
       trait_type:
         type: string
-        description: "Attribute type"
+        description: "属性类型/名称 (也支持 display_type)"
         example: "Background"
       value:
         type: string
-        description: "Attribute value"
+        description: "属性值 (支持字符串、数字、布尔值等多种类型)"
         example: "Galaxy"
       rarity_percentage:
         type: number
         format: float
-        description: "Rarity percentage"
+        description: "稀有度百分比 (也支持 rarity 字段名)"
         example: 2.5
+      # 注意：实际实现支持任意自定义字段
+    additionalProperties: true
 
   # NFT元数据
   NFTMetadata:
@@ -47,26 +50,26 @@ definitions:
         example: "https://example.com/token/1"
       attributes:
         type: array
+        description: "NFT属性数组 - 支持多种解析策略和数据格式"
         items:
-          type: object
-          properties:
-            trait_type:
-              type: string
-              description: "Attribute type"
-              example: "Background"
-            value:
-              type: string
-              description: "Attribute value"
-              example: "Galaxy"
-            rarity_percentage:
-              type: number
-              format: float
-              description: "Rarity percentage"
-              example: 2.5
+          anyOf:
+            - $ref: "#/definitions/NFTAttribute"
+            - type: object
+              description: "支持自定义属性结构"
+              additionalProperties: true
+        example:
+          - trait_type: "Background"
+            value: "Galaxy"
+            rarity_percentage: 2.5
+          - trait_type: "Level"
+            value: "10"
+          - trait_type: "Rarity"
+            value: "Legendary"
 
   # NFT标准元数据响应 (OpenSea兼容)
   NFTStandardMetadata:
     type: object
+    description: "OpenSea兼容的NFT元数据格式，同样支持灵活的属性处理"
     properties:
       name:
         type: string
@@ -86,22 +89,22 @@ definitions:
         example: "https://openseacreatures.io/3"
       attributes:
         type: array
+        description: "灵活的属性数组，支持多种数据格式和自定义结构"
         items:
-          type: object
-          properties:
-            trait_type:
-              type: string
-              description: "Attribute type"
-              example: "Background"
-            value:
-              type: string
-              description: "Attribute value"
-              example: "Galaxy"
-            rarity_percentage:
-              type: number
-              format: float
-              description: "Rarity percentage"
-              example: 2.5
+          anyOf:
+            - $ref: "#/definitions/NFTAttribute"
+            - type: object
+              description: "支持任意属性结构"
+              additionalProperties: true
+        example:
+          - trait_type: "Background"
+            value: "Galaxy"
+            rarity_percentage: 2.5
+          - trait_type: "Eyes"
+            value: "Big"
+          - display_type: "boost_number"
+            trait_type: "Aqua Power"
+            value: 40
 
   # NFT物品
   NFTItem:

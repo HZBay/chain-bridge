@@ -1012,16 +1012,13 @@ func (s *service) GetNFTAsset(ctx context.Context, collectionID, tokenID string)
 		CreatedAt:    nftAsset.CreatedAt.Time,
 	}
 
-	// Parse attributes JSON if available
+	// Parse attributes JSON if available with comprehensive handling
 	if nftAsset.Attributes.Valid && len(nftAsset.Attributes.JSON) > 0 {
-		var metadata NFTMetadata
-		if err := json.Unmarshal(nftAsset.Attributes.JSON, &metadata); err != nil {
-			log.Warn().Err(err).
-				Str("collection_id", collectionID).
-				Str("token_id", tokenID).
-				Msg("Failed to parse NFT attributes JSON")
-		} else {
-			result.Attributes = &metadata
+		attributes := s.parseNFTAttributes(tokenID, nftAsset.Attributes.JSON)
+		if len(attributes) > 0 {
+			result.Attributes = &NFTMetadata{
+				Attributes: attributes,
+			}
 		}
 	}
 
@@ -1084,17 +1081,13 @@ func (s *service) GetUserNFTAssets(ctx context.Context, userID string, chainID *
 			CreatedAt:    dbAsset.CreatedAt.Time,
 		}
 
-		// Parse attributes JSON if available
+		// Parse attributes JSON if available with comprehensive handling
 		if dbAsset.Attributes.Valid && len(dbAsset.Attributes.JSON) > 0 {
-			var metadata NFTMetadata
-			if err := json.Unmarshal(dbAsset.Attributes.JSON, &metadata); err != nil {
-				log.Warn().Err(err).
-					Str("user_id", userID).
-					Str("collection_id", dbAsset.CollectionID).
-					Str("token_id", dbAsset.TokenID).
-					Msg("Failed to parse NFT attributes JSON")
-			} else {
-				nftAsset.Attributes = &metadata
+			attributes := s.parseNFTAttributes(dbAsset.TokenID, dbAsset.Attributes.JSON)
+			if len(attributes) > 0 {
+				nftAsset.Attributes = &NFTMetadata{
+					Attributes: attributes,
+				}
 			}
 		}
 
@@ -1157,39 +1150,9 @@ func (s *service) GetNFTMetadataByTokenID(ctx context.Context, tokenID string) (
 		metadata.ExternalURL = nftAsset.MetadataURI.String
 	}
 
-	// Parse and add attributes if available
+	// Parse and add attributes if available with comprehensive error handling
 	if nftAsset.Attributes.Valid && len(nftAsset.Attributes.JSON) > 0 {
-		var attributesData map[string]interface{}
-		if err := json.Unmarshal(nftAsset.Attributes.JSON, &attributesData); err != nil {
-			log.Warn().Err(err).
-				Str("token_id", tokenID).
-				Msg("Failed to parse NFT attributes JSON")
-		} else {
-			// Try to extract attributes array if it exists
-			if attrs, ok := attributesData["attributes"].([]interface{}); ok {
-				for _, attr := range attrs {
-					if attrMap, ok := attr.(map[string]interface{}); ok {
-						nftAttr := NFTAttribute{}
-						if traitType, ok := attrMap["trait_type"].(string); ok {
-							nftAttr.TraitType = traitType
-						}
-						if value, ok := attrMap["value"].(string); ok {
-							nftAttr.Value = value
-						}
-						if rarity, ok := attrMap["rarity_percentage"].(float64); ok {
-							nftAttr.RarityPercentage = float32(rarity)
-						}
-						metadata.Attributes = append(metadata.Attributes, nftAttr)
-					}
-				}
-			} else {
-				// If attributes is not an array, try to use the whole JSON as attributes
-				// This handles cases where attributes might be stored differently
-				log.Debug().
-					Str("token_id", tokenID).
-					Msg("Attributes not in expected array format, using raw data")
-			}
-		}
+		metadata.Attributes = s.parseNFTAttributes(tokenID, nftAsset.Attributes.JSON)
 	}
 
 	// Set default values if fields are empty
@@ -1210,6 +1173,148 @@ func (s *service) GetNFTMetadataByTokenID(ctx context.Context, tokenID string) (
 	return metadata, nil
 }
 
+// parseNFTAttributes provides comprehensive NFT attributes parsing with multiple strategies
+func (s *service) parseNFTAttributes(tokenID string, attributesJSON []byte) []NFTAttribute {
+	var result []NFTAttribute
+
+	// Strategy 1: Try to parse as direct attributes array
+	var directAttributes []NFTAttribute
+	if err := json.Unmarshal(attributesJSON, &directAttributes); err == nil {
+		// Validate and filter valid attributes
+		for _, attr := range directAttributes {
+			if s.isValidAttribute(attr) {
+				result = append(result, attr)
+			}
+		}
+		if len(result) > 0 {
+			log.Debug().
+				Str("token_id", tokenID).
+				Int("attributes_count", len(result)).
+				Msg("Successfully parsed attributes as direct array")
+			return result
+		}
+	}
+
+	// Strategy 2: Try to parse as wrapped object with attributes field
+	var wrappedData map[string]interface{}
+	if err := json.Unmarshal(attributesJSON, &wrappedData); err != nil {
+		log.Warn().Err(err).
+			Str("token_id", tokenID).
+			Msg("Failed to parse attributes JSON - invalid format")
+		return result
+	}
+
+	// Try to extract attributes array from wrapped object
+	if attrs, ok := wrappedData["attributes"].([]interface{}); ok {
+		for _, attr := range attrs {
+			if attrMap, ok := attr.(map[string]interface{}); ok {
+				nftAttr := s.parseAttributeMap(attrMap)
+				if s.isValidAttribute(nftAttr) {
+					result = append(result, nftAttr)
+				}
+			}
+		}
+		if len(result) > 0 {
+			log.Debug().
+				Str("token_id", tokenID).
+				Int("attributes_count", len(result)).
+				Msg("Successfully parsed attributes from wrapped object")
+			return result
+		}
+	}
+
+	// Strategy 3: Try to parse top-level object as attribute mappings
+	for key, value := range wrappedData {
+		// Skip standard metadata fields
+		if key == "name" || key == "description" || key == "image" || key == "external_url" {
+			continue
+		}
+
+		// Convert other fields to attributes
+		nftAttr := NFTAttribute{
+			TraitType: key,
+			Value:     s.convertValueToString(value),
+		}
+
+		if s.isValidAttribute(nftAttr) {
+			result = append(result, nftAttr)
+		}
+	}
+
+	if len(result) > 0 {
+		log.Debug().
+			Str("token_id", tokenID).
+			Int("attributes_count", len(result)).
+			Msg("Successfully parsed attributes from top-level mappings")
+	} else {
+		log.Debug().
+			Str("token_id", tokenID).
+			Msg("No valid attributes found in any parsing strategy")
+	}
+
+	return result
+}
+
+// parseAttributeMap safely extracts NFT attribute from a map with type assertions
+func (s *service) parseAttributeMap(attrMap map[string]interface{}) NFTAttribute {
+	nftAttr := NFTAttribute{}
+
+	// Safe extraction of trait_type
+	if traitType, ok := attrMap["trait_type"].(string); ok {
+		nftAttr.TraitType = traitType
+	} else if displayType, ok := attrMap["display_type"].(string); ok {
+		// Support OpenSea display_type as fallback
+		nftAttr.TraitType = displayType
+	}
+
+	// Safe extraction of value with multiple type support
+	if value, ok := attrMap["value"].(string); ok {
+		nftAttr.Value = value
+	} else {
+		// Convert other types to string
+		nftAttr.Value = s.convertValueToString(attrMap["value"])
+	}
+
+	// Safe extraction of rarity percentage
+	if rarity, ok := attrMap["rarity_percentage"].(float64); ok {
+		nftAttr.RarityPercentage = float32(rarity)
+	} else if rarity, ok := attrMap["rarity"].(float64); ok {
+		// Support alternative rarity field name
+		nftAttr.RarityPercentage = float32(rarity)
+	}
+
+	return nftAttr
+}
+
+// convertValueToString safely converts interface{} values to string representation
+func (s *service) convertValueToString(value interface{}) string {
+	if value == nil {
+		return ""
+	}
+
+	switch v := value.(type) {
+	case string:
+		return v
+	case int, int32, int64:
+		return fmt.Sprintf("%d", v)
+	case float32, float64:
+		return fmt.Sprintf("%.2f", v)
+	case bool:
+		return fmt.Sprintf("%t", v)
+	default:
+		// For complex types, marshal to JSON
+		if jsonBytes, err := json.Marshal(v); err == nil {
+			return string(jsonBytes)
+		}
+		return fmt.Sprintf("%v", v)
+	}
+}
+
+// isValidAttribute checks if an NFT attribute has meaningful content
+func (s *service) isValidAttribute(attr NFTAttribute) bool {
+	return attr.TraitType != "" && attr.Value != ""
+}
+
 // Helper functions
 func generateBatchID() string {
 	return "nft_batch_" + uuid.New().String()[:8]
@@ -1219,26 +1324,60 @@ func generateTokenID() string {
 	return uuid.New().String()
 }
 
+// convertMetadataToJSON converts NFT metadata to JSON string with comprehensive error handling
 func convertMetadataToJSON(meta *NFTMetadata) string {
 	if meta == nil {
 		return "{}"
 	}
 
-	// Create a map for JSON marshaling
-	metaMap := map[string]interface{}{
-		"name":         meta.Name,
-		"description":  meta.Description,
-		"image":        meta.Image,
-		"external_url": meta.ExternalURL,
+	// Create a map for JSON marshaling - preserve all metadata structure
+	metaMap := map[string]interface{}{}
+	
+	// Add standard fields only if they have values
+	if meta.Name != "" {
+		metaMap["name"] = meta.Name
+	}
+	if meta.Description != "" {
+		metaMap["description"] = meta.Description
+	}
+	if meta.Image != "" {
+		metaMap["image"] = meta.Image
+	}
+	if meta.ExternalURL != "" {
+		metaMap["external_url"] = meta.ExternalURL
 	}
 
+	// Add attributes only if they exist and are valid
 	if len(meta.Attributes) > 0 {
-		metaMap["attributes"] = meta.Attributes
+		// Convert to interface{} slice for proper JSON marshaling
+		attributesList := make([]interface{}, 0, len(meta.Attributes))
+		for _, attr := range meta.Attributes {
+			attrMap := map[string]interface{}{}
+			if attr.TraitType != "" {
+				attrMap["trait_type"] = attr.TraitType
+			}
+			if attr.Value != "" {
+				attrMap["value"] = attr.Value
+			}
+			if attr.RarityPercentage > 0 {
+				attrMap["rarity_percentage"] = attr.RarityPercentage
+			}
+			// Only add attribute if it has meaningful content
+			if len(attrMap) > 0 {
+				attributesList = append(attributesList, attrMap)
+			}
+		}
+		if len(attributesList) > 0 {
+			metaMap["attributes"] = attributesList
+		}
 	}
 
+	// Fallback to empty JSON object on marshaling error
 	jsonData, err := json.Marshal(metaMap)
 	if err != nil {
-		log.Error().Err(err).Msg("Failed to marshal NFT metadata")
+		log.Error().Err(err).
+			Interface("metadata", meta).
+			Msg("Failed to marshal NFT metadata - using fallback")
 		return "{}"
 	}
 
