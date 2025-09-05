@@ -1939,25 +1939,54 @@ func (c *RabbitMQBatchConsumer) processNFTBatch(
 		Str("batch_type", batchType).
 		Msg("Processing NFT batch confirmation")
 
-	// Use TxConfirmationWatcher for NFT special handling
-	err := c.confirmationWatcher.ProcessSingleNFTBatch(
-		ctx,
-		batchID.String(),
-		result.TxHash,
-		group.ChainID,
-		batchType,
-	)
-	if err != nil {
-		return fmt.Errorf("NFT batch confirmation failed: %w", err)
+	// 1. Wait for blockchain confirmation using tool
+	caller, exists := c.cpopCallers[group.ChainID]
+	if !exists {
+		return fmt.Errorf("no caller found for chain %d", group.ChainID)
 	}
 
-	// Complete the batch after NFT processing
+	confirmed, confirmations, err := c.confirmationWatcher.WaitForConfirmation(
+		ctx, caller, result.TxHash, 6, 10*time.Minute,
+	)
+	if err != nil {
+		return fmt.Errorf("NFT confirmation failed: %w", err)
+	}
+
+	if !confirmed {
+		return fmt.Errorf("NFT transaction not confirmed within timeout")
+	}
+
+	log.Info().
+		Str("tx_hash", result.TxHash).
+		Int("confirmations", confirmations).
+		Msg("NFT transaction confirmed, processing NFT operations")
+
+	// 2. Update confirmation status in database
+	err = c.updateConfirmationStatus(ctx, result.TxHash, confirmations, result.BlockNumber)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("tx_hash", result.TxHash).
+			Msg("Failed to update confirmation status in database")
+		// Don't fail the batch for this, just log warning
+	}
+
+	// 3. Process NFT-specific finalization
+	err = c.finalizeNFTAssetsForBatch(ctx, batchID.String(), batchType, group.ChainID, result.TxHash)
+	if err != nil {
+		return fmt.Errorf("NFT finalization failed: %w", err)
+	}
+
+	// 4. Send NFT success notifications
+	c.sendNFTSuccessNotifications(ctx, batchID.String(), batchType, group.ChainID, result.TxHash)
+
+	// 5. Complete the batch after NFT processing
 	err = c.completeSuccessfulBatch(ctx, messages, group, batchID, result, processingTime)
 	if err != nil {
 		return fmt.Errorf("NFT batch completion failed: %w", err)
 	}
 
-	// ACK messages after successful completion
+	// 6. ACK messages after successful completion
 	c.ackAllMessages(messages)
 
 	log.Info().
@@ -2011,6 +2040,16 @@ func (c *RabbitMQBatchConsumer) processFTBatch(
 		Str("tx_hash", result.TxHash).
 		Int("confirmations", confirmations).
 		Msg("FT transaction confirmed, completing batch")
+
+	// Update confirmation status in database
+	err = c.updateConfirmationStatus(ctx, result.TxHash, confirmations, result.BlockNumber)
+	if err != nil {
+		log.Warn().
+			Err(err).
+			Str("tx_hash", result.TxHash).
+			Msg("Failed to update confirmation status in database")
+		// Don't fail the batch for this, just log warning
+	}
 
 	// Complete the batch with confirmed transaction
 	err = c.completeSuccessfulBatch(ctx, messages, group, batchID, result, processingTime)

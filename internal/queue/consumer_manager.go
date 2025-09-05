@@ -23,7 +23,7 @@ type ConsumerManager struct {
 	client              *RabbitMQClient
 	db                  *sql.DB
 	batchOptimizer      *BatchOptimizer
-	unifiedCallers      map[int64]*blockchain.BatchCaller // Changed from cpopCallers
+	callers             map[int64]*blockchain.BatchCaller // Changed from cpopCallers
 	confirmationWatcher *TxConfirmationWatcher
 	batchProcessor      BatchProcessor
 	config              config.Server
@@ -62,15 +62,16 @@ func NewConsumerManager(
 	config config.Server,
 ) *ConsumerManager {
 	return &ConsumerManager{
-		client:          client,
-		db:              db,
-		batchOptimizer:  optimizer,
-		batchProcessor:  batchProcessor,
-		consumers:       make(map[int64]*ChainBatchConsumer),
-		config:          config,
-		stopChan:        make(chan struct{}),
-		refreshInterval: 5 * time.Minute, // Check for new chains every 5 minutes
-		workersPerChain: 1,               // Default 3 workers per chain
+		client:              client,
+		db:                  db,
+		batchOptimizer:      optimizer,
+		batchProcessor:      batchProcessor,
+		consumers:           make(map[int64]*ChainBatchConsumer),
+		confirmationWatcher: NewTxConfirmationWatcher(),
+		config:              config,
+		stopChan:            make(chan struct{}),
+		refreshInterval:     5 * time.Minute, // Check for new chains every 5 minutes
+		workersPerChain:     1,               // Default 3 workers per chain
 	}
 }
 
@@ -169,7 +170,7 @@ func (cm *ConsumerManager) setupConsumersForEnabledChains(ctx context.Context) e
 	defer cm.consumersMutex.Unlock()
 
 	// Initialize unified callers map for blockchain interactions
-	cm.unifiedCallers = make(map[int64]*blockchain.BatchCaller)
+	cm.callers = make(map[int64]*blockchain.BatchCaller)
 
 	// Step 3: Process each enabled chain and create necessary components
 	successfulChains := 0
@@ -251,7 +252,7 @@ func (cm *ConsumerManager) setupConsumersForEnabledChains(ctx context.Context) e
 		}
 
 		// Step 3e: Store the caller for this chain
-		cm.unifiedCallers[chain.ChainID] = caller
+		cm.callers[chain.ChainID] = caller
 
 		// Step 3f: Create and start the consumer for this chain
 		if err := cm.createChainConsumer(ctx, chain); err != nil {
@@ -261,7 +262,7 @@ func (cm *ConsumerManager) setupConsumersForEnabledChains(ctx context.Context) e
 				Err(err).
 				Msg("Failed to create consumer for chain, skipping")
 			// Remove the caller since consumer creation failed
-			delete(cm.unifiedCallers, chain.ChainID)
+			delete(cm.callers, chain.ChainID)
 			continue
 		}
 
@@ -270,17 +271,6 @@ func (cm *ConsumerManager) setupConsumersForEnabledChains(ctx context.Context) e
 			Int64("chain_id", chain.ChainID).
 			Str("chain_name", chain.Name).
 			Msg("Successfully set up consumer for chain")
-	}
-
-	// Step 4: Initialize transaction confirmation watcher
-	// This monitors blockchain transactions for confirmations across all chains
-	if len(cm.unifiedCallers) > 0 {
-		cm.confirmationWatcher = NewTxConfirmationWatcher(cm.db, cm.unifiedCallers, cm.batchProcessor)
-		log.Info().
-			Int("monitored_chains", len(cm.unifiedCallers)).
-			Msg("NFT special handling watcher initialized")
-	} else {
-		log.Warn().Msg("No unified callers available, confirmation watcher not initialized")
 	}
 
 	// Step 5: Log setup summary
@@ -320,7 +310,7 @@ func (cm *ConsumerManager) createChainConsumer(ctx context.Context, chain *model
 		cm.client,
 		cm.db,
 		cm.batchOptimizer,
-		cm.unifiedCallers,
+		cm.callers,
 		cm.confirmationWatcher,
 		cm.batchProcessor,
 		chain.ChainID,

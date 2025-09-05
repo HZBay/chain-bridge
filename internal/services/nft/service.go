@@ -1344,7 +1344,6 @@ func generateBatchID() string {
 	return "nft_batch_" + uuid.New().String()[:8]
 }
 
-
 // convertMetadataToJSON converts NFT metadata to JSON string with comprehensive error handling
 func convertMetadataToJSON(meta *NFTMetadata) string {
 	if meta == nil {
