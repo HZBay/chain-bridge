@@ -354,11 +354,19 @@ func (cm *ConsumerManager) generateQueueNamesForChain(chainID int64, tokens []*m
 	// Job types that need queues per chain/token
 	jobTypes := []JobType{JobTypeTransfer, JobTypeAssetAdjust}
 
+	// Add queues for token-based operations
 	for _, jobType := range jobTypes {
 		for _, token := range tokens {
 			queueName := cm.client.GetQueueName(jobType, chainID, token.ID)
 			queueNames = append(queueNames, queueName)
 		}
+	}
+
+	// Add queues for NFT operations (these don't need token iteration)
+	nftJobTypes := []JobType{JobTypeNFTMint, JobTypeNFTBurn, JobTypeNFTTransfer}
+	for _, jobType := range nftJobTypes {
+		queueName := cm.client.GetQueueName(jobType, chainID, 0) // Use token_id 0 for NFT queues
+		queueNames = append(queueNames, queueName)
 	}
 
 	// Note: Notification queues are not consumed by this service

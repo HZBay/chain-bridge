@@ -347,6 +347,25 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 	}()
 
 	for _, mintOp := range request.MintOperations {
+		// 检查用户是否有 AA 钱包
+		var aaAddress string
+		err := tx.QueryRowContext(ctx, `
+			SELECT aa_address 
+			FROM user_accounts 
+			WHERE user_id = $1 AND chain_id = $2
+			LIMIT 1
+		`, mintOp.ToUserID, request.ChainID).Scan(&aaAddress)
+
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return nil, nil, NFTError{
+					Type:    ErrorTypeValidation,
+					Message: fmt.Sprintf("User %s does not have an AA wallet on chain %d", mintOp.ToUserID, request.ChainID),
+				}
+			}
+			return nil, nil, fmt.Errorf("failed to check user AA wallet: %w", err)
+		}
+
 		// Create transaction record - token_id will be set to -1 until minting is complete
 		transactionID := uuid.New()
 
@@ -390,13 +409,13 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 		}
 
 		// Insert transaction record with both operation_id and individual_operation_id for tracking
-		_, err := tx.ExecContext(ctx, `
+		_, err = tx.ExecContext(ctx, `
 			INSERT INTO transactions (
-				tx_id, operation_id, individual_operation_id, user_id, chain_id, tx_type, business_type, status, amount, 
+				tx_id, operation_id, individual_operation_id, user_id, chain_id, tx_type, business_type, status, amount, token_id,
 				collection_id, nft_token_id, nft_metadata, reason_type, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
 		`, transactionID, mainOperationID.String(), mintJob.IndividualOperationID, mintOp.ToUserID, request.ChainID, "nft_mint", mintOp.BusinessType, "pending",
-			"1", request.CollectionID, "-1", convertMetadataToJSON(mintOp.Meta), mintOp.ReasonType)
+			"1", 1, request.CollectionID, "-1", convertMetadataToJSON(mintOp.Meta), mintOp.ReasonType)
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create transaction record: %w", err)
@@ -592,11 +611,11 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 		transactionID := uuid.New()
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO transactions (
-				tx_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount,
+				tx_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount, token_id,
 				collection_id, nft_token_id, reason_type, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
 		`, transactionID, mainOperationID.String(), burnOp.OwnerUserID, request.ChainID, "nft_burn", "consumption", "pending",
-			"1", request.CollectionID, burnOp.TokenID, "nft_burn")
+			"1", 1, request.CollectionID, burnOp.TokenID, "nft_burn")
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create transaction record: %w", err)
@@ -831,7 +850,7 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 				token_id, collection_id, nft_token_id, related_user_id, reason_type, reason_detail, created_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
 		`, transactionID, mainOperationID.String(), transferOp.FromUserID, request.ChainID, "transfer", "transfer", "pending",
-			"1", 0, request.CollectionID, transferOp.TokenID, transferOp.ToUserID, "nft_transfer", "NFT transfer operation")
+			"1", 1, request.CollectionID, transferOp.TokenID, transferOp.ToUserID, "nft_transfer", "NFT transfer operation")
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create transaction record: %w", err)

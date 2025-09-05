@@ -500,8 +500,8 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 			INSERT INTO transactions (
 				tx_id, operation_id, user_id, chain_id, tx_type, business_type,
 				collection_id, nft_token_id, status, batch_id, is_batch_operation,
-				reason_type, reason_detail, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+				reason_type, reason_detail, created_at, amount, individual_operation_id
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 			ON CONFLICT (tx_id) DO UPDATE SET
 				status = 'batching',
 				batch_id = EXCLUDED.batch_id,
@@ -510,7 +510,8 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 		args = []interface{}{
 			j.TransactionID, j.GetOperationID(), j.ToUserID, j.ChainID, "nft_mint", j.BusinessType,
 			j.CollectionID, j.TokenID, "batching", batchID, true,
-			j.ReasonType, j.ReasonDetail, j.CreatedAt,
+			j.ReasonType, j.ReasonDetail, j.CreatedAt, "1", // 设置 amount 为 "1"
+			j.IndividualOperationID, // 添加 individual_operation_id
 		}
 
 	case NFTBurnJob:
@@ -518,8 +519,8 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 			INSERT INTO transactions (
 				tx_id, operation_id, user_id, chain_id, tx_type, business_type,
 				collection_id, nft_token_id, status, batch_id, is_batch_operation,
-				reason_type, reason_detail, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
+				reason_type, reason_detail, created_at, amount, individual_operation_id
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 			ON CONFLICT (tx_id) DO UPDATE SET
 				status = 'batching',
 				batch_id = EXCLUDED.batch_id,
@@ -528,7 +529,8 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 		args = []interface{}{
 			j.TransactionID, j.GetOperationID(), j.OwnerUserID, j.ChainID, "nft_burn", j.BusinessType,
 			j.CollectionID, j.TokenID, "batching", batchID, true,
-			j.ReasonType, j.ReasonDetail, j.CreatedAt,
+			j.ReasonType, j.ReasonDetail, j.CreatedAt, "1", // 设置 amount 为 "1"
+			j.IndividualOperationID, // 添加 individual_operation_id
 		}
 
 	case NFTTransferJob:
@@ -536,8 +538,8 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 			INSERT INTO transactions (
 				tx_id, operation_id, user_id, chain_id, tx_type, business_type,
 				related_user_id, collection_id, nft_token_id, status, batch_id, is_batch_operation,
-				reason_type, reason_detail, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+				reason_type, reason_detail, created_at, amount, individual_operation_id
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 			ON CONFLICT (tx_id) DO UPDATE SET
 				status = 'batching',
 				batch_id = EXCLUDED.batch_id,
@@ -546,7 +548,8 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 		args = []interface{}{
 			j.TransactionID, j.GetOperationID(), j.FromUserID, j.ChainID, "nft_transfer", j.BusinessType,
 			j.ToUserID, j.CollectionID, j.TokenID, "batching", batchID, true,
-			j.ReasonType, j.ReasonDetail, j.CreatedAt,
+			j.ReasonType, j.ReasonDetail, j.CreatedAt, "1", // 设置 amount 为 "1"
+			j.IndividualOperationID, // 添加 individual_operation_id
 		}
 
 	default:
@@ -1431,10 +1434,16 @@ func (c *RabbitMQBatchConsumer) createPreparingBatchRecord(tx *sql.Tx, batchID u
 			optimal_batch_size, status, created_at
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`
 
+	// 如果 token_id 为 0，则设置为 1
+	tokenID := firstJob.GetTokenID()
+	if tokenID == 0 {
+		tokenID = 1
+	}
+
 	_, err := tx.Exec(query,
 		batchID.String(),
 		firstJob.GetChainID(),
-		firstJob.GetTokenID(),
+		tokenID,
 		batchType,
 		len(messages),
 		len(messages), // For now, use actual batch size as optimal
@@ -1460,6 +1469,10 @@ func (c *RabbitMQBatchConsumer) freezeUserBalance(tx *sql.Tx, job BatchJob) erro
 
 	case TransferJob:
 		return c.freezeBalanceForTransfer(tx, j)
+
+	case NFTMintJob, NFTBurnJob, NFTTransferJob:
+		// NFT operations don't need to freeze balance
+		return nil
 
 	default:
 		return fmt.Errorf("unsupported job type for balance freezing: %T", job)
@@ -1566,6 +1579,10 @@ func (c *RabbitMQBatchConsumer) unfreezeUserBalance(tx *sql.Tx, job BatchJob) er
 
 	case TransferJob:
 		return c.unfreezeBalanceForTransfer(tx, j)
+
+	case NFTMintJob, NFTBurnJob, NFTTransferJob:
+		// NFT operations don't need to unfreeze balance
+		return nil
 
 	default:
 		return fmt.Errorf("unsupported job type for balance unfreezing: %T", job)

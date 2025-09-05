@@ -30,6 +30,7 @@ import (
 
 	// Import postgres driver for database/sql package
 	_ "github.com/lib/pq"
+	"github.com/volatiletech/sqlboiler/v4/boil"
 )
 
 type Router struct {
@@ -158,12 +159,12 @@ func (s *Server) InitCmd() *Server {
 		log.Fatal().Err(err).Msg("Failed to initialize tokens service")
 	}
 
-	if err := s.InitNFTService(); err != nil {
-		log.Fatal().Err(err).Msg("Failed to initialize NFT service")
-	}
-
 	if err := s.InitBatchProcessor(); err != nil {
 		log.Fatal().Err(err).Msg("Failed to initialize batch processor")
+	}
+
+	if err := s.InitNFTService(); err != nil {
+		log.Fatal().Err(err).Msg("Failed to initialize NFT service")
 	}
 
 	if err := s.InitAccountService(); err != nil {
@@ -375,6 +376,8 @@ func (s *Server) Start() error {
 		return errors.New("server is not ready")
 	}
 
+	// Enable SQL debug logging
+	boil.DebugMode = true
 	// Start payment event service if enabled
 	if s.PaymentEventService != nil && s.Config.RabbitMQ.Enabled {
 		ctx := context.Background()

@@ -48,6 +48,7 @@ func New() *cobra.Command {
 }
 
 func runServer(flags Flags) {
+
 	err := command.WithServer(context.Background(), config.DefaultServiceConfigFromEnv(), func(ctx context.Context, s *api.Server) error {
 		log := util.LogFromContext(ctx)
 

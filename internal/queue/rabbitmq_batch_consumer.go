@@ -53,13 +53,14 @@ type NotificationProcessor interface {
 
 // BatchOperation represents an operation within a batch
 type BatchOperation struct {
-	TxID          string          `db:"tx_id"`
-	OperationID   sql.NullString  `db:"operation_id"`
-	UserID        string          `db:"user_id"`
-	RelatedUserID sql.NullString  `db:"related_user_id"`
-	TxType        string          `db:"tx_type"`
-	Amount        decimal.Decimal `db:"amount"`
-	Direction     sql.NullString  `db:"transfer_direction"`
+	TxID                  string          `db:"tx_id"`
+	OperationID           sql.NullString  `db:"operation_id"`
+	IndividualOperationID sql.NullString  `db:"individual_operation_id"`
+	UserID                string          `db:"user_id"`
+	RelatedUserID         sql.NullString  `db:"related_user_id"`
+	TxType                string          `db:"tx_type"`
+	Amount                decimal.Decimal `db:"amount"`
+	Direction             sql.NullString  `db:"transfer_direction"`
 	// NFT-specific fields
 	CollectionID sql.NullString `db:"collection_id"`
 	NFTTokenID   sql.NullString `db:"nft_token_id"`
@@ -742,11 +743,9 @@ func (c *RabbitMQBatchConsumer) processChainAggregatedMessages(ctx context.Conte
 				Int("batch_size", len(messages)).
 				Msg("Processing chain batch")
 
-			// Process the batch
-			go func(batchGroup BatchGroup, batchMessages []*MessageWrapper) {
-				c.processBatch(ctx, batchMessages, batchGroup)
-				c.processedCount += int64(len(batchMessages))
-			}(group, messages)
+			// Process the batch synchronously
+			c.processBatch(ctx, messages, group)
+			c.processedCount += int64(len(messages))
 
 			// Clear processed messages
 			delete(c.pendingMessages, group)
@@ -1095,7 +1094,7 @@ func (c *RabbitMQBatchConsumer) handleBatchFailureDuringShutdown(ctx context.Con
 func (c *RabbitMQBatchConsumer) getBatchOperations(ctx context.Context, batchID string) ([]BatchOperation, error) {
 	query := `
 		SELECT 
-			tx_id, operation_id, user_id, related_user_id, tx_type, 
+			tx_id, operation_id, individual_operation_id, user_id, related_user_id, tx_type, 
 			amount, transfer_direction, collection_id, nft_token_id
 		FROM transactions 
 		WHERE batch_id = $1 
@@ -1113,6 +1112,7 @@ func (c *RabbitMQBatchConsumer) getBatchOperations(ctx context.Context, batchID 
 		err := rows.Scan(
 			&op.TxID,
 			&op.OperationID,
+			&op.IndividualOperationID,
 			&op.UserID,
 			&op.RelatedUserID,
 			&op.TxType,
@@ -1237,9 +1237,9 @@ func (c *RabbitMQBatchConsumer) finalizeNFTForMint(tx *sql.Tx, op BatchOperation
 			is_minted = true,
 			is_locked = false,
 			updated_at = $3
-		WHERE collection_id = $1 AND owner_user_id = $2 AND operation_id = $4 AND token_id = '-1'`
+		WHERE collection_id = $1 AND owner_user_id = $2 AND individual_operation_id = $4 AND token_id = '-1'`
 
-	_, err := tx.Exec(query, op.CollectionID.String, op.UserID, time.Now(), op.OperationID.String)
+	_, err := tx.Exec(query, op.CollectionID.String, op.UserID, time.Now(), op.IndividualOperationID.String)
 	if err != nil {
 		return fmt.Errorf("failed to finalize NFT mint: %w", err)
 	}
@@ -1555,15 +1555,15 @@ func (c *RabbitMQBatchConsumer) updateNFTTokenIDDirect(ctx context.Context, oper
 			Msg("No NFT assets found to update token ID")
 	}
 
-	// Update transactions table using both operation_id and individual_operation_id
+	// Update transactions table using individual_operation_id
 	txQuery := `
 		UPDATE transactions 
 		SET 
 			nft_token_id = $1,
 			updated_at = $2
-		WHERE operation_id = $3 AND individual_operation_id = $4 AND collection_id = $5 AND nft_token_id = '-1'`
+		WHERE individual_operation_id = $3 AND collection_id = $4 AND nft_token_id = '-1'`
 
-	result, err = tx.ExecContext(ctx, txQuery, actualTokenID, time.Now(), operationID, individualOperationID, collectionID)
+	result, err = tx.ExecContext(ctx, txQuery, actualTokenID, time.Now(), individualOperationID, collectionID)
 	if err != nil {
 		return fmt.Errorf("failed to update NFT token ID in transactions: %w", err)
 	}

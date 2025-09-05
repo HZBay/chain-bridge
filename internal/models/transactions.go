@@ -307,8 +307,8 @@ type transactionL struct{}
 
 var (
 	transactionAllColumns            = []string{"id", "tx_id", "operation_id", "user_id", "chain_id", "tx_type", "business_type", "related_user_id", "transfer_direction", "token_id", "amount", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_type", "reason_detail", "metadata", "created_at", "confirmed_at", "failure_reason", "updated_at", "collection_id", "nft_token_id", "nft_metadata", "individual_operation_id"}
-	transactionColumnsWithoutDefault = []string{"tx_id", "user_id", "chain_id", "tx_type", "business_type", "amount", "reason_type", "individual_operation_id"}
-	transactionColumnsWithDefault    = []string{"id", "operation_id", "related_user_id", "transfer_direction", "token_id", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_detail", "metadata", "created_at", "confirmed_at", "failure_reason", "updated_at", "collection_id", "nft_token_id", "nft_metadata"}
+	transactionColumnsWithoutDefault = []string{"tx_id", "user_id", "chain_id", "tx_type", "business_type", "amount", "reason_type"}
+	transactionColumnsWithDefault    = []string{"id", "operation_id", "related_user_id", "transfer_direction", "token_id", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_detail", "metadata", "created_at", "confirmed_at", "failure_reason", "updated_at", "collection_id", "nft_token_id", "nft_metadata", "individual_operation_id"}
 	transactionPrimaryKeyColumns     = []string{"id"}
 	transactionGeneratedColumns      = []string{}
 )

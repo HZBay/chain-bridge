@@ -215,8 +215,8 @@ type nftAssetL struct{}
 
 var (
 	nftAssetAllColumns            = []string{"id", "collection_id", "token_id", "owner_user_id", "chain_id", "metadata_uri", "name", "description", "image_url", "attributes", "is_burned", "is_minted", "is_locked", "created_at", "updated_at", "operation_id", "individual_operation_id"}
-	nftAssetColumnsWithoutDefault = []string{"collection_id", "token_id", "owner_user_id", "chain_id", "individual_operation_id"}
-	nftAssetColumnsWithDefault    = []string{"id", "metadata_uri", "name", "description", "image_url", "attributes", "is_burned", "is_minted", "is_locked", "created_at", "updated_at", "operation_id"}
+	nftAssetColumnsWithoutDefault = []string{"collection_id", "token_id", "owner_user_id", "chain_id"}
+	nftAssetColumnsWithDefault    = []string{"id", "metadata_uri", "name", "description", "image_url", "attributes", "is_burned", "is_minted", "is_locked", "created_at", "updated_at", "operation_id", "individual_operation_id"}
 	nftAssetPrimaryKeyColumns     = []string{"id"}
 	nftAssetGeneratedColumns      = []string{}
 )
