@@ -349,17 +349,14 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 	for _, mintOp := range request.MintOperations {
 		// Create transaction record - token_id will be set to -1 until minting is complete
 		transactionID := uuid.New()
-		// Each mint operation gets its own unique operation_id for tracking
-		individualOperationID := uuid.New()
-
-		// Insert transaction record with individual operation_id for proper tracking
+		// Insert transaction record with main operation_id for proper tracking
 		_, err := tx.ExecContext(ctx, `
 			INSERT INTO transactions (
-				transaction_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount, 
-				collection_id, nft_token_id, nft_metadata, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
-		`, transactionID, individualOperationID.String(), mintOp.ToUserID, request.ChainID, "nft_mint", mintOp.BusinessType, "pending",
-			"1", request.CollectionID, "-1", convertMetadataToJSON(mintOp.Meta))
+				tx_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount, 
+				collection_id, nft_token_id, nft_metadata, reason_type, created_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+		`, transactionID, mainOperationID.String(), mintOp.ToUserID, request.ChainID, "nft_mint", mintOp.BusinessType, "pending",
+			"1", request.CollectionID, "-1", convertMetadataToJSON(mintOp.Meta), mintOp.ReasonType)
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create transaction record: %w", err)
@@ -372,7 +369,7 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 				metadata_uri, name, description, image_url, attributes,
 				is_burned, is_minted, is_locked, created_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
-		`, request.CollectionID, "-1", mintOp.ToUserID, request.ChainID, individualOperationID.String(),
+		`, request.CollectionID, "-1", mintOp.ToUserID, request.ChainID, uuid.New().String(),
 			"", // metadata_uri will be set after token_id is known
 			mintOp.Meta.Name, mintOp.Meta.Description, mintOp.Meta.Image,
 			convertMetadataToJSON(mintOp.Meta), false, false, false)
@@ -396,8 +393,8 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 			Priority:      queue.PriorityNormal,
 			CreatedAt:     time.Now(),
 			// Store both batch operation_id and individual operation_id for mapping
-			BatchOperationID:      mainOperationID.String(),       // Batch-level tracking
-			IndividualOperationID: individualOperationID.String(), // Individual operation tracking
+			BatchOperationID:      mainOperationID.String(), // Batch-level tracking
+			IndividualOperationID: uuid.New().String(),      // Individual operation tracking
 		}
 
 		if mintOp.ReasonDetail != nil {
@@ -590,16 +587,15 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 			}
 		}
 
-		// Create transaction record with individual operation_id for proper tracking
+		// Create transaction record with main operation_id for proper tracking
 		transactionID := uuid.New()
-		individualOperationID := uuid.New()
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO transactions (
-				transaction_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount,
-				collection_id, nft_token_id, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW())
-		`, transactionID, individualOperationID.String(), burnOp.OwnerUserID, request.ChainID, "nft_burn", "consumption", "pending",
-			"1", request.CollectionID, burnOp.TokenID)
+				tx_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount,
+				collection_id, nft_token_id, reason_type, created_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
+		`, transactionID, mainOperationID.String(), burnOp.OwnerUserID, request.ChainID, "nft_burn", "consumption", "pending",
+			"1", request.CollectionID, burnOp.TokenID, "nft_burn")
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create transaction record: %w", err)
@@ -630,8 +626,8 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 			Priority:      queue.PriorityNormal,
 			CreatedAt:     time.Now(),
 			// Store both batch operation_id and individual operation_id for mapping
-			BatchOperationID:      mainOperationID.String(),       // Batch-level tracking
-			IndividualOperationID: individualOperationID.String(), // Individual operation tracking
+			BatchOperationID:      mainOperationID.String(), // Batch-level tracking
+			IndividualOperationID: uuid.New().String(),      // Individual operation tracking
 		}
 
 		// Queue the job for batch processing
@@ -826,16 +822,15 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 			}
 		}
 
-		// Create transaction record with individual operation_id for proper tracking
+		// Create transaction record with main operation_id for proper tracking
 		transactionID := uuid.New()
-		individualOperationID := uuid.New()
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO transactions (
-				transaction_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount,
-				collection_id, nft_token_id, related_user_id, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, NOW())
-		`, transactionID, individualOperationID.String(), transferOp.FromUserID, request.ChainID, "nft_transfer", "transfer", "pending",
-			"1", request.CollectionID, transferOp.TokenID, transferOp.ToUserID)
+				tx_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount,
+				token_id, collection_id, nft_token_id, related_user_id, reason_type, reason_detail, created_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
+		`, transactionID, mainOperationID.String(), transferOp.FromUserID, request.ChainID, "transfer", "transfer", "pending",
+			"1", 0, request.CollectionID, transferOp.TokenID, transferOp.ToUserID, "nft_transfer", "NFT transfer operation")
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create transaction record: %w", err)
@@ -867,8 +862,8 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 			Priority:      queue.PriorityNormal,
 			CreatedAt:     time.Now(),
 			// Store both batch operation_id and individual operation_id for mapping
-			BatchOperationID:      mainOperationID.String(),       // Batch-level tracking
-			IndividualOperationID: individualOperationID.String(), // Individual operation tracking
+			BatchOperationID:      mainOperationID.String(), // Batch-level tracking
+			IndividualOperationID: uuid.New().String(),      // Individual operation tracking
 		}
 
 		// Queue the job for batch processing
@@ -1485,14 +1480,17 @@ func (s *service) sendTransactionFailedNotification(ctx context.Context, tx *mod
 		notificationData["business_type"] = tx.BusinessType
 	}
 
+	// Add user_id to notification data
+	notificationData["user_id"] = tx.UserID
+
 	notification := queue.NotificationJob{
-		ID:        uuid.New().String(),
-		JobType:   queue.JobTypeNotification,
-		UserID:    tx.UserID,
-		EventType: "transaction_status_changed", // Keep this for routing purposes
-		Data:      notificationData,
-		Priority:  queue.PriorityHigh, // High priority for failure notifications
-		CreatedAt: time.Now(),
+		ID:          uuid.New().String(),
+		JobType:     queue.JobTypeNotification,
+		OperationID: uuid.MustParse(tx.OperationID.String),
+		EventType:   "transaction_status_changed", // Keep this for routing purposes
+		Data:        notificationData,
+		Priority:    queue.PriorityHigh, // High priority for failure notifications
+		CreatedAt:   time.Now(),
 	}
 
 	if err := s.batchProcessor.PublishNotification(ctx, notification); err != nil {
@@ -1505,14 +1503,21 @@ func (s *service) sendTransactionFailedNotification(ctx context.Context, tx *mod
 
 	// For transfers, also send notification to the recipient if different from sender
 	if tx.TXType == "nft_transfer" && tx.RelatedUserID.Valid && tx.RelatedUserID.String != tx.UserID {
+		// Create separate notification data for recipient
+		recipientData := make(map[string]interface{})
+		for k, v := range notificationData {
+			recipientData[k] = v
+		}
+		recipientData["user_id"] = tx.RelatedUserID.String
+
 		recipientNotification := queue.NotificationJob{
-			ID:        uuid.New().String(),
-			JobType:   queue.JobTypeNotification,
-			UserID:    tx.RelatedUserID.String,
-			EventType: "transaction_status_changed",
-			Data:      notificationData,
-			Priority:  queue.PriorityHigh,
-			CreatedAt: time.Now(),
+			ID:          uuid.New().String(),
+			JobType:     queue.JobTypeNotification,
+			OperationID: uuid.MustParse(tx.OperationID.String),
+			EventType:   "transaction_status_changed",
+			Data:        recipientData,
+			Priority:    queue.PriorityHigh,
+			CreatedAt:   time.Now(),
 		}
 
 		if err := s.batchProcessor.PublishNotification(ctx, recipientNotification); err != nil {

@@ -384,14 +384,17 @@ func (c *RabbitMQBatchConsumer) sendInsufficientBalanceNotification(ctx context.
 		return
 	}
 
+	// Add user_id to notification data
+	notificationData["user_id"] = userID
+
 	notification := NotificationJob{
-		ID:        uuid.New().String(),
-		JobType:   JobTypeNotification,
-		UserID:    userID,
-		EventType: "insufficient_balance",
-		Data:      notificationData,
-		Priority:  PriorityHigh, // High priority for balance issues
-		CreatedAt: time.Now(),
+		ID:          uuid.New().String(),
+		JobType:     JobTypeNotification,
+		OperationID: job.GetOperationID(),
+		EventType:   "insufficient_balance",
+		Data:        notificationData,
+		Priority:    PriorityHigh, // High priority for balance issues
+		CreatedAt:   time.Now(),
 	}
 
 	if err := c.batchProcessor.PublishNotification(ctx, notification); err != nil {
@@ -468,7 +471,7 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 
 		amount, _ := decimal.NewFromString(j.Amount)
 		args = []interface{}{
-			j.TransactionID, uuid.New(), j.UserID, j.ChainID, j.AdjustmentType, j.BusinessType,
+			j.TransactionID, j.GetOperationID(), j.UserID, j.ChainID, j.AdjustmentType, j.BusinessType,
 			j.TokenID, amount, "batching", batchID, true,
 			j.ReasonType, j.ReasonDetail, j.CreatedAt,
 		}
@@ -487,7 +490,7 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 
 		amount, _ := decimal.NewFromString(j.Amount)
 		args = []interface{}{
-			j.TransactionID, uuid.New(), j.FromUserID, j.ChainID, "transfer", j.BusinessType,
+			j.TransactionID, j.GetOperationID(), j.FromUserID, j.ChainID, "transfer", j.BusinessType,
 			j.ToUserID, "outgoing", j.TokenID, amount, "batching",
 			batchID, true, j.ReasonType, j.ReasonDetail, j.CreatedAt,
 		}
@@ -505,7 +508,7 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 				is_batch_operation = TRUE`
 
 		args = []interface{}{
-			j.TransactionID, uuid.New(), j.ToUserID, j.ChainID, "nft_mint", j.BusinessType,
+			j.TransactionID, j.GetOperationID(), j.ToUserID, j.ChainID, "nft_mint", j.BusinessType,
 			j.CollectionID, j.TokenID, "batching", batchID, true,
 			j.ReasonType, j.ReasonDetail, j.CreatedAt,
 		}
@@ -523,7 +526,7 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 				is_batch_operation = TRUE`
 
 		args = []interface{}{
-			j.TransactionID, uuid.New(), j.OwnerUserID, j.ChainID, "nft_burn", j.BusinessType,
+			j.TransactionID, j.GetOperationID(), j.OwnerUserID, j.ChainID, "nft_burn", j.BusinessType,
 			j.CollectionID, j.TokenID, "batching", batchID, true,
 			j.ReasonType, j.ReasonDetail, j.CreatedAt,
 		}
@@ -541,7 +544,7 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 				is_batch_operation = TRUE`
 
 		args = []interface{}{
-			j.TransactionID, uuid.New(), j.FromUserID, j.ChainID, "nft_transfer", j.BusinessType,
+			j.TransactionID, j.GetOperationID(), j.FromUserID, j.ChainID, "nft_transfer", j.BusinessType,
 			j.ToUserID, j.CollectionID, j.TokenID, "batching", batchID, true,
 			j.ReasonType, j.ReasonDetail, j.CreatedAt,
 		}
@@ -1691,43 +1694,139 @@ func (c *RabbitMQBatchConsumer) sendBalanceChangeNotification(job BatchJob) {
 	}
 }
 
+// getUserBalance gets the current confirmed balance for a user
+func (c *RabbitMQBatchConsumer) getUserBalance(ctx context.Context, userID string, chainID int64, tokenID int) (string, error) {
+	query := `
+		SELECT COALESCE(confirmed_balance, 0) as balance
+		FROM user_balances 
+		WHERE user_id = $1 AND chain_id = $2 AND token_id = $3`
+
+	var balance string
+	err := c.db.QueryRowContext(ctx, query, userID, chainID, tokenID).Scan(&balance)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "0", nil // Return 0 if no balance record exists
+		}
+		return "0", err
+	}
+	return balance, nil
+}
+
+// getTransactionOldStatus gets the old status of a transaction before status change
+func (c *RabbitMQBatchConsumer) getTransactionOldStatus(ctx context.Context, txID uuid.UUID) (string, error) {
+	query := `SELECT status FROM transactions WHERE tx_id = $1`
+
+	var oldStatus string
+	err := c.db.QueryRowContext(ctx, query, txID).Scan(&oldStatus)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "pending", nil // Default to pending if no record exists
+		}
+		return "pending", err
+	}
+	return oldStatus, nil
+}
+
+// getBatchOldStatus gets the old status of a batch before status change
+func (c *RabbitMQBatchConsumer) getBatchOldStatus(ctx context.Context, batchID uuid.UUID) (string, error) {
+	query := `SELECT status FROM batches WHERE batch_id = $1`
+
+	var oldStatus string
+	err := c.db.QueryRowContext(ctx, query, batchID).Scan(&oldStatus)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return "preparing", nil // Default to preparing if no record exists
+		}
+		return "preparing", err
+	}
+	return oldStatus, nil
+}
+
 // sendTransferNotifications sends balance change notifications for both sender and receiver
 func (c *RabbitMQBatchConsumer) sendTransferNotifications(ctx context.Context, job TransferJob) {
+	// Get sender's current balance (this is the new balance after transfer)
+	senderNewBalance, err := c.getUserBalance(ctx, job.FromUserID, job.ChainID, job.TokenID)
+	if err != nil {
+		log.Warn().Err(err).
+			Str("user_id", job.FromUserID).
+			Int64("chain_id", job.ChainID).
+			Int("token_id", job.TokenID).
+			Msg("Failed to get sender balance for notification")
+		senderNewBalance = "0" // Fallback to 0
+	}
+
+	// Calculate sender's old balance (new balance + transfer amount)
+	senderOldBalance := "0"
+	if amount, err := decimal.NewFromString(job.Amount); err == nil {
+		if newBal, err := decimal.NewFromString(senderNewBalance); err == nil {
+			senderOldBalance = newBal.Add(amount).String()
+		}
+	}
+
 	// Sender notification (debit)
 	senderNotification := NotificationJob{
-		ID:        uuid.New().String(),
-		JobType:   JobTypeNotification,
-		UserID:    job.FromUserID,
-		EventType: "balance_changed",
+		ID:          uuid.New().String(),
+		JobType:     JobTypeNotification,
+		OperationID: job.GetOperationID(),
+		EventType:   "balance_changed",
 		Data: map[string]interface{}{
-			"type":          "debit",
-			"amount":        job.Amount,
-			"chain_id":      job.ChainID,
-			"token_id":      job.TokenID,
-			"business_type": job.BusinessType,
-			"reason_type":   job.ReasonType,
-			"reason_detail": job.ReasonDetail,
-			"to_user_id":    job.ToUserID,
+			"type":             "balance_changed",
+			"user_id":          job.FromUserID,
+			"chain_id":         job.ChainID,
+			"operation_id":     job.ID, // Use job ID as operation ID
+			"old_balance":      senderOldBalance,
+			"new_balance":      senderNewBalance,
+			"change_amount":    "-" + job.Amount, // Negative for debit
+			"timestamp":        time.Now().Unix(),
+			"transaction_type": "transfer_debit",
+			"to_user_id":       job.ToUserID,
+			"business_type":    job.BusinessType,
+			"reason_type":      job.ReasonType,
+			"reason_detail":    job.ReasonDetail,
 		},
 		Priority:  PriorityNormal,
 		CreatedAt: time.Now(),
 	}
 
+	// Get receiver's current balance (this is the new balance after transfer)
+	receiverNewBalance, err := c.getUserBalance(ctx, job.ToUserID, job.ChainID, job.TokenID)
+	if err != nil {
+		log.Warn().Err(err).
+			Str("user_id", job.ToUserID).
+			Int64("chain_id", job.ChainID).
+			Int("token_id", job.TokenID).
+			Msg("Failed to get receiver balance for notification")
+		receiverNewBalance = "0" // Fallback to 0
+	}
+
+	// Calculate receiver's old balance (new balance - transfer amount)
+	receiverOldBalance := "0"
+	if amount, err := decimal.NewFromString(job.Amount); err == nil {
+		if newBal, err := decimal.NewFromString(receiverNewBalance); err == nil {
+			receiverOldBalance = newBal.Sub(amount).String()
+		}
+	}
+
 	// Receiver notification (credit)
 	receiverNotification := NotificationJob{
-		ID:        uuid.New().String(),
-		JobType:   JobTypeNotification,
-		UserID:    job.ToUserID,
-		EventType: "balance_changed",
+		ID:          uuid.New().String(),
+		JobType:     JobTypeNotification,
+		OperationID: job.GetOperationID(),
+		EventType:   "balance_changed",
 		Data: map[string]interface{}{
-			"type":          "credit",
-			"amount":        job.Amount,
-			"chain_id":      job.ChainID,
-			"token_id":      job.TokenID,
-			"business_type": job.BusinessType,
-			"reason_type":   job.ReasonType,
-			"reason_detail": job.ReasonDetail,
-			"from_user_id":  job.FromUserID,
+			"type":             "balance_changed",
+			"user_id":          job.ToUserID,
+			"chain_id":         job.ChainID,
+			"operation_id":     job.ID, // Use job ID as operation ID
+			"old_balance":      receiverOldBalance,
+			"new_balance":      receiverNewBalance,
+			"change_amount":    "+" + job.Amount, // Positive for credit
+			"timestamp":        time.Now().Unix(),
+			"transaction_type": "transfer_credit",
+			"from_user_id":     job.FromUserID,
+			"business_type":    job.BusinessType,
+			"reason_type":      job.ReasonType,
+			"reason_detail":    job.ReasonDetail,
 		},
 		Priority:  PriorityNormal,
 		CreatedAt: time.Now(),
@@ -1751,20 +1850,57 @@ func (c *RabbitMQBatchConsumer) sendTransferNotifications(ctx context.Context, j
 
 // sendAssetAdjustNotification sends notification for asset adjustment (mint/burn)
 func (c *RabbitMQBatchConsumer) sendAssetAdjustNotification(ctx context.Context, job AssetAdjustJob) {
+	// Get user's current balance (this is the new balance after adjustment)
+	newBalance, err := c.getUserBalance(ctx, job.UserID, job.ChainID, job.TokenID)
+	if err != nil {
+		log.Warn().Err(err).
+			Str("user_id", job.UserID).
+			Int64("chain_id", job.ChainID).
+			Int("token_id", job.TokenID).
+			Msg("Failed to get user balance for notification")
+		newBalance = "0" // Fallback to 0
+	}
+
+	// Calculate old balance based on adjustment type
+	oldBalance := "0"
+	if amount, err := decimal.NewFromString(job.Amount); err == nil {
+		if newBal, err := decimal.NewFromString(newBalance); err == nil {
+			if job.AdjustmentType == "mint" {
+				// For mint: old_balance = new_balance - mint_amount
+				oldBalance = newBal.Sub(amount).String()
+			} else if job.AdjustmentType == "burn" {
+				// For burn: old_balance = new_balance + burn_amount
+				oldBalance = newBal.Add(amount).String()
+			}
+		}
+	}
+
+	// Determine change amount sign based on adjustment type
+	changeAmount := job.Amount
+	if job.AdjustmentType == "burn" {
+		changeAmount = "-" + job.Amount
+	} else if job.AdjustmentType == "mint" {
+		changeAmount = "+" + job.Amount
+	}
+
 	notification := NotificationJob{
-		ID:        uuid.New().String(),
-		JobType:   JobTypeNotification,
-		UserID:    job.UserID,
-		EventType: "balance_changed",
+		ID:          uuid.New().String(),
+		JobType:     JobTypeNotification,
+		OperationID: job.GetOperationID(),
+		EventType:   "balance_changed",
 		Data: map[string]interface{}{
-			"type":            job.AdjustmentType, // "mint" or "burn"
-			"amount":          job.Amount,
-			"chain_id":        job.ChainID,
-			"token_id":        job.TokenID,
-			"business_type":   job.BusinessType,
-			"reason_type":     job.ReasonType,
-			"reason_detail":   job.ReasonDetail,
-			"adjustment_type": job.AdjustmentType,
+			"type":             "balance_changed",
+			"user_id":          job.UserID,
+			"chain_id":         job.ChainID,
+			"operation_id":     job.ID, // Use job ID as operation ID
+			"old_balance":      oldBalance,
+			"new_balance":      newBalance,
+			"change_amount":    changeAmount,
+			"timestamp":        time.Now().Unix(),
+			"transaction_type": job.AdjustmentType, // "mint" or "burn"
+			"business_type":    job.BusinessType,
+			"reason_type":      job.ReasonType,
+			"reason_detail":    job.ReasonDetail,
 		},
 		Priority:  PriorityNormal,
 		CreatedAt: time.Now(),
@@ -1785,15 +1921,27 @@ func (c *RabbitMQBatchConsumer) sendTransactionStatusNotification(ctx context.Co
 		return // No notification processor available, skip silently
 	}
 
+	// Get the actual old status from database
+	oldStatus, err := c.getTransactionOldStatus(ctx, txID)
+	if err != nil {
+		log.Warn().Err(err).
+			Str("tx_id", txID.String()).
+			Msg("Failed to get transaction old status, using default")
+		oldStatus = "pending" // Fallback to default
+	}
+
 	notification := NotificationJob{
-		ID:        uuid.New().String(),
-		JobType:   JobTypeNotification,
-		UserID:    userID,
-		EventType: "transaction_status_changed",
+		ID:          uuid.New().String(),
+		JobType:     JobTypeNotification,
+		OperationID: job.GetOperationID(),
+		EventType:   "transaction_status_changed",
 		Data: map[string]interface{}{
+			"type":           "transaction_status_changed",
+			"user_id":        userID,
 			"transaction_id": txID.String(),
-			"status":         status,
-			"timestamp":      time.Now().Format(time.RFC3339),
+			"old_status":     oldStatus,
+			"new_status":     status,
+			"timestamp":      time.Now().Unix(),
 		},
 		Priority:  PriorityNormal,
 		CreatedAt: time.Now(),
@@ -1837,14 +1985,17 @@ func (c *RabbitMQBatchConsumer) sendTransactionStatusNotifications(transactionNo
 			continue
 		}
 
+		// Add user_id to transaction data
+		txData["user_id"] = userID
+
 		notification := NotificationJob{
-			ID:        uuid.New().String(),
-			JobType:   JobTypeNotification,
-			UserID:    userID,
-			EventType: "transaction_status_changed",
-			Data:      txData,
-			Priority:  PriorityNormal,
-			CreatedAt: time.Now(),
+			ID:          uuid.New().String(),
+			JobType:     JobTypeNotification,
+			OperationID: job.GetOperationID(),
+			EventType:   "transaction_status_changed",
+			Data:        txData,
+			Priority:    PriorityNormal,
+			CreatedAt:   time.Now(),
 		}
 
 		if err := c.batchProcessor.PublishNotification(ctx, notification); err != nil {
@@ -1856,14 +2007,21 @@ func (c *RabbitMQBatchConsumer) sendTransactionStatusNotifications(transactionNo
 
 		// For transfers, also send notification to the recipient
 		if toUID, ok := txData["to_user_id"].(string); ok && toUID != "" && toUID != userID {
+			// Create separate notification data for recipient
+			recipientData := make(map[string]interface{})
+			for k, v := range txData {
+				recipientData[k] = v
+			}
+			recipientData["user_id"] = toUID
+
 			recipientNotification := NotificationJob{
-				ID:        uuid.New().String(),
-				JobType:   JobTypeNotification,
-				UserID:    toUID,
-				EventType: "transaction_status_changed",
-				Data:      txData,
-				Priority:  PriorityNormal,
-				CreatedAt: time.Now(),
+				ID:          uuid.New().String(),
+				JobType:     JobTypeNotification,
+				OperationID: job.GetOperationID(),
+				EventType:   "transaction_status_changed",
+				Data:        recipientData,
+				Priority:    PriorityNormal,
+				CreatedAt:   time.Now(),
 			}
 
 			if err := c.batchProcessor.PublishNotification(ctx, recipientNotification); err != nil {
@@ -1882,15 +2040,27 @@ func (c *RabbitMQBatchConsumer) sendBatchStatusNotification(ctx context.Context,
 		return // No notification processor available, skip silently
 	}
 
+	// Get the actual old status from database
+	oldStatus, err := c.getBatchOldStatus(ctx, batchID)
+	if err != nil {
+		log.Warn().Err(err).
+			Str("batch_id", batchID.String()).
+			Msg("Failed to get batch old status, using default")
+		oldStatus = "preparing" // Fallback to default
+	}
+
 	notification := NotificationJob{
-		ID:        uuid.New().String(),
-		JobType:   JobTypeNotification,
-		EventType: "batch_status_changed",
+		ID:          uuid.New().String(),
+		JobType:     JobTypeNotification,
+		OperationID: uuid.New(), // Batch status changes don't have an operation_id
+		EventType:   "batch_status_changed",
 		Data: map[string]interface{}{
-			"batch_id":  batchID.String(),
-			"status":    status,
-			"chain_id":  c.chainID,
-			"timestamp": time.Now().Format(time.RFC3339),
+			"type":       "batch_status_changed",
+			"batch_id":   batchID.String(),
+			"old_status": oldStatus,
+			"new_status": status,
+			"chain_id":   c.chainID,
+			"timestamp":  time.Now().Unix(), // Use Unix timestamp for consistency
 		},
 		Priority:  PriorityLow, // Batch status changes are lower priority
 		CreatedAt: time.Now(),

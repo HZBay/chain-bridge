@@ -62,18 +62,29 @@ func (r *RabbitMQProcessor) PublishAssetAdjust(ctx context.Context, job AssetAdj
 	return r.client.PublishMessage(ctx, queueName, job)
 }
 
-// PublishNotification publishes a notification job to the appropriate chain-specific queue
+// PublishNotification publishes a notification in final user format (data content only)
 func (r *RabbitMQProcessor) PublishNotification(ctx context.Context, job NotificationJob) error {
 	queueName := r.client.GetQueueName(job.GetJobType(), job.GetChainID(), job.GetTokenID())
 
 	log.Debug().
 		Str("queue", queueName).
 		Str("job_id", job.GetID()).
-		Int64("chain_id", job.GetChainID()).
-		Int("token_id", job.GetTokenID()).
-		Msg("Publishing notification job to chain-specific queue")
+		Str("event_type", job.EventType).
+		Interface("notification_data", job.Data).
+		Msg("Publishing notification in final user format (data content only)")
 
-	return r.client.PublishMessage(ctx, queueName, job)
+	// Set type if not present
+	if _, exists := job.Data["type"]; !exists {
+		job.Data["type"] = job.EventType
+	}
+
+	// Set operation_id if not present
+	if _, exists := job.Data["operation_id"]; !exists {
+		job.Data["operation_id"] = job.OperationID.String()
+	}
+
+	// Publish only the data content (final user receiving format)
+	return r.client.PublishMessage(ctx, queueName, job.Data)
 }
 
 // PublishHealthCheck publishes a health check job to the appropriate queue

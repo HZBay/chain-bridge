@@ -215,6 +215,7 @@ func (s *service) AdjustAssets(ctx context.Context, req *types.AssetAdjustReques
 			ID:             txID.String(),
 			JobType:        queue.JobTypeAssetAdjust,
 			TransactionID:  txID,
+			OperationID:    mainOperationID,
 			ChainID:        *adjustment.ChainID,
 			TokenID:        tokenID, // Use validated token ID
 			UserID:         *adjustment.UserID,
@@ -820,14 +821,17 @@ func (s *service) sendTransactionFailedNotification(ctx context.Context, tx *mod
 		notificationData["amount"] = tx.Amount.Big.String()
 	}
 
+	// Add user_id to notification data
+	notificationData["user_id"] = tx.UserID
+
 	notification := queue.NotificationJob{
-		ID:        uuid.New().String(),
-		JobType:   queue.JobTypeNotification,
-		UserID:    tx.UserID,
-		EventType: "transaction_status_changed", // Keep this for routing purposes
-		Data:      notificationData,
-		Priority:  queue.PriorityHigh, // High priority for failure notifications
-		CreatedAt: time.Now(),
+		ID:          uuid.New().String(),
+		JobType:     queue.JobTypeNotification,
+		OperationID: uuid.MustParse(tx.OperationID.String),
+		EventType:   "transaction_status_changed", // Keep this for routing purposes
+		Data:        notificationData,
+		Priority:    queue.PriorityHigh, // High priority for failure notifications
+		CreatedAt:   time.Now(),
 	}
 
 	if err := s.batchProcessor.PublishNotification(ctx, notification); err != nil {

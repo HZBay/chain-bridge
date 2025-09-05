@@ -15,6 +15,7 @@ type BatchJob interface {
 	GetJobType() JobType
 	GetPriority() Priority
 	GetCreatedAt() time.Time
+	GetOperationID() uuid.UUID
 }
 
 // JobType defines the type of batch job
@@ -45,6 +46,7 @@ type TransferJob struct {
 	ID            string    `json:"id"`
 	JobType       JobType   `json:"job_type"`
 	TransactionID uuid.UUID `json:"transaction_id"`
+	OperationID   uuid.UUID `json:"operation_id"`
 	ChainID       int64     `json:"chain_id"`
 	TokenID       int       `json:"token_id"`
 	FromUserID    string    `json:"from_user_id"`
@@ -57,18 +59,20 @@ type TransferJob struct {
 	CreatedAt     time.Time `json:"created_at"`
 }
 
-func (t TransferJob) GetID() string           { return t.ID }
-func (t TransferJob) GetChainID() int64       { return t.ChainID }
-func (t TransferJob) GetTokenID() int         { return t.TokenID }
-func (t TransferJob) GetJobType() JobType     { return t.JobType }
-func (t TransferJob) GetPriority() Priority   { return t.Priority }
-func (t TransferJob) GetCreatedAt() time.Time { return t.CreatedAt }
+func (t TransferJob) GetID() string             { return t.ID }
+func (t TransferJob) GetChainID() int64         { return t.ChainID }
+func (t TransferJob) GetTokenID() int           { return t.TokenID }
+func (t TransferJob) GetJobType() JobType       { return t.JobType }
+func (t TransferJob) GetPriority() Priority     { return t.Priority }
+func (t TransferJob) GetCreatedAt() time.Time   { return t.CreatedAt }
+func (t TransferJob) GetOperationID() uuid.UUID { return t.OperationID }
 
 // AssetAdjustJob represents an asset adjustment operation (mint/burn)
 type AssetAdjustJob struct {
 	ID             string    `json:"id"`
 	JobType        JobType   `json:"job_type"`
 	TransactionID  uuid.UUID `json:"transaction_id"`
+	OperationID    uuid.UUID `json:"operation_id"`
 	ChainID        int64     `json:"chain_id"`
 	TokenID        int       `json:"token_id"`
 	UserID         string    `json:"user_id"`
@@ -81,35 +85,38 @@ type AssetAdjustJob struct {
 	CreatedAt      time.Time `json:"created_at"`
 }
 
-func (a AssetAdjustJob) GetID() string           { return a.ID }
-func (a AssetAdjustJob) GetChainID() int64       { return a.ChainID }
-func (a AssetAdjustJob) GetTokenID() int         { return a.TokenID }
-func (a AssetAdjustJob) GetJobType() JobType     { return a.JobType }
-func (a AssetAdjustJob) GetPriority() Priority   { return a.Priority }
-func (a AssetAdjustJob) GetCreatedAt() time.Time { return a.CreatedAt }
+func (a AssetAdjustJob) GetID() string             { return a.ID }
+func (a AssetAdjustJob) GetChainID() int64         { return a.ChainID }
+func (a AssetAdjustJob) GetTokenID() int           { return a.TokenID }
+func (a AssetAdjustJob) GetJobType() JobType       { return a.JobType }
+func (a AssetAdjustJob) GetPriority() Priority     { return a.Priority }
+func (a AssetAdjustJob) GetCreatedAt() time.Time   { return a.CreatedAt }
+func (a AssetAdjustJob) GetOperationID() uuid.UUID { return a.OperationID }
 
 // NotificationJob represents a notification to be sent
 type NotificationJob struct {
-	ID        string                 `json:"id"`
-	JobType   JobType                `json:"job_type"`
-	UserID    string                 `json:"user_id,omitempty"`
-	EventType string                 `json:"event_type"`
-	Data      map[string]interface{} `json:"data"`
-	Priority  Priority               `json:"priority"`
-	CreatedAt time.Time              `json:"created_at"`
+	ID          string                 `json:"id"`
+	JobType     JobType                `json:"job_type"`
+	OperationID uuid.UUID              `json:"operation_id"`
+	EventType   string                 `json:"event_type"`
+	Data        map[string]interface{} `json:"data"`
+	Priority    Priority               `json:"priority"`
+	CreatedAt   time.Time              `json:"created_at"`
 }
 
-func (n NotificationJob) GetID() string           { return n.ID }
-func (n NotificationJob) GetChainID() int64       { return 0 } // Notifications are not chain-specific
-func (n NotificationJob) GetTokenID() int         { return 0 } // Notifications are not token-specific
-func (n NotificationJob) GetJobType() JobType     { return n.JobType }
-func (n NotificationJob) GetPriority() Priority   { return n.Priority }
-func (n NotificationJob) GetCreatedAt() time.Time { return n.CreatedAt }
+func (n NotificationJob) GetID() string             { return n.ID }
+func (n NotificationJob) GetChainID() int64         { return 0 } // Notifications are not chain-specific for batching
+func (n NotificationJob) GetTokenID() int           { return 0 } // Notifications are not token-specific for batching
+func (n NotificationJob) GetJobType() JobType       { return n.JobType }
+func (n NotificationJob) GetPriority() Priority     { return n.Priority }
+func (n NotificationJob) GetCreatedAt() time.Time   { return n.CreatedAt }
+func (n NotificationJob) GetOperationID() uuid.UUID { return n.OperationID }
 
 // HealthCheckJob represents a health check operation for queue monitoring
 type HealthCheckJob struct {
 	ID           string    `json:"id"`
 	JobType      JobType   `json:"job_type"`
+	OperationID  uuid.UUID `json:"operation_id"`
 	ChainID      int64     `json:"chain_id"`
 	TokenID      int       `json:"token_id"`
 	FromUserID   string    `json:"from_user_id"`
@@ -121,12 +128,13 @@ type HealthCheckJob struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
-func (h HealthCheckJob) GetID() string           { return h.ID }
-func (h HealthCheckJob) GetChainID() int64       { return h.ChainID }
-func (h HealthCheckJob) GetTokenID() int         { return h.TokenID }
-func (h HealthCheckJob) GetJobType() JobType     { return h.JobType }
-func (h HealthCheckJob) GetPriority() Priority   { return h.Priority }
-func (h HealthCheckJob) GetCreatedAt() time.Time { return h.CreatedAt }
+func (h HealthCheckJob) GetID() string             { return h.ID }
+func (h HealthCheckJob) GetChainID() int64         { return h.ChainID }
+func (h HealthCheckJob) GetTokenID() int           { return h.TokenID }
+func (h HealthCheckJob) GetJobType() JobType       { return h.JobType }
+func (h HealthCheckJob) GetPriority() Priority     { return h.Priority }
+func (h HealthCheckJob) GetCreatedAt() time.Time   { return h.CreatedAt }
+func (h HealthCheckJob) GetOperationID() uuid.UUID { return h.OperationID }
 
 // NFTMintJob represents an NFT mint operation to be batched
 type NFTMintJob struct {
@@ -155,6 +163,12 @@ func (n NFTMintJob) GetTokenID() int         { return 0 } // NFT operations don'
 func (n NFTMintJob) GetJobType() JobType     { return n.JobType }
 func (n NFTMintJob) GetPriority() Priority   { return n.Priority }
 func (n NFTMintJob) GetCreatedAt() time.Time { return n.CreatedAt }
+func (n NFTMintJob) GetOperationID() uuid.UUID {
+	if id, err := uuid.Parse(n.BatchOperationID); err == nil {
+		return id
+	}
+	return uuid.Nil // Return nil UUID if BatchOperationID is invalid or empty
+}
 
 // NFTBurnJob represents an NFT burn operation to be batched
 type NFTBurnJob struct {
@@ -182,6 +196,12 @@ func (n NFTBurnJob) GetTokenID() int         { return 0 } // NFT operations don'
 func (n NFTBurnJob) GetJobType() JobType     { return n.JobType }
 func (n NFTBurnJob) GetPriority() Priority   { return n.Priority }
 func (n NFTBurnJob) GetCreatedAt() time.Time { return n.CreatedAt }
+func (n NFTBurnJob) GetOperationID() uuid.UUID {
+	if id, err := uuid.Parse(n.BatchOperationID); err == nil {
+		return id
+	}
+	return uuid.Nil // Return nil UUID if BatchOperationID is invalid or empty
+}
 
 // NFTTransferJob represents an NFT transfer operation to be batched
 type NFTTransferJob struct {
@@ -210,6 +230,12 @@ func (n NFTTransferJob) GetTokenID() int         { return 0 } // NFT operations 
 func (n NFTTransferJob) GetJobType() JobType     { return n.JobType }
 func (n NFTTransferJob) GetPriority() Priority   { return n.Priority }
 func (n NFTTransferJob) GetCreatedAt() time.Time { return n.CreatedAt }
+func (n NFTTransferJob) GetOperationID() uuid.UUID {
+	if id, err := uuid.Parse(n.BatchOperationID); err == nil {
+		return id
+	}
+	return uuid.Nil // Return nil UUID if BatchOperationID is invalid or empty
+}
 
 // Stats provides statistics about queue performance
 type Stats struct {

@@ -791,6 +791,7 @@ func (s *service) BatchTransferAssets(ctx context.Context, req *types.TransferRe
 			ID:            uuid.New().String(),
 			JobType:       queue.JobTypeTransfer,
 			TransactionID: uuid.MustParse(allTransactions[validIdx*2].TXID), // Use outgoing transaction ID
+			OperationID:   mainOperationID,
 			ChainID:       *transfer.ChainID,
 			TokenID:       tokenID,
 			FromUserID:    *transfer.FromUserID,
@@ -958,6 +959,17 @@ func (s *service) sendTransactionStatusNotification(ctx context.Context, txID uu
 		return // No notification processor available, skip silently
 	}
 
+	// Get transaction record to get operation_id
+	tx, err := models.Transactions(
+		models.TransactionWhere.TXID.EQ(txID.String()),
+	).One(ctx, s.db)
+	if err != nil {
+		log.Error().Err(err).
+			Str("tx_id", txID.String()).
+			Msg("Failed to get transaction for notification")
+		return
+	}
+
 	// Build notification data following the established patterns from the notification guide
 	notificationData := map[string]interface{}{
 		"type":           "transaction_status_changed",
@@ -995,14 +1007,23 @@ func (s *service) sendTransactionStatusNotification(ctx context.Context, txID uu
 		notificationData["requested_amount"] = requestedAmount
 	}
 
+	// Add user_id to notification data
+	notificationData["user_id"] = userID
+
+	// Get operation_id from transaction record
+	var operationID uuid.UUID
+	if tx.OperationID.Valid {
+		operationID = uuid.MustParse(tx.OperationID.String)
+	}
+
 	notification := queue.NotificationJob{
-		ID:        uuid.New().String(),
-		JobType:   queue.JobTypeNotification,
-		UserID:    userID,
-		EventType: "transaction_status_changed", // Keep this for routing purposes
-		Data:      notificationData,
-		Priority:  queue.PriorityHigh, // Use high priority for failure notifications
-		CreatedAt: time.Now(),
+		ID:          uuid.New().String(),
+		JobType:     queue.JobTypeNotification,
+		OperationID: operationID,
+		EventType:   "transaction_status_changed", // Keep this for routing purposes
+		Data:        notificationData,
+		Priority:    queue.PriorityHigh, // Use high priority for failure notifications
+		CreatedAt:   time.Now(),
 	}
 
 	if err := s.batchProcessor.PublishNotification(ctx, notification); err != nil {

@@ -116,7 +116,42 @@ NFT通知系统是对现有通知基础设施的扩展，专门处理NFT相关�
 - **非阻塞设计**: 通知失败不影响交易确认
 - **架构一致性**: 复用现有通知基础设施
 
-### 3.2 支持的NFT通知类型
+### 3.2 通知消息格式说明
+
+**重要**: 从 v1.0.0 开始，系统采用了标准化的通知消息格式。
+
+#### **内部消息结构**
+系统内部使用的完整 `NotificationJob` 结构：
+```json
+{
+  "id": "unique-notification-id",
+  "job_type": "notification", 
+  "event_type": "notification_type_name",
+  "data": {
+    // 实际的通知数据内容（符合文档定义的格式）
+    "type": "notification_type_name",
+    // ... 其他业务字段
+  },
+  "priority": "normal|high|low",
+  "created_at": "2024-01-01T00:00:00Z"
+}
+```
+
+#### **最终用户接收格式**
+用户/消费者实际处理的通知内容（即 `data` 字段的内容）：
+```json
+{
+  "type": "notification_type_name",
+  // ... 业务相关字段（完全符合文档定义）
+}
+```
+
+#### **设计说明**
+- **`data` 字段包含完整的业务数据**：所有文档中定义的字段都在 `data` 中
+- **扁平化的业务数据**：`data` 内的结构完全符合原有文档定义
+- **向后兼容**：消费者只需处理 `data` 字段内容，与之前的格式保持一致
+
+### 3.3 支持的NFT通知类型
 
 NFT系统支持完整的操作成功通知：
 
@@ -124,6 +159,29 @@ NFT系统支持完整的操作成功通知：
 **发送对象**: NFT接收者（铸造者）
 **触发时机**: NFT铸造操作获得区块链确认后
 
+**内部消息格式**:
+```json
+{
+  "id": "nft-mint-550e8400-12345",
+  "job_type": "notification",
+  "event_type": "nft_mint_success",
+  "data": {
+    "type": "nft_mint_success",
+    "user_id": "user123",
+    "operation_id": "550e8400-e29b-41d4-a716-446655440001",
+    "chain_id": 1,
+    "collection_id": "cpop_genesis",
+    "nft_token_id": "1001",
+    "transaction_hash": "0xabcdef...",
+    "timestamp": 1703123456,
+    "status": "confirmed"
+  },
+  "priority": "normal",
+  "created_at": "2024-01-01T00:00:00Z"
+}
+```
+
+**最终用户接收格式** (data 字段内容):
 ```json
 {
   "type": "nft_mint_success",
@@ -132,7 +190,7 @@ NFT系统支持完整的操作成功通知：
   "chain_id": 1,
   "collection_id": "cpop_genesis",
   "nft_token_id": "1001",
-  "tx_hash": "0xabcdef...",
+  "transaction_hash": "0xabcdef...",
   "timestamp": 1703123456,
   "status": "confirmed"
 }
@@ -142,6 +200,29 @@ NFT系统支持完整的操作成功通知：
 **发送对象**: NFT拥有者（销毁者）
 **触发时机**: NFT销毁操作获得区块链确认后
 
+**内部消息格式**:
+```json
+{
+  "id": "nft-burn-550e8400-12346",
+  "job_type": "notification",
+  "event_type": "nft_burn_success",
+  "data": {
+    "type": "nft_burn_success",
+    "user_id": "user456",
+    "operation_id": "550e8400-e29b-41d4-a716-446655440002",
+    "chain_id": 1,
+    "collection_id": "cpop_genesis",
+    "nft_token_id": "1002",
+    "transaction_hash": "0xdef123...",
+    "timestamp": 1703123556,
+    "status": "confirmed"
+  },
+  "priority": "normal",
+  "created_at": "2024-01-01T00:00:00Z"
+}
+```
+
+**最终用户接收格式** (data 字段内容):
 ```json
 {
   "type": "nft_burn_success",
@@ -150,7 +231,7 @@ NFT系统支持完整的操作成功通知：
   "chain_id": 1,
   "collection_id": "cpop_genesis",
   "nft_token_id": "1002",
-  "tx_hash": "0xdef123...",
+  "transaction_hash": "0xdef123...",
   "timestamp": 1703123556,
   "status": "confirmed"
 }
@@ -160,6 +241,30 @@ NFT系统支持完整的操作成功通知：
 **发送对象**: NFT发送者
 **触发时机**: NFT转账操作获得区块链确认后
 
+**内部消息格式**:
+```json
+{
+  "id": "nft-transfer-550e8400-12347",
+  "job_type": "notification",
+  "event_type": "nft_transfer_success",
+  "data": {
+    "type": "nft_transfer_success",
+    "user_id": "user789",
+    "operation_id": "550e8400-e29b-41d4-a716-446655440003",
+    "chain_id": 1,
+    "collection_id": "cpop_genesis",
+    "nft_token_id": "1003",
+    "to_user_id": "user101",
+    "transaction_hash": "0x123abc...",
+    "timestamp": 1703123656,
+    "status": "confirmed"
+  },
+  "priority": "normal",
+  "created_at": "2024-01-01T00:00:00Z"
+}
+```
+
+**最终用户接收格式** (data 字段内容):
 ```json
 {
   "type": "nft_transfer_success",
@@ -169,7 +274,7 @@ NFT系统支持完整的操作成功通知：
   "collection_id": "cpop_genesis",
   "nft_token_id": "1003",
   "to_user_id": "user101",
-  "tx_hash": "0x123abc...",
+  "transaction_hash": "0x123abc...",
   "timestamp": 1703123656,
   "status": "confirmed"
 }
@@ -348,11 +453,36 @@ WHERE collection_id = $1 AND token_id = $2
 ## 4. 传统支付和转账通知
 
 #### 余额变化通知
+**内部消息格式**:
+```json
+{
+  "id": "balance-550e8400-12350",
+  "job_type": "notification",
+  "event_type": "balance_changed",
+  "data": {
+    "type": "balance_changed",
+    "user_id": "user123",
+    "chain_id": 1,
+    "operation_id": "550e8400-e29b-41d4-a716-446655440001",
+    "token_address": "0xA0b86a33E6776d02b1a65828fe28C6dCE13d8f8e",
+    "old_balance": "1000000000000000000",
+    "new_balance": "2000000000000000000",
+    "change_amount": "1000000000000000000",
+    "timestamp": 1703123456,
+    "transaction_hash": "0xabcdef..."
+  },
+  "priority": "normal",
+  "created_at": "2024-01-01T00:00:00Z"
+}
+```
+
+**最终用户接收格式** (data 字段内容):
 ```json
 {
   "type": "balance_changed",
   "user_id": "user123",
   "chain_id": 1,
+  "operation_id": "550e8400-e29b-41d4-a716-446655440001",
   "token_address": "0xA0b86a33E6776d02b1a65828fe28C6dCE13d8f8e",
   "old_balance": "1000000000000000000",
   "new_balance": "2000000000000000000",
@@ -367,6 +497,7 @@ WHERE collection_id = $1 AND token_id = $2
 {
   "type": "transaction_status_changed",
   "transaction_id": "tx_12345",
+  "operation_id": "550e8400-e29b-41d4-a716-446655440001",
   "user_id": "user123",
   "old_status": "pending",
   "new_status": "confirmed",
@@ -379,6 +510,29 @@ WHERE collection_id = $1 AND token_id = $2
 ```
 
 #### 批处理状态变化通知
+**内部消息格式**:
+```json
+{
+  "id": "batch-status-67890-12348",
+  "job_type": "notification",
+  "event_type": "batch_status_changed",
+  "data": {
+    "type": "batch_status_changed",
+    "batch_id": "batch_67890",
+    "old_status": "processing",
+    "new_status": "confirmed",
+    "chain_id": 1,
+    "operation_count": 25,
+    "gas_saved_usd": "12.50",
+    "timestamp": 1703123456,
+    "transaction_hash": "0xabcdef..."
+  },
+  "priority": "low",
+  "created_at": "2024-01-01T00:00:00Z"
+}
+```
+
+**最终用户接收格式** (data 字段内容):
 ```json
 {
   "type": "batch_status_changed",

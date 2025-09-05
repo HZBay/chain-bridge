@@ -17,15 +17,15 @@ import (
 
 // PaymentEventMessage represents a payment event message for RabbitMQ
 type PaymentEventMessage struct {
-	EventType   string `json:"event_type"`   // "payment_made"
-	ChainID     int64  `json:"chain_id"`     // 链ID
-	OrderID     string `json:"order_id"`     // 订单ID
-	Payer       string `json:"payer"`        // 付款人地址
-	Token       string `json:"token"`        // 代币合约地址
-	Amount      string `json:"amount"`       // 支付金额
-	Timestamp   int64  `json:"timestamp"`    // 支付时间戳
-	BlockNumber uint64 `json:"block_number"` // 区块高度
-	TxHash      string `json:"tx_hash"`      // 交易哈希
+	EventType       string `json:"type"`             // "payment_made"
+	ChainID         int64  `json:"chain_id"`         // 链ID
+	OrderID         string `json:"order_id"`         // 订单ID
+	Payer           string `json:"payer"`            // 付款人地址
+	Token           string `json:"token"`            // 代币合约地址
+	Amount          string `json:"amount"`           // 支付金额
+	Timestamp       int64  `json:"timestamp"`        // 支付时间戳
+	BlockNumber     uint64 `json:"block_number"`     // 区块高度
+	TransactionHash string `json:"transaction_hash"` // 交易哈希
 }
 
 // PaymentListenerConfig contains configuration for payment event listener
@@ -411,15 +411,15 @@ func (l *PaymentEventListener) processEvents(ctx context.Context) {
 func (l *PaymentEventListener) processPaymentEvent(ctx context.Context, event *cpop.PaymentPaymentMade) error {
 	// Create payment event message
 	message := &PaymentEventMessage{
-		EventType:   "payment_made",
-		ChainID:     l.config.ChainID,
-		OrderID:     event.OrderId.String(),
-		Payer:       event.Payer.Hex(),
-		Token:       event.Token.Hex(),
-		Amount:      event.Amount.String(),
-		Timestamp:   event.Timestamp.Int64(),
-		BlockNumber: event.Raw.BlockNumber,
-		TxHash:      event.Raw.TxHash.Hex(),
+		EventType:       "payment_made",
+		ChainID:         l.config.ChainID,
+		OrderID:         event.OrderId.String(),
+		Payer:           event.Payer.Hex(),
+		Token:           event.Token.Hex(),
+		Amount:          event.Amount.String(),
+		Timestamp:       event.Timestamp.Int64(),
+		BlockNumber:     event.Raw.BlockNumber,
+		TransactionHash: event.Raw.TxHash.Hex(),
 	}
 
 	// Generate queue name based on chain ID
@@ -436,7 +436,7 @@ func (l *PaymentEventListener) processPaymentEvent(ctx context.Context, event *c
 		Str("payer", message.Payer).
 		Str("token", message.Token).
 		Str("amount", message.Amount).
-		Str("tx_hash", message.TxHash).
+		Str("tx_hash", message.TransactionHash).
 		Uint64("block_number", message.BlockNumber).
 		Msg("Payment event processed and published")
 

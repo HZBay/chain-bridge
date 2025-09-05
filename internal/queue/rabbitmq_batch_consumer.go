@@ -1332,26 +1332,33 @@ func (c *RabbitMQBatchConsumer) sendNFTSuccessNotification(ctx context.Context, 
 		return
 	}
 
+	// Build NFT notification data according to documentation
 	extraData := map[string]interface{}{
-		"chain_id": chainID,
-		"tx_hash":  txHash,
+		"type":             notificationType,
+		"user_id":          op.UserID,
+		"operation_id":     op.OperationID.String, // Use operation ID from database
+		"chain_id":         chainID,
+		"transaction_hash": txHash,
+		"timestamp":        time.Now().Unix(),
+		"status":           "confirmed",
 	}
 
+	// Add collection and token information if available
 	if op.CollectionID.Valid {
 		extraData["collection_id"] = op.CollectionID.String
 	}
 	if op.NFTTokenID.Valid {
-		extraData["token_id"] = op.NFTTokenID.String
+		extraData["nft_token_id"] = op.NFTTokenID.String // Use nft_token_id as per documentation
 	}
 
 	notification := NotificationJob{
-		ID:        fmt.Sprintf("nft-%s-%d", op.UserID, time.Now().UnixNano()),
-		JobType:   JobTypeNotification,
-		UserID:    op.UserID,
-		EventType: notificationType,
-		Data:      extraData,
-		Priority:  PriorityNormal,
-		CreatedAt: time.Now(),
+		ID:          fmt.Sprintf("nft-%s-%d", op.UserID, time.Now().UnixNano()),
+		JobType:     JobTypeNotification,
+		OperationID: uuid.MustParse(op.OperationID.String),
+		EventType:   notificationType,
+		Data:        extraData,
+		Priority:    PriorityNormal,
+		CreatedAt:   time.Now(),
 	}
 
 	err := c.batchProcessor.PublishNotification(ctx, notification)
@@ -1370,23 +1377,29 @@ func (c *RabbitMQBatchConsumer) sendNFTTransferReceivedNotification(ctx context.
 		return
 	}
 
+	// Build NFT transfer received notification data according to documentation
 	extraData := map[string]interface{}{
-		"chain_id":     chainID,
-		"tx_hash":      txHash,
-		"from_user_id": op.UserID,
+		"type":             "nft_transfer_received",
+		"user_id":          op.RelatedUserID.String,
+		"operation_id":     op.OperationID.String, // Use operation ID from database
+		"chain_id":         chainID,
+		"transaction_hash": txHash,
+		"timestamp":        time.Now().Unix(),
+		"status":           "confirmed",
+		"from_user_id":     op.UserID, // The sender
 	}
 
+	// Add collection and token information if available
 	if op.CollectionID.Valid {
 		extraData["collection_id"] = op.CollectionID.String
 	}
 	if op.NFTTokenID.Valid {
-		extraData["token_id"] = op.NFTTokenID.String
+		extraData["nft_token_id"] = op.NFTTokenID.String // Use nft_token_id as per documentation
 	}
 
 	notification := NotificationJob{
 		ID:        fmt.Sprintf("nft-recv-%s-%d", op.RelatedUserID.String, time.Now().UnixNano()),
 		JobType:   JobTypeNotification,
-		UserID:    op.RelatedUserID.String,
 		EventType: "nft_transfer_received",
 		Data:      extraData,
 		Priority:  PriorityNormal,
