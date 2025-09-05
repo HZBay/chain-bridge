@@ -1704,7 +1704,7 @@ func (c *RabbitMQBatchConsumer) getUserBalance(ctx context.Context, userID strin
 	var balance string
 	err := c.db.QueryRowContext(ctx, query, userID, chainID, tokenID).Scan(&balance)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return "0", nil // Return 0 if no balance record exists
 		}
 		return "0", err
@@ -1712,19 +1712,18 @@ func (c *RabbitMQBatchConsumer) getUserBalance(ctx context.Context, userID strin
 	return balance, nil
 }
 
-// getTransactionOldStatus gets the old status of a transaction before status change
-func (c *RabbitMQBatchConsumer) getTransactionOldStatus(ctx context.Context, txID uuid.UUID) (string, error) {
-	query := `SELECT status FROM transactions WHERE tx_id = $1`
-
-	var oldStatus string
-	err := c.db.QueryRowContext(ctx, query, txID).Scan(&oldStatus)
+// getTransaction gets a transaction record by ID
+func (c *RabbitMQBatchConsumer) getTransaction(ctx context.Context, txID uuid.UUID) (*models.Transaction, error) {
+	tx, err := models.Transactions(
+		models.TransactionWhere.TXID.EQ(txID.String()),
+	).One(ctx, c.db)
 	if err != nil {
-		if err == sql.ErrNoRows {
-			return "pending", nil // Default to pending if no record exists
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil // Return nil if no record exists
 		}
-		return "pending", err
+		return nil, fmt.Errorf("failed to get transaction: %w", err)
 	}
-	return oldStatus, nil
+	return tx, nil
 }
 
 // getBatchOldStatus gets the old status of a batch before status change
@@ -1734,7 +1733,7 @@ func (c *RabbitMQBatchConsumer) getBatchOldStatus(ctx context.Context, batchID u
 	var oldStatus string
 	err := c.db.QueryRowContext(ctx, query, batchID).Scan(&oldStatus)
 	if err != nil {
-		if err == sql.ErrNoRows {
+		if errors.Is(err, sql.ErrNoRows) {
 			return "preparing", nil // Default to preparing if no record exists
 		}
 		return "preparing", err
@@ -1921,19 +1920,32 @@ func (c *RabbitMQBatchConsumer) sendTransactionStatusNotification(ctx context.Co
 		return // No notification processor available, skip silently
 	}
 
-	// Get the actual old status from database
-	oldStatus, err := c.getTransactionOldStatus(ctx, txID)
+	// Get transaction record
+	tx, err := c.getTransaction(ctx, txID)
 	if err != nil {
 		log.Warn().Err(err).
 			Str("tx_id", txID.String()).
-			Msg("Failed to get transaction old status, using default")
-		oldStatus = "pending" // Fallback to default
+			Msg("Failed to get transaction details")
+	}
+
+	// Get operation_id and status from transaction record
+	var operationID uuid.UUID
+	oldStatus := "pending" // Default status
+	if tx != nil {
+		if tx.OperationID.Valid {
+			if id, err := uuid.Parse(tx.OperationID.String); err == nil {
+				operationID = id
+			}
+		}
+		if tx.Status.Valid {
+			oldStatus = tx.Status.String // Use actual status if available
+		}
 	}
 
 	notification := NotificationJob{
 		ID:          uuid.New().String(),
 		JobType:     JobTypeNotification,
-		OperationID: job.GetOperationID(),
+		OperationID: operationID, // Use operation_id from transaction record
 		EventType:   "transaction_status_changed",
 		Data: map[string]interface{}{
 			"type":           "transaction_status_changed",
@@ -1988,10 +2000,42 @@ func (c *RabbitMQBatchConsumer) sendTransactionStatusNotifications(transactionNo
 		// Add user_id to transaction data
 		txData["user_id"] = userID
 
+		// Get transaction ID from data
+		var txID uuid.UUID
+		var operationID uuid.UUID
+		if txIDStr, ok := txData["transaction_id"].(string); ok {
+			if id, err := uuid.Parse(txIDStr); err == nil {
+				txID = id
+				// Get transaction record
+				tx, err := c.getTransaction(ctx, txID)
+				if err != nil {
+					log.Warn().Err(err).
+						Str("tx_id", txID.String()).
+						Msg("Failed to get transaction details")
+				}
+
+				// Get operation_id and status from transaction record
+				if tx != nil {
+					if tx.OperationID.Valid {
+						if id, err := uuid.Parse(tx.OperationID.String); err == nil {
+							operationID = id
+						}
+					}
+					if tx.Status.Valid {
+						txData["old_status"] = tx.Status.String // Use actual status if available
+					} else {
+						txData["old_status"] = "pending" // Default status if null
+					}
+				} else {
+					txData["old_status"] = "pending" // Default status
+				}
+			}
+		}
+
 		notification := NotificationJob{
 			ID:          uuid.New().String(),
 			JobType:     JobTypeNotification,
-			OperationID: job.GetOperationID(),
+			OperationID: operationID, // Use operation_id from transaction record
 			EventType:   "transaction_status_changed",
 			Data:        txData,
 			Priority:    PriorityNormal,
@@ -2014,10 +2058,42 @@ func (c *RabbitMQBatchConsumer) sendTransactionStatusNotifications(transactionNo
 			}
 			recipientData["user_id"] = toUID
 
+			// Get transaction ID from data
+			var txID uuid.UUID
+			var operationID uuid.UUID
+			if txIDStr, ok := recipientData["transaction_id"].(string); ok {
+				if id, err := uuid.Parse(txIDStr); err == nil {
+					txID = id
+					// Get transaction record
+					tx, err := c.getTransaction(ctx, txID)
+					if err != nil {
+						log.Warn().Err(err).
+							Str("tx_id", txID.String()).
+							Msg("Failed to get transaction details")
+					}
+
+					// Get operation_id and status from transaction record
+					if tx != nil {
+						if tx.OperationID.Valid {
+							if id, err := uuid.Parse(tx.OperationID.String); err == nil {
+								operationID = id
+							}
+						}
+						if tx.Status.Valid {
+							recipientData["old_status"] = tx.Status.String // Use actual status if available
+						} else {
+							recipientData["old_status"] = "pending" // Default status if null
+						}
+					} else {
+						recipientData["old_status"] = "pending" // Default status
+					}
+				}
+			}
+
 			recipientNotification := NotificationJob{
 				ID:          uuid.New().String(),
 				JobType:     JobTypeNotification,
-				OperationID: job.GetOperationID(),
+				OperationID: operationID, // Use operation_id from transaction record
 				EventType:   "transaction_status_changed",
 				Data:        recipientData,
 				Priority:    PriorityNormal,

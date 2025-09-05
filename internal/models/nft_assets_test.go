@@ -537,7 +537,7 @@ func testNFTAssetsSelect(t *testing.T) {
 }
 
 var (
-	nftAssetDBTypes = map[string]string{`ID`: `integer`, `CollectionID`: `character varying`, `TokenID`: `character varying`, `OwnerUserID`: `text`, `ChainID`: `bigint`, `MetadataURI`: `text`, `Name`: `character varying`, `Description`: `text`, `ImageURL`: `text`, `Attributes`: `jsonb`, `IsBurned`: `boolean`, `IsMinted`: `boolean`, `IsLocked`: `boolean`, `CreatedAt`: `timestamp with time zone`, `UpdatedAt`: `timestamp with time zone`, `OperationID`: `character varying`}
+	nftAssetDBTypes = map[string]string{`ID`: `integer`, `CollectionID`: `character varying`, `TokenID`: `character varying`, `OwnerUserID`: `text`, `ChainID`: `bigint`, `MetadataURI`: `text`, `Name`: `character varying`, `Description`: `text`, `ImageURL`: `text`, `Attributes`: `jsonb`, `IsBurned`: `boolean`, `IsMinted`: `boolean`, `IsLocked`: `boolean`, `CreatedAt`: `timestamp with time zone`, `UpdatedAt`: `timestamp with time zone`, `OperationID`: `character varying`, `IndividualOperationID`: `uuid`}
 	_               = bytes.MinRead
 )
 

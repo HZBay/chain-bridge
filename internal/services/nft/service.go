@@ -349,34 +349,6 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 	for _, mintOp := range request.MintOperations {
 		// Create transaction record - token_id will be set to -1 until minting is complete
 		transactionID := uuid.New()
-		// Insert transaction record with main operation_id for proper tracking
-		_, err := tx.ExecContext(ctx, `
-			INSERT INTO transactions (
-				tx_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount, 
-				collection_id, nft_token_id, nft_metadata, reason_type, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
-		`, transactionID, mainOperationID.String(), mintOp.ToUserID, request.ChainID, "nft_mint", mintOp.BusinessType, "pending",
-			"1", request.CollectionID, "-1", convertMetadataToJSON(mintOp.Meta), mintOp.ReasonType)
-
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create transaction record: %w", err)
-		}
-
-		// Create NFT asset record (not yet minted) with individual operation_id for tracking
-		_, err = tx.ExecContext(ctx, `
-			INSERT INTO nft_assets (
-				collection_id, token_id, owner_user_id, chain_id, operation_id,
-				metadata_uri, name, description, image_url, attributes,
-				is_burned, is_minted, is_locked, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
-		`, request.CollectionID, "-1", mintOp.ToUserID, request.ChainID, uuid.New().String(),
-			"", // metadata_uri will be set after token_id is known
-			mintOp.Meta.Name, mintOp.Meta.Description, mintOp.Meta.Image,
-			convertMetadataToJSON(mintOp.Meta), false, false, false)
-
-		if err != nil {
-			return nil, nil, fmt.Errorf("failed to create NFT asset record: %w", err)
-		}
 
 		// Create NFT mint job for batch processing with individual operation_id
 		mintJob := queue.NFTMintJob{
@@ -397,8 +369,37 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 			IndividualOperationID: uuid.New().String(),      // Individual operation tracking
 		}
 
+		// Create NFT asset record with both operation_id and individual_operation_id for tracking
+		_, err = tx.ExecContext(ctx, `
+			INSERT INTO nft_assets (
+				collection_id, token_id, owner_user_id, chain_id, operation_id, individual_operation_id,
+				metadata_uri, name, description, image_url, attributes,
+				is_burned, is_minted, is_locked, created_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
+		`, request.CollectionID, "-1", mintOp.ToUserID, request.ChainID, mainOperationID.String(), mintJob.IndividualOperationID,
+			"", // metadata_uri will be set after token_id is known
+			mintOp.Meta.Name, mintOp.Meta.Description, mintOp.Meta.Image,
+			convertMetadataToJSON(mintOp.Meta), false, false, false)
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create NFT asset record: %w", err)
+		}
+
 		if mintOp.ReasonDetail != nil {
 			mintJob.ReasonDetail = *mintOp.ReasonDetail
+		}
+
+		// Insert transaction record with both operation_id and individual_operation_id for tracking
+		_, err := tx.ExecContext(ctx, `
+			INSERT INTO transactions (
+				tx_id, operation_id, individual_operation_id, user_id, chain_id, tx_type, business_type, status, amount, 
+				collection_id, nft_token_id, nft_metadata, reason_type, created_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+		`, transactionID, mainOperationID.String(), mintJob.IndividualOperationID, mintOp.ToUserID, request.ChainID, "nft_mint", mintOp.BusinessType, "pending",
+			"1", request.CollectionID, "-1", convertMetadataToJSON(mintOp.Meta), mintOp.ReasonType)
+
+		if err != nil {
+			return nil, nil, fmt.Errorf("failed to create transaction record: %w", err)
 		}
 
 		// Queue the job for batch processing
