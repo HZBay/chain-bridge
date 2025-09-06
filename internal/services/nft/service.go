@@ -394,6 +394,19 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 		}
 
 		// Create NFT asset record with tx_id for tracking
+		// Handle optional metadata
+		var name, description, image string
+		var attributes []byte
+		if mintOp.Meta != nil {
+			name = mintOp.Meta.Name
+			description = mintOp.Meta.Description
+			image = mintOp.Meta.Image
+			attributes = []byte(convertMetadataToJSON(mintOp.Meta))
+		} else {
+			// Use empty JSON object when metadata is nil
+			attributes = []byte("{}")
+		}
+
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO nft_assets (
 				collection_id, token_id, owner_user_id, chain_id, operation_id, tx_id,
@@ -402,8 +415,7 @@ func (s *service) BatchMintNFTs(ctx context.Context, request *BatchMintRequest) 
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
 		`, request.CollectionID, "-1", mintOp.ToUserID, request.ChainID, mainOperationID.String(), transactionID,
 			"", // metadata_uri will be set after token_id is known
-			mintOp.Meta.Name, mintOp.Meta.Description, mintOp.Meta.Image,
-			convertMetadataToJSON(mintOp.Meta), false, false, false)
+			name, description, image, attributes, false, false, false)
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create NFT asset record: %w", err)
@@ -1658,12 +1670,12 @@ func (s *service) validateNFTOwnership(ctx context.Context, userID, collectionID
 	defer cancel()
 
 	var currentOwner string
-	var isBurned, isMinted bool
+	var isBurned, isMinted, isLocked bool
 	err := s.db.QueryRowContext(ctxTimeout, `
-		SELECT owner_user_id, is_burned, is_minted
+		SELECT owner_user_id, is_burned, is_minted, is_locked
 		FROM nft_assets
 		WHERE collection_id = $1 AND token_id = $2
-	`, collectionID, tokenID).Scan(&currentOwner, &isBurned, &isMinted)
+	`, collectionID, tokenID).Scan(&currentOwner, &isBurned, &isMinted, &isLocked)
 
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
@@ -1686,6 +1698,13 @@ func (s *service) validateNFTOwnership(ctx context.Context, userID, collectionID
 		return NFTError{
 			Type:    ErrorTypeValidation,
 			Message: fmt.Sprintf("NFT with token ID %s is already burned", tokenID),
+		}
+	}
+
+	if isLocked {
+		return NFTError{
+			Type:    ErrorTypeValidation,
+			Message: fmt.Sprintf("NFT with token ID %s is locked and cannot be burned", tokenID),
 		}
 	}
 
