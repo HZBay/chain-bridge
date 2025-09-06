@@ -25,162 +25,157 @@ import (
 
 // Transaction is an object representing the database table.
 type Transaction struct {
-	ID                    int               `boil:"id" json:"id" toml:"id" yaml:"id"`
-	TXID                  string            `boil:"tx_id" json:"tx_id" toml:"tx_id" yaml:"tx_id"`
-	OperationID           null.String       `boil:"operation_id" json:"operation_id,omitempty" toml:"operation_id" yaml:"operation_id,omitempty"`
-	UserID                string            `boil:"user_id" json:"user_id" toml:"user_id" yaml:"user_id"`
-	ChainID               int64             `boil:"chain_id" json:"chain_id" toml:"chain_id" yaml:"chain_id"`
-	TXType                string            `boil:"tx_type" json:"tx_type" toml:"tx_type" yaml:"tx_type"`
-	BusinessType          string            `boil:"business_type" json:"business_type" toml:"business_type" yaml:"business_type"`
-	RelatedUserID         null.String       `boil:"related_user_id" json:"related_user_id,omitempty" toml:"related_user_id" yaml:"related_user_id,omitempty"`
-	TransferDirection     null.String       `boil:"transfer_direction" json:"transfer_direction,omitempty" toml:"transfer_direction" yaml:"transfer_direction,omitempty"`
-	TokenID               int               `boil:"token_id" json:"token_id" toml:"token_id" yaml:"token_id"`
-	Amount                types.Decimal     `boil:"amount" json:"amount" toml:"amount" yaml:"amount"`
-	AmountUsd             types.NullDecimal `boil:"amount_usd" json:"amount_usd,omitempty" toml:"amount_usd" yaml:"amount_usd,omitempty"`
-	Status                null.String       `boil:"status" json:"status,omitempty" toml:"status" yaml:"status,omitempty"`
-	TXHash                null.String       `boil:"tx_hash" json:"tx_hash,omitempty" toml:"tx_hash" yaml:"tx_hash,omitempty"`
-	BlockNumber           null.Int64        `boil:"block_number" json:"block_number,omitempty" toml:"block_number" yaml:"block_number,omitempty"`
-	BatchID               null.String       `boil:"batch_id" json:"batch_id,omitempty" toml:"batch_id" yaml:"batch_id,omitempty"`
-	IsBatchOperation      null.Bool         `boil:"is_batch_operation" json:"is_batch_operation,omitempty" toml:"is_batch_operation" yaml:"is_batch_operation,omitempty"`
-	GasSavedPercentage    types.NullDecimal `boil:"gas_saved_percentage" json:"gas_saved_percentage,omitempty" toml:"gas_saved_percentage" yaml:"gas_saved_percentage,omitempty"`
-	ReasonType            string            `boil:"reason_type" json:"reason_type" toml:"reason_type" yaml:"reason_type"`
-	ReasonDetail          null.String       `boil:"reason_detail" json:"reason_detail,omitempty" toml:"reason_detail" yaml:"reason_detail,omitempty"`
-	Metadata              null.JSON         `boil:"metadata" json:"metadata,omitempty" toml:"metadata" yaml:"metadata,omitempty"`
-	CreatedAt             null.Time         `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
-	ConfirmedAt           null.Time         `boil:"confirmed_at" json:"confirmed_at,omitempty" toml:"confirmed_at" yaml:"confirmed_at,omitempty"`
-	FailureReason         null.String       `boil:"failure_reason" json:"failure_reason,omitempty" toml:"failure_reason" yaml:"failure_reason,omitempty"`
-	UpdatedAt             null.Time         `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
-	CollectionID          null.String       `boil:"collection_id" json:"collection_id,omitempty" toml:"collection_id" yaml:"collection_id,omitempty"`
-	NFTTokenID            null.String       `boil:"nft_token_id" json:"nft_token_id,omitempty" toml:"nft_token_id" yaml:"nft_token_id,omitempty"`
-	NFTMetadata           null.JSON         `boil:"nft_metadata" json:"nft_metadata,omitempty" toml:"nft_metadata" yaml:"nft_metadata,omitempty"`
-	IndividualOperationID string            `boil:"individual_operation_id" json:"individual_operation_id" toml:"individual_operation_id" yaml:"individual_operation_id"`
+	ID                 int               `boil:"id" json:"id" toml:"id" yaml:"id"`
+	TXID               string            `boil:"tx_id" json:"tx_id" toml:"tx_id" yaml:"tx_id"`
+	OperationID        null.String       `boil:"operation_id" json:"operation_id,omitempty" toml:"operation_id" yaml:"operation_id,omitempty"`
+	UserID             string            `boil:"user_id" json:"user_id" toml:"user_id" yaml:"user_id"`
+	ChainID            int64             `boil:"chain_id" json:"chain_id" toml:"chain_id" yaml:"chain_id"`
+	TXType             string            `boil:"tx_type" json:"tx_type" toml:"tx_type" yaml:"tx_type"`
+	BusinessType       string            `boil:"business_type" json:"business_type" toml:"business_type" yaml:"business_type"`
+	RelatedUserID      null.String       `boil:"related_user_id" json:"related_user_id,omitempty" toml:"related_user_id" yaml:"related_user_id,omitempty"`
+	TransferDirection  null.String       `boil:"transfer_direction" json:"transfer_direction,omitempty" toml:"transfer_direction" yaml:"transfer_direction,omitempty"`
+	TokenID            int               `boil:"token_id" json:"token_id" toml:"token_id" yaml:"token_id"`
+	Amount             types.Decimal     `boil:"amount" json:"amount" toml:"amount" yaml:"amount"`
+	AmountUsd          types.NullDecimal `boil:"amount_usd" json:"amount_usd,omitempty" toml:"amount_usd" yaml:"amount_usd,omitempty"`
+	Status             null.String       `boil:"status" json:"status,omitempty" toml:"status" yaml:"status,omitempty"`
+	TXHash             null.String       `boil:"tx_hash" json:"tx_hash,omitempty" toml:"tx_hash" yaml:"tx_hash,omitempty"`
+	BlockNumber        null.Int64        `boil:"block_number" json:"block_number,omitempty" toml:"block_number" yaml:"block_number,omitempty"`
+	BatchID            null.String       `boil:"batch_id" json:"batch_id,omitempty" toml:"batch_id" yaml:"batch_id,omitempty"`
+	IsBatchOperation   null.Bool         `boil:"is_batch_operation" json:"is_batch_operation,omitempty" toml:"is_batch_operation" yaml:"is_batch_operation,omitempty"`
+	GasSavedPercentage types.NullDecimal `boil:"gas_saved_percentage" json:"gas_saved_percentage,omitempty" toml:"gas_saved_percentage" yaml:"gas_saved_percentage,omitempty"`
+	ReasonType         string            `boil:"reason_type" json:"reason_type" toml:"reason_type" yaml:"reason_type"`
+	ReasonDetail       null.String       `boil:"reason_detail" json:"reason_detail,omitempty" toml:"reason_detail" yaml:"reason_detail,omitempty"`
+	Metadata           null.JSON         `boil:"metadata" json:"metadata,omitempty" toml:"metadata" yaml:"metadata,omitempty"`
+	CreatedAt          null.Time         `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
+	ConfirmedAt        null.Time         `boil:"confirmed_at" json:"confirmed_at,omitempty" toml:"confirmed_at" yaml:"confirmed_at,omitempty"`
+	FailureReason      null.String       `boil:"failure_reason" json:"failure_reason,omitempty" toml:"failure_reason" yaml:"failure_reason,omitempty"`
+	UpdatedAt          null.Time         `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
+	CollectionID       null.String       `boil:"collection_id" json:"collection_id,omitempty" toml:"collection_id" yaml:"collection_id,omitempty"`
+	NFTTokenID         null.String       `boil:"nft_token_id" json:"nft_token_id,omitempty" toml:"nft_token_id" yaml:"nft_token_id,omitempty"`
+	NFTMetadata        null.JSON         `boil:"nft_metadata" json:"nft_metadata,omitempty" toml:"nft_metadata" yaml:"nft_metadata,omitempty"`
 
 	R *transactionR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L transactionL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var TransactionColumns = struct {
-	ID                    string
-	TXID                  string
-	OperationID           string
-	UserID                string
-	ChainID               string
-	TXType                string
-	BusinessType          string
-	RelatedUserID         string
-	TransferDirection     string
-	TokenID               string
-	Amount                string
-	AmountUsd             string
-	Status                string
-	TXHash                string
-	BlockNumber           string
-	BatchID               string
-	IsBatchOperation      string
-	GasSavedPercentage    string
-	ReasonType            string
-	ReasonDetail          string
-	Metadata              string
-	CreatedAt             string
-	ConfirmedAt           string
-	FailureReason         string
-	UpdatedAt             string
-	CollectionID          string
-	NFTTokenID            string
-	NFTMetadata           string
-	IndividualOperationID string
+	ID                 string
+	TXID               string
+	OperationID        string
+	UserID             string
+	ChainID            string
+	TXType             string
+	BusinessType       string
+	RelatedUserID      string
+	TransferDirection  string
+	TokenID            string
+	Amount             string
+	AmountUsd          string
+	Status             string
+	TXHash             string
+	BlockNumber        string
+	BatchID            string
+	IsBatchOperation   string
+	GasSavedPercentage string
+	ReasonType         string
+	ReasonDetail       string
+	Metadata           string
+	CreatedAt          string
+	ConfirmedAt        string
+	FailureReason      string
+	UpdatedAt          string
+	CollectionID       string
+	NFTTokenID         string
+	NFTMetadata        string
 }{
-	ID:                    "id",
-	TXID:                  "tx_id",
-	OperationID:           "operation_id",
-	UserID:                "user_id",
-	ChainID:               "chain_id",
-	TXType:                "tx_type",
-	BusinessType:          "business_type",
-	RelatedUserID:         "related_user_id",
-	TransferDirection:     "transfer_direction",
-	TokenID:               "token_id",
-	Amount:                "amount",
-	AmountUsd:             "amount_usd",
-	Status:                "status",
-	TXHash:                "tx_hash",
-	BlockNumber:           "block_number",
-	BatchID:               "batch_id",
-	IsBatchOperation:      "is_batch_operation",
-	GasSavedPercentage:    "gas_saved_percentage",
-	ReasonType:            "reason_type",
-	ReasonDetail:          "reason_detail",
-	Metadata:              "metadata",
-	CreatedAt:             "created_at",
-	ConfirmedAt:           "confirmed_at",
-	FailureReason:         "failure_reason",
-	UpdatedAt:             "updated_at",
-	CollectionID:          "collection_id",
-	NFTTokenID:            "nft_token_id",
-	NFTMetadata:           "nft_metadata",
-	IndividualOperationID: "individual_operation_id",
+	ID:                 "id",
+	TXID:               "tx_id",
+	OperationID:        "operation_id",
+	UserID:             "user_id",
+	ChainID:            "chain_id",
+	TXType:             "tx_type",
+	BusinessType:       "business_type",
+	RelatedUserID:      "related_user_id",
+	TransferDirection:  "transfer_direction",
+	TokenID:            "token_id",
+	Amount:             "amount",
+	AmountUsd:          "amount_usd",
+	Status:             "status",
+	TXHash:             "tx_hash",
+	BlockNumber:        "block_number",
+	BatchID:            "batch_id",
+	IsBatchOperation:   "is_batch_operation",
+	GasSavedPercentage: "gas_saved_percentage",
+	ReasonType:         "reason_type",
+	ReasonDetail:       "reason_detail",
+	Metadata:           "metadata",
+	CreatedAt:          "created_at",
+	ConfirmedAt:        "confirmed_at",
+	FailureReason:      "failure_reason",
+	UpdatedAt:          "updated_at",
+	CollectionID:       "collection_id",
+	NFTTokenID:         "nft_token_id",
+	NFTMetadata:        "nft_metadata",
 }
 
 var TransactionTableColumns = struct {
-	ID                    string
-	TXID                  string
-	OperationID           string
-	UserID                string
-	ChainID               string
-	TXType                string
-	BusinessType          string
-	RelatedUserID         string
-	TransferDirection     string
-	TokenID               string
-	Amount                string
-	AmountUsd             string
-	Status                string
-	TXHash                string
-	BlockNumber           string
-	BatchID               string
-	IsBatchOperation      string
-	GasSavedPercentage    string
-	ReasonType            string
-	ReasonDetail          string
-	Metadata              string
-	CreatedAt             string
-	ConfirmedAt           string
-	FailureReason         string
-	UpdatedAt             string
-	CollectionID          string
-	NFTTokenID            string
-	NFTMetadata           string
-	IndividualOperationID string
+	ID                 string
+	TXID               string
+	OperationID        string
+	UserID             string
+	ChainID            string
+	TXType             string
+	BusinessType       string
+	RelatedUserID      string
+	TransferDirection  string
+	TokenID            string
+	Amount             string
+	AmountUsd          string
+	Status             string
+	TXHash             string
+	BlockNumber        string
+	BatchID            string
+	IsBatchOperation   string
+	GasSavedPercentage string
+	ReasonType         string
+	ReasonDetail       string
+	Metadata           string
+	CreatedAt          string
+	ConfirmedAt        string
+	FailureReason      string
+	UpdatedAt          string
+	CollectionID       string
+	NFTTokenID         string
+	NFTMetadata        string
 }{
-	ID:                    "transactions.id",
-	TXID:                  "transactions.tx_id",
-	OperationID:           "transactions.operation_id",
-	UserID:                "transactions.user_id",
-	ChainID:               "transactions.chain_id",
-	TXType:                "transactions.tx_type",
-	BusinessType:          "transactions.business_type",
-	RelatedUserID:         "transactions.related_user_id",
-	TransferDirection:     "transactions.transfer_direction",
-	TokenID:               "transactions.token_id",
-	Amount:                "transactions.amount",
-	AmountUsd:             "transactions.amount_usd",
-	Status:                "transactions.status",
-	TXHash:                "transactions.tx_hash",
-	BlockNumber:           "transactions.block_number",
-	BatchID:               "transactions.batch_id",
-	IsBatchOperation:      "transactions.is_batch_operation",
-	GasSavedPercentage:    "transactions.gas_saved_percentage",
-	ReasonType:            "transactions.reason_type",
-	ReasonDetail:          "transactions.reason_detail",
-	Metadata:              "transactions.metadata",
-	CreatedAt:             "transactions.created_at",
-	ConfirmedAt:           "transactions.confirmed_at",
-	FailureReason:         "transactions.failure_reason",
-	UpdatedAt:             "transactions.updated_at",
-	CollectionID:          "transactions.collection_id",
-	NFTTokenID:            "transactions.nft_token_id",
-	NFTMetadata:           "transactions.nft_metadata",
-	IndividualOperationID: "transactions.individual_operation_id",
+	ID:                 "transactions.id",
+	TXID:               "transactions.tx_id",
+	OperationID:        "transactions.operation_id",
+	UserID:             "transactions.user_id",
+	ChainID:            "transactions.chain_id",
+	TXType:             "transactions.tx_type",
+	BusinessType:       "transactions.business_type",
+	RelatedUserID:      "transactions.related_user_id",
+	TransferDirection:  "transactions.transfer_direction",
+	TokenID:            "transactions.token_id",
+	Amount:             "transactions.amount",
+	AmountUsd:          "transactions.amount_usd",
+	Status:             "transactions.status",
+	TXHash:             "transactions.tx_hash",
+	BlockNumber:        "transactions.block_number",
+	BatchID:            "transactions.batch_id",
+	IsBatchOperation:   "transactions.is_batch_operation",
+	GasSavedPercentage: "transactions.gas_saved_percentage",
+	ReasonType:         "transactions.reason_type",
+	ReasonDetail:       "transactions.reason_detail",
+	Metadata:           "transactions.metadata",
+	CreatedAt:          "transactions.created_at",
+	ConfirmedAt:        "transactions.confirmed_at",
+	FailureReason:      "transactions.failure_reason",
+	UpdatedAt:          "transactions.updated_at",
+	CollectionID:       "transactions.collection_id",
+	NFTTokenID:         "transactions.nft_token_id",
+	NFTMetadata:        "transactions.nft_metadata",
 }
 
 // Generated where
@@ -207,65 +202,63 @@ func (w whereHelpertypes_Decimal) GTE(x types.Decimal) qm.QueryMod {
 }
 
 var TransactionWhere = struct {
-	ID                    whereHelperint
-	TXID                  whereHelperstring
-	OperationID           whereHelpernull_String
-	UserID                whereHelperstring
-	ChainID               whereHelperint64
-	TXType                whereHelperstring
-	BusinessType          whereHelperstring
-	RelatedUserID         whereHelpernull_String
-	TransferDirection     whereHelpernull_String
-	TokenID               whereHelperint
-	Amount                whereHelpertypes_Decimal
-	AmountUsd             whereHelpertypes_NullDecimal
-	Status                whereHelpernull_String
-	TXHash                whereHelpernull_String
-	BlockNumber           whereHelpernull_Int64
-	BatchID               whereHelpernull_String
-	IsBatchOperation      whereHelpernull_Bool
-	GasSavedPercentage    whereHelpertypes_NullDecimal
-	ReasonType            whereHelperstring
-	ReasonDetail          whereHelpernull_String
-	Metadata              whereHelpernull_JSON
-	CreatedAt             whereHelpernull_Time
-	ConfirmedAt           whereHelpernull_Time
-	FailureReason         whereHelpernull_String
-	UpdatedAt             whereHelpernull_Time
-	CollectionID          whereHelpernull_String
-	NFTTokenID            whereHelpernull_String
-	NFTMetadata           whereHelpernull_JSON
-	IndividualOperationID whereHelperstring
+	ID                 whereHelperint
+	TXID               whereHelperstring
+	OperationID        whereHelpernull_String
+	UserID             whereHelperstring
+	ChainID            whereHelperint64
+	TXType             whereHelperstring
+	BusinessType       whereHelperstring
+	RelatedUserID      whereHelpernull_String
+	TransferDirection  whereHelpernull_String
+	TokenID            whereHelperint
+	Amount             whereHelpertypes_Decimal
+	AmountUsd          whereHelpertypes_NullDecimal
+	Status             whereHelpernull_String
+	TXHash             whereHelpernull_String
+	BlockNumber        whereHelpernull_Int64
+	BatchID            whereHelpernull_String
+	IsBatchOperation   whereHelpernull_Bool
+	GasSavedPercentage whereHelpertypes_NullDecimal
+	ReasonType         whereHelperstring
+	ReasonDetail       whereHelpernull_String
+	Metadata           whereHelpernull_JSON
+	CreatedAt          whereHelpernull_Time
+	ConfirmedAt        whereHelpernull_Time
+	FailureReason      whereHelpernull_String
+	UpdatedAt          whereHelpernull_Time
+	CollectionID       whereHelpernull_String
+	NFTTokenID         whereHelpernull_String
+	NFTMetadata        whereHelpernull_JSON
 }{
-	ID:                    whereHelperint{field: "\"transactions\".\"id\""},
-	TXID:                  whereHelperstring{field: "\"transactions\".\"tx_id\""},
-	OperationID:           whereHelpernull_String{field: "\"transactions\".\"operation_id\""},
-	UserID:                whereHelperstring{field: "\"transactions\".\"user_id\""},
-	ChainID:               whereHelperint64{field: "\"transactions\".\"chain_id\""},
-	TXType:                whereHelperstring{field: "\"transactions\".\"tx_type\""},
-	BusinessType:          whereHelperstring{field: "\"transactions\".\"business_type\""},
-	RelatedUserID:         whereHelpernull_String{field: "\"transactions\".\"related_user_id\""},
-	TransferDirection:     whereHelpernull_String{field: "\"transactions\".\"transfer_direction\""},
-	TokenID:               whereHelperint{field: "\"transactions\".\"token_id\""},
-	Amount:                whereHelpertypes_Decimal{field: "\"transactions\".\"amount\""},
-	AmountUsd:             whereHelpertypes_NullDecimal{field: "\"transactions\".\"amount_usd\""},
-	Status:                whereHelpernull_String{field: "\"transactions\".\"status\""},
-	TXHash:                whereHelpernull_String{field: "\"transactions\".\"tx_hash\""},
-	BlockNumber:           whereHelpernull_Int64{field: "\"transactions\".\"block_number\""},
-	BatchID:               whereHelpernull_String{field: "\"transactions\".\"batch_id\""},
-	IsBatchOperation:      whereHelpernull_Bool{field: "\"transactions\".\"is_batch_operation\""},
-	GasSavedPercentage:    whereHelpertypes_NullDecimal{field: "\"transactions\".\"gas_saved_percentage\""},
-	ReasonType:            whereHelperstring{field: "\"transactions\".\"reason_type\""},
-	ReasonDetail:          whereHelpernull_String{field: "\"transactions\".\"reason_detail\""},
-	Metadata:              whereHelpernull_JSON{field: "\"transactions\".\"metadata\""},
-	CreatedAt:             whereHelpernull_Time{field: "\"transactions\".\"created_at\""},
-	ConfirmedAt:           whereHelpernull_Time{field: "\"transactions\".\"confirmed_at\""},
-	FailureReason:         whereHelpernull_String{field: "\"transactions\".\"failure_reason\""},
-	UpdatedAt:             whereHelpernull_Time{field: "\"transactions\".\"updated_at\""},
-	CollectionID:          whereHelpernull_String{field: "\"transactions\".\"collection_id\""},
-	NFTTokenID:            whereHelpernull_String{field: "\"transactions\".\"nft_token_id\""},
-	NFTMetadata:           whereHelpernull_JSON{field: "\"transactions\".\"nft_metadata\""},
-	IndividualOperationID: whereHelperstring{field: "\"transactions\".\"individual_operation_id\""},
+	ID:                 whereHelperint{field: "\"transactions\".\"id\""},
+	TXID:               whereHelperstring{field: "\"transactions\".\"tx_id\""},
+	OperationID:        whereHelpernull_String{field: "\"transactions\".\"operation_id\""},
+	UserID:             whereHelperstring{field: "\"transactions\".\"user_id\""},
+	ChainID:            whereHelperint64{field: "\"transactions\".\"chain_id\""},
+	TXType:             whereHelperstring{field: "\"transactions\".\"tx_type\""},
+	BusinessType:       whereHelperstring{field: "\"transactions\".\"business_type\""},
+	RelatedUserID:      whereHelpernull_String{field: "\"transactions\".\"related_user_id\""},
+	TransferDirection:  whereHelpernull_String{field: "\"transactions\".\"transfer_direction\""},
+	TokenID:            whereHelperint{field: "\"transactions\".\"token_id\""},
+	Amount:             whereHelpertypes_Decimal{field: "\"transactions\".\"amount\""},
+	AmountUsd:          whereHelpertypes_NullDecimal{field: "\"transactions\".\"amount_usd\""},
+	Status:             whereHelpernull_String{field: "\"transactions\".\"status\""},
+	TXHash:             whereHelpernull_String{field: "\"transactions\".\"tx_hash\""},
+	BlockNumber:        whereHelpernull_Int64{field: "\"transactions\".\"block_number\""},
+	BatchID:            whereHelpernull_String{field: "\"transactions\".\"batch_id\""},
+	IsBatchOperation:   whereHelpernull_Bool{field: "\"transactions\".\"is_batch_operation\""},
+	GasSavedPercentage: whereHelpertypes_NullDecimal{field: "\"transactions\".\"gas_saved_percentage\""},
+	ReasonType:         whereHelperstring{field: "\"transactions\".\"reason_type\""},
+	ReasonDetail:       whereHelpernull_String{field: "\"transactions\".\"reason_detail\""},
+	Metadata:           whereHelpernull_JSON{field: "\"transactions\".\"metadata\""},
+	CreatedAt:          whereHelpernull_Time{field: "\"transactions\".\"created_at\""},
+	ConfirmedAt:        whereHelpernull_Time{field: "\"transactions\".\"confirmed_at\""},
+	FailureReason:      whereHelpernull_String{field: "\"transactions\".\"failure_reason\""},
+	UpdatedAt:          whereHelpernull_Time{field: "\"transactions\".\"updated_at\""},
+	CollectionID:       whereHelpernull_String{field: "\"transactions\".\"collection_id\""},
+	NFTTokenID:         whereHelpernull_String{field: "\"transactions\".\"nft_token_id\""},
+	NFTMetadata:        whereHelpernull_JSON{field: "\"transactions\".\"nft_metadata\""},
 }
 
 // TransactionRels is where relationship names are stored.
@@ -306,9 +299,9 @@ func (r *transactionR) GetToken() *SupportedToken {
 type transactionL struct{}
 
 var (
-	transactionAllColumns            = []string{"id", "tx_id", "operation_id", "user_id", "chain_id", "tx_type", "business_type", "related_user_id", "transfer_direction", "token_id", "amount", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_type", "reason_detail", "metadata", "created_at", "confirmed_at", "failure_reason", "updated_at", "collection_id", "nft_token_id", "nft_metadata", "individual_operation_id"}
+	transactionAllColumns            = []string{"id", "tx_id", "operation_id", "user_id", "chain_id", "tx_type", "business_type", "related_user_id", "transfer_direction", "token_id", "amount", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_type", "reason_detail", "metadata", "created_at", "confirmed_at", "failure_reason", "updated_at", "collection_id", "nft_token_id", "nft_metadata"}
 	transactionColumnsWithoutDefault = []string{"tx_id", "user_id", "chain_id", "tx_type", "business_type", "amount", "reason_type"}
-	transactionColumnsWithDefault    = []string{"id", "operation_id", "related_user_id", "transfer_direction", "token_id", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_detail", "metadata", "created_at", "confirmed_at", "failure_reason", "updated_at", "collection_id", "nft_token_id", "nft_metadata", "individual_operation_id"}
+	transactionColumnsWithDefault    = []string{"id", "operation_id", "related_user_id", "transfer_direction", "token_id", "amount_usd", "status", "tx_hash", "block_number", "batch_id", "is_batch_operation", "gas_saved_percentage", "reason_detail", "metadata", "created_at", "confirmed_at", "failure_reason", "updated_at", "collection_id", "nft_token_id", "nft_metadata"}
 	transactionPrimaryKeyColumns     = []string{"id"}
 	transactionGeneratedColumns      = []string{}
 )

@@ -136,8 +136,10 @@ func (s *service) AdjustAssets(ctx context.Context, req *types.AssetAdjustReques
 		return nil, nil, fmt.Errorf("failed to begin transaction: %w", err)
 	}
 	defer func() {
-		if err := tx.Rollback(); err != nil {
-			log.Warn().Err(err).Msg("Failed to rollback transaction")
+		if err != nil {
+			if rollbackErr := tx.Rollback(); rollbackErr != nil {
+				log.Warn().Err(rollbackErr).Msg("Failed to rollback transaction")
+			}
 		}
 	}()
 
@@ -234,6 +236,9 @@ func (s *service) AdjustAssets(ctx context.Context, req *types.AssetAdjustReques
 	if err := tx.Commit(); err != nil {
 		return nil, nil, fmt.Errorf("failed to commit transactions: %w", err)
 	}
+
+	// Clear error to prevent rollback in defer
+	err = nil
 
 	// 3. Publish all jobs to batch processor
 	for _, job := range adjustJobs {

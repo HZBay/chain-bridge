@@ -153,8 +153,6 @@ type NFTMintJob struct {
 	CreatedAt     time.Time `json:"created_at"`
 	// Batch-level operation ID (for idempotency of the entire batch request)
 	BatchOperationID string `json:"batch_operation_id,omitempty"`
-	// Individual operation ID (for tracking each specific mint operation)
-	IndividualOperationID string `json:"individual_operation_id,omitempty"`
 }
 
 func (n NFTMintJob) GetID() string           { return n.ID }
@@ -186,8 +184,6 @@ type NFTBurnJob struct {
 	CreatedAt     time.Time `json:"created_at"`
 	// Batch-level operation ID (for idempotency of the entire batch request)
 	BatchOperationID string `json:"batch_operation_id,omitempty"`
-	// Individual operation ID (for tracking each specific burn operation)
-	IndividualOperationID string `json:"individual_operation_id,omitempty"`
 }
 
 func (n NFTBurnJob) GetID() string           { return n.ID }
@@ -220,8 +216,6 @@ type NFTTransferJob struct {
 	CreatedAt     time.Time `json:"created_at"`
 	// Batch-level operation ID (for idempotency of the entire batch request)
 	BatchOperationID string `json:"batch_operation_id,omitempty"`
-	// Individual operation ID (for tracking each specific transfer operation)
-	IndividualOperationID string `json:"individual_operation_id,omitempty"`
 }
 
 func (n NFTTransferJob) GetID() string           { return n.ID }

@@ -30,7 +30,6 @@ import (
 
 	// Import postgres driver for database/sql package
 	_ "github.com/lib/pq"
-	"github.com/volatiletech/sqlboiler/v4/boil"
 )
 
 type Router struct {
@@ -376,8 +375,6 @@ func (s *Server) Start() error {
 		return errors.New("server is not ready")
 	}
 
-	// Enable SQL debug logging
-	boil.DebugMode = true
 	// Start payment event service if enabled
 	if s.PaymentEventService != nil && s.Config.RabbitMQ.Enabled {
 		ctx := context.Background()

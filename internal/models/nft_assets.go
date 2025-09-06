@@ -24,102 +24,102 @@ import (
 
 // NFTAsset is an object representing the database table.
 type NFTAsset struct {
-	ID                    int         `boil:"id" json:"id" toml:"id" yaml:"id"`
-	CollectionID          string      `boil:"collection_id" json:"collection_id" toml:"collection_id" yaml:"collection_id"`
-	TokenID               string      `boil:"token_id" json:"token_id" toml:"token_id" yaml:"token_id"`
-	OwnerUserID           string      `boil:"owner_user_id" json:"owner_user_id" toml:"owner_user_id" yaml:"owner_user_id"`
-	ChainID               int64       `boil:"chain_id" json:"chain_id" toml:"chain_id" yaml:"chain_id"`
-	MetadataURI           null.String `boil:"metadata_uri" json:"metadata_uri,omitempty" toml:"metadata_uri" yaml:"metadata_uri,omitempty"`
-	Name                  null.String `boil:"name" json:"name,omitempty" toml:"name" yaml:"name,omitempty"`
-	Description           null.String `boil:"description" json:"description,omitempty" toml:"description" yaml:"description,omitempty"`
-	ImageURL              null.String `boil:"image_url" json:"image_url,omitempty" toml:"image_url" yaml:"image_url,omitempty"`
-	Attributes            null.JSON   `boil:"attributes" json:"attributes,omitempty" toml:"attributes" yaml:"attributes,omitempty"`
-	IsBurned              null.Bool   `boil:"is_burned" json:"is_burned,omitempty" toml:"is_burned" yaml:"is_burned,omitempty"`
-	IsMinted              null.Bool   `boil:"is_minted" json:"is_minted,omitempty" toml:"is_minted" yaml:"is_minted,omitempty"`
-	IsLocked              null.Bool   `boil:"is_locked" json:"is_locked,omitempty" toml:"is_locked" yaml:"is_locked,omitempty"`
-	CreatedAt             null.Time   `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
-	UpdatedAt             null.Time   `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
-	OperationID           null.String `boil:"operation_id" json:"operation_id,omitempty" toml:"operation_id" yaml:"operation_id,omitempty"`
-	IndividualOperationID string      `boil:"individual_operation_id" json:"individual_operation_id" toml:"individual_operation_id" yaml:"individual_operation_id"`
+	ID           int         `boil:"id" json:"id" toml:"id" yaml:"id"`
+	CollectionID string      `boil:"collection_id" json:"collection_id" toml:"collection_id" yaml:"collection_id"`
+	TokenID      string      `boil:"token_id" json:"token_id" toml:"token_id" yaml:"token_id"`
+	OwnerUserID  string      `boil:"owner_user_id" json:"owner_user_id" toml:"owner_user_id" yaml:"owner_user_id"`
+	ChainID      int64       `boil:"chain_id" json:"chain_id" toml:"chain_id" yaml:"chain_id"`
+	MetadataURI  null.String `boil:"metadata_uri" json:"metadata_uri,omitempty" toml:"metadata_uri" yaml:"metadata_uri,omitempty"`
+	Name         null.String `boil:"name" json:"name,omitempty" toml:"name" yaml:"name,omitempty"`
+	Description  null.String `boil:"description" json:"description,omitempty" toml:"description" yaml:"description,omitempty"`
+	ImageURL     null.String `boil:"image_url" json:"image_url,omitempty" toml:"image_url" yaml:"image_url,omitempty"`
+	Attributes   null.JSON   `boil:"attributes" json:"attributes,omitempty" toml:"attributes" yaml:"attributes,omitempty"`
+	IsBurned     null.Bool   `boil:"is_burned" json:"is_burned,omitempty" toml:"is_burned" yaml:"is_burned,omitempty"`
+	IsMinted     null.Bool   `boil:"is_minted" json:"is_minted,omitempty" toml:"is_minted" yaml:"is_minted,omitempty"`
+	IsLocked     null.Bool   `boil:"is_locked" json:"is_locked,omitempty" toml:"is_locked" yaml:"is_locked,omitempty"`
+	CreatedAt    null.Time   `boil:"created_at" json:"created_at,omitempty" toml:"created_at" yaml:"created_at,omitempty"`
+	UpdatedAt    null.Time   `boil:"updated_at" json:"updated_at,omitempty" toml:"updated_at" yaml:"updated_at,omitempty"`
+	OperationID  null.String `boil:"operation_id" json:"operation_id,omitempty" toml:"operation_id" yaml:"operation_id,omitempty"`
+	TXID         null.String `boil:"tx_id" json:"tx_id,omitempty" toml:"tx_id" yaml:"tx_id,omitempty"`
 
 	R *nftAssetR `boil:"-" json:"-" toml:"-" yaml:"-"`
 	L nftAssetL  `boil:"-" json:"-" toml:"-" yaml:"-"`
 }
 
 var NFTAssetColumns = struct {
-	ID                    string
-	CollectionID          string
-	TokenID               string
-	OwnerUserID           string
-	ChainID               string
-	MetadataURI           string
-	Name                  string
-	Description           string
-	ImageURL              string
-	Attributes            string
-	IsBurned              string
-	IsMinted              string
-	IsLocked              string
-	CreatedAt             string
-	UpdatedAt             string
-	OperationID           string
-	IndividualOperationID string
+	ID           string
+	CollectionID string
+	TokenID      string
+	OwnerUserID  string
+	ChainID      string
+	MetadataURI  string
+	Name         string
+	Description  string
+	ImageURL     string
+	Attributes   string
+	IsBurned     string
+	IsMinted     string
+	IsLocked     string
+	CreatedAt    string
+	UpdatedAt    string
+	OperationID  string
+	TXID         string
 }{
-	ID:                    "id",
-	CollectionID:          "collection_id",
-	TokenID:               "token_id",
-	OwnerUserID:           "owner_user_id",
-	ChainID:               "chain_id",
-	MetadataURI:           "metadata_uri",
-	Name:                  "name",
-	Description:           "description",
-	ImageURL:              "image_url",
-	Attributes:            "attributes",
-	IsBurned:              "is_burned",
-	IsMinted:              "is_minted",
-	IsLocked:              "is_locked",
-	CreatedAt:             "created_at",
-	UpdatedAt:             "updated_at",
-	OperationID:           "operation_id",
-	IndividualOperationID: "individual_operation_id",
+	ID:           "id",
+	CollectionID: "collection_id",
+	TokenID:      "token_id",
+	OwnerUserID:  "owner_user_id",
+	ChainID:      "chain_id",
+	MetadataURI:  "metadata_uri",
+	Name:         "name",
+	Description:  "description",
+	ImageURL:     "image_url",
+	Attributes:   "attributes",
+	IsBurned:     "is_burned",
+	IsMinted:     "is_minted",
+	IsLocked:     "is_locked",
+	CreatedAt:    "created_at",
+	UpdatedAt:    "updated_at",
+	OperationID:  "operation_id",
+	TXID:         "tx_id",
 }
 
 var NFTAssetTableColumns = struct {
-	ID                    string
-	CollectionID          string
-	TokenID               string
-	OwnerUserID           string
-	ChainID               string
-	MetadataURI           string
-	Name                  string
-	Description           string
-	ImageURL              string
-	Attributes            string
-	IsBurned              string
-	IsMinted              string
-	IsLocked              string
-	CreatedAt             string
-	UpdatedAt             string
-	OperationID           string
-	IndividualOperationID string
+	ID           string
+	CollectionID string
+	TokenID      string
+	OwnerUserID  string
+	ChainID      string
+	MetadataURI  string
+	Name         string
+	Description  string
+	ImageURL     string
+	Attributes   string
+	IsBurned     string
+	IsMinted     string
+	IsLocked     string
+	CreatedAt    string
+	UpdatedAt    string
+	OperationID  string
+	TXID         string
 }{
-	ID:                    "nft_assets.id",
-	CollectionID:          "nft_assets.collection_id",
-	TokenID:               "nft_assets.token_id",
-	OwnerUserID:           "nft_assets.owner_user_id",
-	ChainID:               "nft_assets.chain_id",
-	MetadataURI:           "nft_assets.metadata_uri",
-	Name:                  "nft_assets.name",
-	Description:           "nft_assets.description",
-	ImageURL:              "nft_assets.image_url",
-	Attributes:            "nft_assets.attributes",
-	IsBurned:              "nft_assets.is_burned",
-	IsMinted:              "nft_assets.is_minted",
-	IsLocked:              "nft_assets.is_locked",
-	CreatedAt:             "nft_assets.created_at",
-	UpdatedAt:             "nft_assets.updated_at",
-	OperationID:           "nft_assets.operation_id",
-	IndividualOperationID: "nft_assets.individual_operation_id",
+	ID:           "nft_assets.id",
+	CollectionID: "nft_assets.collection_id",
+	TokenID:      "nft_assets.token_id",
+	OwnerUserID:  "nft_assets.owner_user_id",
+	ChainID:      "nft_assets.chain_id",
+	MetadataURI:  "nft_assets.metadata_uri",
+	Name:         "nft_assets.name",
+	Description:  "nft_assets.description",
+	ImageURL:     "nft_assets.image_url",
+	Attributes:   "nft_assets.attributes",
+	IsBurned:     "nft_assets.is_burned",
+	IsMinted:     "nft_assets.is_minted",
+	IsLocked:     "nft_assets.is_locked",
+	CreatedAt:    "nft_assets.created_at",
+	UpdatedAt:    "nft_assets.updated_at",
+	OperationID:  "nft_assets.operation_id",
+	TXID:         "nft_assets.tx_id",
 }
 
 // Generated where
@@ -149,41 +149,41 @@ func (w whereHelpernull_JSON) IsNull() qm.QueryMod    { return qmhelper.WhereIsN
 func (w whereHelpernull_JSON) IsNotNull() qm.QueryMod { return qmhelper.WhereIsNotNull(w.field) }
 
 var NFTAssetWhere = struct {
-	ID                    whereHelperint
-	CollectionID          whereHelperstring
-	TokenID               whereHelperstring
-	OwnerUserID           whereHelperstring
-	ChainID               whereHelperint64
-	MetadataURI           whereHelpernull_String
-	Name                  whereHelpernull_String
-	Description           whereHelpernull_String
-	ImageURL              whereHelpernull_String
-	Attributes            whereHelpernull_JSON
-	IsBurned              whereHelpernull_Bool
-	IsMinted              whereHelpernull_Bool
-	IsLocked              whereHelpernull_Bool
-	CreatedAt             whereHelpernull_Time
-	UpdatedAt             whereHelpernull_Time
-	OperationID           whereHelpernull_String
-	IndividualOperationID whereHelperstring
+	ID           whereHelperint
+	CollectionID whereHelperstring
+	TokenID      whereHelperstring
+	OwnerUserID  whereHelperstring
+	ChainID      whereHelperint64
+	MetadataURI  whereHelpernull_String
+	Name         whereHelpernull_String
+	Description  whereHelpernull_String
+	ImageURL     whereHelpernull_String
+	Attributes   whereHelpernull_JSON
+	IsBurned     whereHelpernull_Bool
+	IsMinted     whereHelpernull_Bool
+	IsLocked     whereHelpernull_Bool
+	CreatedAt    whereHelpernull_Time
+	UpdatedAt    whereHelpernull_Time
+	OperationID  whereHelpernull_String
+	TXID         whereHelpernull_String
 }{
-	ID:                    whereHelperint{field: "\"nft_assets\".\"id\""},
-	CollectionID:          whereHelperstring{field: "\"nft_assets\".\"collection_id\""},
-	TokenID:               whereHelperstring{field: "\"nft_assets\".\"token_id\""},
-	OwnerUserID:           whereHelperstring{field: "\"nft_assets\".\"owner_user_id\""},
-	ChainID:               whereHelperint64{field: "\"nft_assets\".\"chain_id\""},
-	MetadataURI:           whereHelpernull_String{field: "\"nft_assets\".\"metadata_uri\""},
-	Name:                  whereHelpernull_String{field: "\"nft_assets\".\"name\""},
-	Description:           whereHelpernull_String{field: "\"nft_assets\".\"description\""},
-	ImageURL:              whereHelpernull_String{field: "\"nft_assets\".\"image_url\""},
-	Attributes:            whereHelpernull_JSON{field: "\"nft_assets\".\"attributes\""},
-	IsBurned:              whereHelpernull_Bool{field: "\"nft_assets\".\"is_burned\""},
-	IsMinted:              whereHelpernull_Bool{field: "\"nft_assets\".\"is_minted\""},
-	IsLocked:              whereHelpernull_Bool{field: "\"nft_assets\".\"is_locked\""},
-	CreatedAt:             whereHelpernull_Time{field: "\"nft_assets\".\"created_at\""},
-	UpdatedAt:             whereHelpernull_Time{field: "\"nft_assets\".\"updated_at\""},
-	OperationID:           whereHelpernull_String{field: "\"nft_assets\".\"operation_id\""},
-	IndividualOperationID: whereHelperstring{field: "\"nft_assets\".\"individual_operation_id\""},
+	ID:           whereHelperint{field: "\"nft_assets\".\"id\""},
+	CollectionID: whereHelperstring{field: "\"nft_assets\".\"collection_id\""},
+	TokenID:      whereHelperstring{field: "\"nft_assets\".\"token_id\""},
+	OwnerUserID:  whereHelperstring{field: "\"nft_assets\".\"owner_user_id\""},
+	ChainID:      whereHelperint64{field: "\"nft_assets\".\"chain_id\""},
+	MetadataURI:  whereHelpernull_String{field: "\"nft_assets\".\"metadata_uri\""},
+	Name:         whereHelpernull_String{field: "\"nft_assets\".\"name\""},
+	Description:  whereHelpernull_String{field: "\"nft_assets\".\"description\""},
+	ImageURL:     whereHelpernull_String{field: "\"nft_assets\".\"image_url\""},
+	Attributes:   whereHelpernull_JSON{field: "\"nft_assets\".\"attributes\""},
+	IsBurned:     whereHelpernull_Bool{field: "\"nft_assets\".\"is_burned\""},
+	IsMinted:     whereHelpernull_Bool{field: "\"nft_assets\".\"is_minted\""},
+	IsLocked:     whereHelpernull_Bool{field: "\"nft_assets\".\"is_locked\""},
+	CreatedAt:    whereHelpernull_Time{field: "\"nft_assets\".\"created_at\""},
+	UpdatedAt:    whereHelpernull_Time{field: "\"nft_assets\".\"updated_at\""},
+	OperationID:  whereHelpernull_String{field: "\"nft_assets\".\"operation_id\""},
+	TXID:         whereHelpernull_String{field: "\"nft_assets\".\"tx_id\""},
 }
 
 // NFTAssetRels is where relationship names are stored.
@@ -214,9 +214,9 @@ func (r *nftAssetR) GetCollection() *NFTCollection {
 type nftAssetL struct{}
 
 var (
-	nftAssetAllColumns            = []string{"id", "collection_id", "token_id", "owner_user_id", "chain_id", "metadata_uri", "name", "description", "image_url", "attributes", "is_burned", "is_minted", "is_locked", "created_at", "updated_at", "operation_id", "individual_operation_id"}
+	nftAssetAllColumns            = []string{"id", "collection_id", "token_id", "owner_user_id", "chain_id", "metadata_uri", "name", "description", "image_url", "attributes", "is_burned", "is_minted", "is_locked", "created_at", "updated_at", "operation_id", "tx_id"}
 	nftAssetColumnsWithoutDefault = []string{"collection_id", "token_id", "owner_user_id", "chain_id"}
-	nftAssetColumnsWithDefault    = []string{"id", "metadata_uri", "name", "description", "image_url", "attributes", "is_burned", "is_minted", "is_locked", "created_at", "updated_at", "operation_id", "individual_operation_id"}
+	nftAssetColumnsWithDefault    = []string{"id", "metadata_uri", "name", "description", "image_url", "attributes", "is_burned", "is_minted", "is_locked", "created_at", "updated_at", "operation_id", "tx_id"}
 	nftAssetPrimaryKeyColumns     = []string{"id"}
 	nftAssetGeneratedColumns      = []string{}
 )

@@ -153,7 +153,8 @@ func (c *RabbitMQBatchConsumer) validateAndSeparateByBalance(ctx context.Context
 
 	tx, err := c.db.BeginTx(ctx, &sql.TxOptions{ReadOnly: true})
 	if err != nil {
-		return nil, nil, fmt.Errorf("failed to begin read transaction: %w", err)
+		log.Error().Err(err).Msg("failed to begin read transaction")
+		return nil, nil, err
 	}
 	defer func() {
 		if err := tx.Rollback(); err != nil {
@@ -202,7 +203,8 @@ func (c *RabbitMQBatchConsumer) validateAndSeparateByBalance(ctx context.Context
 func (c *RabbitMQBatchConsumer) validateBurnBalance(tx *sql.Tx, job AssetAdjustJob) (bool, error) {
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
-		return false, fmt.Errorf("invalid amount format: %s", job.Amount)
+		log.Error().Err(err).Str("amount", job.Amount).Msg("invalid amount format")
+		return false, err
 	}
 
 	if amount.IsNegative() {
@@ -217,7 +219,8 @@ func (c *RabbitMQBatchConsumer) validateBurnBalance(tx *sql.Tx, job AssetAdjustJ
 	var balanceStr string
 	err = tx.QueryRow(query, job.UserID, job.ChainID, job.TokenID).Scan(&balanceStr)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return false, fmt.Errorf("failed to query user balance: %w", err)
+		log.Error().Err(err).Str("user_id", job.UserID).Int64("chain_id", job.ChainID).Int("token_id", job.TokenID).Msg("failed to query user balance")
+		return false, err
 	}
 
 	// If no balance record exists, balance is 0
@@ -227,7 +230,8 @@ func (c *RabbitMQBatchConsumer) validateBurnBalance(tx *sql.Tx, job AssetAdjustJ
 	} else {
 		balance, err = decimal.NewFromString(balanceStr)
 		if err != nil {
-			return false, fmt.Errorf("failed to parse balance: %w", err)
+			log.Error().Err(err).Str("balance", balanceStr).Msg("failed to parse balance")
+			return false, err
 		}
 	}
 
@@ -238,11 +242,13 @@ func (c *RabbitMQBatchConsumer) validateBurnBalance(tx *sql.Tx, job AssetAdjustJ
 func (c *RabbitMQBatchConsumer) validateTransferBalance(tx *sql.Tx, job TransferJob) (bool, error) {
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
-		return false, fmt.Errorf("invalid amount format: %s", job.Amount)
+		log.Error().Str("amount", job.Amount).Msg("invalid amount format")
+		return false, err
 	}
 
 	if amount.IsNegative() {
-		return false, fmt.Errorf("transfer amount cannot be negative: %s", job.Amount)
+		log.Error().Str("amount", job.Amount).Msg("transfer amount cannot be negative")
+		return false, err
 	}
 
 	query := `
@@ -253,7 +259,8 @@ func (c *RabbitMQBatchConsumer) validateTransferBalance(tx *sql.Tx, job Transfer
 	var balanceStr string
 	err = tx.QueryRow(query, job.FromUserID, job.ChainID, job.TokenID).Scan(&balanceStr)
 	if err != nil && !errors.Is(err, sql.ErrNoRows) {
-		return false, fmt.Errorf("failed to query user balance: %w", err)
+		log.Error().Err(err).Str("from_user_id", job.FromUserID).Msg("failed to query user balance")
+		return false, err
 	}
 
 	// If no balance record exists, balance is 0
@@ -263,7 +270,8 @@ func (c *RabbitMQBatchConsumer) validateTransferBalance(tx *sql.Tx, job Transfer
 	} else {
 		balance, err = decimal.NewFromString(balanceStr)
 		if err != nil {
-			return false, fmt.Errorf("failed to parse balance: %w", err)
+			log.Error().Err(err).Str("balance", balanceStr).Msg("failed to parse balance")
+			return false, err
 		}
 	}
 
@@ -408,12 +416,15 @@ func (c *RabbitMQBatchConsumer) sendInsufficientBalanceNotification(ctx context.
 // updateTransactionsToBatching updates transaction records to 'batching' status and freezes balances
 func (c *RabbitMQBatchConsumer) updateTransactionsToBatching(ctx context.Context, messages []*MessageWrapper, batchID uuid.UUID) error {
 	if c.db == nil {
-		return fmt.Errorf("database connection is nil")
+		err := errors.New("database connection is nil")
+		log.Error().Msg("database connection is nil")
+		return err
 	}
 
 	tx, err := c.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		log.Error().Err(err).Msg("failed to begin transaction")
+		return err
 	}
 	defer func() {
 		if err := tx.Rollback(); err != nil {
@@ -424,7 +435,8 @@ func (c *RabbitMQBatchConsumer) updateTransactionsToBatching(ctx context.Context
 	// 1. Create batch record in 'preparing' status
 	err = c.createPreparingBatchRecord(tx, batchID, messages)
 	if err != nil {
-		return fmt.Errorf("failed to create preparing batch record: %w", err)
+		log.Error().Err(err).Msg("failed to create preparing batch record")
+		return err
 	}
 
 	// 2. Update transaction status and freeze balances atomically
@@ -434,18 +446,21 @@ func (c *RabbitMQBatchConsumer) updateTransactionsToBatching(ctx context.Context
 		// Insert or update transaction record
 		err = c.upsertTransactionRecord(tx, job, batchID)
 		if err != nil {
-			return fmt.Errorf("failed to upsert transaction record: %w", err)
+			log.Error().Err(err).Msg("failed to upsert transaction record")
+			return err
 		}
 
 		// Freeze balances for burn/transfer operations
 		err = c.freezeUserBalance(tx, job)
 		if err != nil {
-			return fmt.Errorf("failed to freeze user balance: %w", err)
+			log.Error().Err(err).Msg("failed to freeze user balance")
+			return err
 		}
 	}
 
 	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit batching status update: %w", err)
+		log.Error().Err(err).Msg("failed to commit batching status update")
+		return err
 	}
 
 	return nil
@@ -467,7 +482,8 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 			ON CONFLICT (tx_id) DO UPDATE SET
 				status = 'batching',
 				batch_id = EXCLUDED.batch_id,
-				is_batch_operation = TRUE`
+				is_batch_operation = TRUE,
+				updated_at = NOW()`
 
 		amount, _ := decimal.NewFromString(j.Amount)
 		args = []interface{}{
@@ -486,7 +502,8 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 			ON CONFLICT (tx_id) DO UPDATE SET
 				status = 'batching',
 				batch_id = EXCLUDED.batch_id,
-				is_batch_operation = TRUE`
+				is_batch_operation = TRUE,
+				updated_at = NOW()`
 
 		amount, _ := decimal.NewFromString(j.Amount)
 		args = []interface{}{
@@ -500,18 +517,18 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 			INSERT INTO transactions (
 				tx_id, operation_id, user_id, chain_id, tx_type, business_type,
 				collection_id, nft_token_id, status, batch_id, is_batch_operation,
-				reason_type, reason_detail, created_at, amount, individual_operation_id
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+				reason_type, reason_detail, created_at, amount
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 			ON CONFLICT (tx_id) DO UPDATE SET
 				status = 'batching',
 				batch_id = EXCLUDED.batch_id,
-				is_batch_operation = TRUE`
+				is_batch_operation = TRUE,
+				updated_at = NOW()`
 
 		args = []interface{}{
 			j.TransactionID, j.GetOperationID(), j.ToUserID, j.ChainID, "nft_mint", j.BusinessType,
 			j.CollectionID, j.TokenID, "batching", batchID, true,
 			j.ReasonType, j.ReasonDetail, j.CreatedAt, "1", // 设置 amount 为 "1"
-			j.IndividualOperationID, // 添加 individual_operation_id
 		}
 
 	case NFTBurnJob:
@@ -519,18 +536,18 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 			INSERT INTO transactions (
 				tx_id, operation_id, user_id, chain_id, tx_type, business_type,
 				collection_id, nft_token_id, status, batch_id, is_batch_operation,
-				reason_type, reason_detail, created_at, amount, individual_operation_id
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+				reason_type, reason_detail, created_at, amount
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
 			ON CONFLICT (tx_id) DO UPDATE SET
 				status = 'batching',
 				batch_id = EXCLUDED.batch_id,
-				is_batch_operation = TRUE`
+				is_batch_operation = TRUE,
+				updated_at = NOW()`
 
 		args = []interface{}{
 			j.TransactionID, j.GetOperationID(), j.OwnerUserID, j.ChainID, "nft_burn", j.BusinessType,
 			j.CollectionID, j.TokenID, "batching", batchID, true,
 			j.ReasonType, j.ReasonDetail, j.CreatedAt, "1", // 设置 amount 为 "1"
-			j.IndividualOperationID, // 添加 individual_operation_id
 		}
 
 	case NFTTransferJob:
@@ -538,18 +555,18 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 			INSERT INTO transactions (
 				tx_id, operation_id, user_id, chain_id, tx_type, business_type,
 				related_user_id, collection_id, nft_token_id, status, batch_id, is_batch_operation,
-				reason_type, reason_detail, created_at, amount, individual_operation_id
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+				reason_type, reason_detail, created_at, amount
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 			ON CONFLICT (tx_id) DO UPDATE SET
 				status = 'batching',
 				batch_id = EXCLUDED.batch_id,
-				is_batch_operation = TRUE`
+				is_batch_operation = TRUE,
+				updated_at = NOW()`
 
 		args = []interface{}{
 			j.TransactionID, j.GetOperationID(), j.FromUserID, j.ChainID, "nft_transfer", j.BusinessType,
 			j.ToUserID, j.CollectionID, j.TokenID, "batching", batchID, true,
 			j.ReasonType, j.ReasonDetail, j.CreatedAt, "1", // 设置 amount 为 "1"
-			j.IndividualOperationID, // 添加 individual_operation_id
 		}
 
 	default:
@@ -896,12 +913,15 @@ func (c *RabbitMQBatchConsumer) prepareTransferFromParams(ctx context.Context, j
 // updateBatchToSubmitted updates batch status to 'submitted' after successful blockchain submission
 func (c *RabbitMQBatchConsumer) updateBatchToSubmitted(ctx context.Context, batchID uuid.UUID, result *blockchain.BatchResult) error {
 	if c.db == nil {
-		return fmt.Errorf("database connection is nil")
+		err := errors.New("database connection is nil")
+		log.Error().Msg("database connection is nil")
+		return err
 	}
 
 	tx, err := c.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		log.Error().Err(err).Msg("failed to begin transaction")
+		return err
 	}
 	defer func() {
 		if err := tx.Rollback(); err != nil {
@@ -1007,12 +1027,15 @@ func (c *RabbitMQBatchConsumer) completeSuccessfulBatch(
 	processingTime time.Duration,
 ) error {
 	if c.db == nil {
-		return fmt.Errorf("database connection is nil")
+		err := errors.New("database connection is nil")
+		log.Error().Msg("database connection is nil")
+		return err
 	}
 
 	tx, err := c.db.BeginTx(ctx, nil)
 	if err != nil {
-		return fmt.Errorf("failed to begin transaction: %w", err)
+		log.Error().Err(err).Msg("failed to begin transaction")
+		return err
 	}
 	defer func() {
 		if err := tx.Rollback(); err != nil {
