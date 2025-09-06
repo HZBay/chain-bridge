@@ -2329,22 +2329,35 @@ func (c *RabbitMQBatchConsumer) processNFTBatch(
 		// Don't fail the batch for this, just log warning
 	}
 
-	// 3. Process NFT-specific finalization
-	err = c.finalizeNFTAssetsForBatch(ctx, batchID.String(), batchType, group.ChainID, result.TxHash)
+	// 3. Extract and update NFT token IDs for mint operations (before finalization)
+	if batchType == "nft_mint" {
+		err = c.extractAndUpdateNFTTokenIDs(ctx, batchID.String(), result.TxHash)
+		if err != nil {
+			log.Warn().
+				Err(err).
+				Str("batch_id", batchID.String()).
+				Str("tx_hash", result.TxHash).
+				Msg("Failed to extract and update NFT token IDs")
+			// Don't fail the batch for this, just log warning
+		}
+	}
+
+	// 4. Process NFT-specific finalization
+	err = c.finalizeNFTAssetsForBatch(ctx, batchID.String(), batchType, group.ChainID)
 	if err != nil {
 		return fmt.Errorf("NFT finalization failed: %w", err)
 	}
 
-	// 4. Send NFT success notifications
+	// 5. Send NFT success notifications
 	c.sendNFTSuccessNotifications(ctx, batchID.String(), batchType, group.ChainID, result.TxHash)
 
-	// 5. Complete the batch after NFT processing
+	// 6. Complete the batch after NFT processing
 	err = c.completeSuccessfulBatch(ctx, messages, group, batchID, result, processingTime)
 	if err != nil {
 		return fmt.Errorf("NFT batch completion failed: %w", err)
 	}
 
-	// 6. ACK messages after successful completion
+	// 7. ACK messages after successful completion
 	c.ackAllMessages(messages)
 
 	log.Info().

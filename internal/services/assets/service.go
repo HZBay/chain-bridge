@@ -3,6 +3,7 @@ package assets
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"math"
@@ -10,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-openapi/strfmt"
 	"github.com/google/uuid"
 	"github.com/hzbay/chain-bridge/internal/models"
 	"github.com/hzbay/chain-bridge/internal/queue"
@@ -520,9 +522,12 @@ func (s *service) GetUserAssets(ctx context.Context, userID string) (*types.Asse
 	).All(ctx, s.db)
 
 	// Query user NFT assets with collection and chain information
+	// Filter out NFTs with token_id = '-1' and is_burned = true
 	userNFTs, err2 := models.NFTAssets(
 		models.NFTAssetWhere.OwnerUserID.EQ(userID),
+		models.NFTAssetWhere.IsMinted.EQ(null.BoolFrom(true)),
 		models.NFTAssetWhere.IsBurned.EQ(null.BoolFrom(false)), // Only include non-burned NFTs
+		models.NFTAssetWhere.TokenID.NEQ("-1"),                 // Exclude NFTs with token_id = '-1'
 		qm.Load(models.NFTAssetRels.Collection),
 		qm.Load(models.NFTAssetRels.Collection+"."+models.NFTCollectionRels.Chain),
 		qm.OrderBy(models.NFTAssetColumns.ChainID+" ASC, "+models.NFTAssetColumns.CollectionID+" ASC, "+models.NFTAssetColumns.TokenID+" ASC"),
@@ -613,6 +618,7 @@ func (s *service) GetUserAssets(ctx context.Context, userID string) (*types.Asse
 
 	// Process NFT assets - group by collection
 	var nftCollections []*NFTCollectionGroup
+	var nftAssets []*types.NFTCollectionInfo
 	if userNFTs != nil {
 		nftCollections = s.groupNFTsByCollection(userNFTs)
 		for _, collection := range nftCollections {
@@ -623,6 +629,10 @@ func (s *service) GetUserAssets(ctx context.Context, userID string) (*types.Asse
 			// Build asset info for NFT collection
 			nftAssetInfo := s.buildNFTCollectionAssetInfo(collection, collectionValueUsd)
 			assets = append(assets, nftAssetInfo)
+
+			// Build NFT collection info for nft_assets field
+			nftCollectionInfo := s.buildNFTCollectionInfo(collection, collectionValueUsd)
+			nftAssets = append(nftAssets, nftCollectionInfo)
 		}
 	}
 
@@ -632,6 +642,7 @@ func (s *service) GetUserAssets(ctx context.Context, userID string) (*types.Asse
 		UserID:        strPtr(userID),
 		TotalValueUsd: &totalValueUsdFloat32,
 		Assets:        assets,
+		NftAssets:     nftAssets,
 	}
 
 	// Get batch info for this user
@@ -857,6 +868,10 @@ func float32Ptr(f float32) *float32 {
 	return &f
 }
 
+func int64Ptr(i int64) *int64 {
+	return &i
+}
+
 // NFT Collection processing types and helpers
 
 // NFTCollectionGroup represents a grouped collection of NFTs
@@ -999,5 +1014,103 @@ func (s *service) buildNFTCollectionAssetInfo(collection *NFTCollectionGroup, va
 		LockedBalance:    &lockedBalance,
 		BalanceUsd:       float32(valueUsd),
 		SyncStatus:       &syncStatus,
+	}
+}
+
+// buildNFTCollectionInfo builds NFTCollectionInfo for the nft_assets field
+func (s *service) buildNFTCollectionInfo(collection *NFTCollectionGroup, valueUsd float64) *types.NFTCollectionInfo {
+	// Count NFTs by status
+	totalCount := len(collection.NFTs)
+	lockedCount := 0
+	mintedCount := 0
+
+	for _, nft := range collection.NFTs {
+		if nft.IsLocked.Valid && nft.IsLocked.Bool {
+			lockedCount++
+		}
+		if nft.IsMinted.Valid && nft.IsMinted.Bool {
+			mintedCount++
+		}
+	}
+
+	// Build NFT items
+	var items []*types.NFTItem
+	for _, nft := range collection.NFTs {
+		// Parse attributes from JSON
+		var attributes []*types.NFTAttribute
+		if nft.Attributes.Valid && len(nft.Attributes.JSON) > 0 {
+			// Parse JSON bytes
+			var attrs map[string]interface{}
+			if err := json.Unmarshal(nft.Attributes.JSON, &attrs); err == nil {
+				if attrsArray, exists := attrs["attributes"]; exists {
+					if attrsList, ok := attrsArray.([]interface{}); ok {
+						for _, attr := range attrsList {
+							if attrMap, ok := attr.(map[string]interface{}); ok {
+								traitType, _ := attrMap["trait_type"].(string)
+								value, _ := attrMap["value"].(string)
+								attributes = append(attributes, &types.NFTAttribute{
+									TraitType: &traitType,
+									Value:     &value,
+								})
+							}
+						}
+					}
+				}
+			}
+		}
+
+		// Build metadata
+		metadata := &types.NFTItemMeta{
+			Name:        nft.Name.String,
+			Description: nft.Description.String,
+			Image:       nft.ImageURL.String,
+			Attributes:  attributes,
+		}
+
+		// Add external URL if available
+		if nft.Attributes.Valid && len(nft.Attributes.JSON) > 0 {
+			var attrs map[string]interface{}
+			if err := json.Unmarshal(nft.Attributes.JSON, &attrs); err == nil {
+				if externalURL, exists := attrs["external_url"]; exists {
+					if url, ok := externalURL.(string); ok {
+						metadata.ExternalURL = url
+					}
+				}
+			}
+		}
+
+		// Build NFT item
+		item := &types.NFTItem{
+			TokenID: &nft.TokenID,
+			Meta:    metadata,
+		}
+
+		// Add estimated value (placeholder)
+		estimatedValue := float32(valueUsd / float64(totalCount))
+		item.EstimatedValueUsd = estimatedValue
+
+		// Add last transfer date
+		if nft.UpdatedAt.Valid {
+			lastTransferDate := strfmt.DateTime(nft.UpdatedAt.Time)
+			item.LastTransferDate = lastTransferDate
+		}
+
+		items = append(items, item)
+	}
+
+	// Calculate floor price (placeholder - in production would use price feeds)
+	floorPrice := float32(valueUsd / float64(totalCount))
+	totalValue := float32(valueUsd)
+
+	return &types.NFTCollectionInfo{
+		CollectionID:    &collection.CollectionID,
+		CollectionName:  &collection.CollectionName,
+		ContractAddress: collection.ContractAddress,
+		ChainID:         &collection.ChainID,
+		ChainName:       collection.ChainName,
+		TotalCount:      int64Ptr(int64(totalCount)),
+		FloorPriceUsd:   floorPrice,
+		TotalValueUsd:   totalValue,
+		Items:           items,
 	}
 }

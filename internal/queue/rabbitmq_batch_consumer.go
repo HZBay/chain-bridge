@@ -19,7 +19,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
-	"strings"
 	"sync"
 	"time"
 
@@ -1143,7 +1142,7 @@ func (c *RabbitMQBatchConsumer) handleInsufficientBalanceMessagesDuringShutdown(
 }
 
 // finalizeNFTAssetsForBatch finalizes NFT assets for all NFT operations in the batch
-func (c *RabbitMQBatchConsumer) finalizeNFTAssetsForBatch(ctx context.Context, batchID string, batchType string, chainID int64, txHash string) error {
+func (c *RabbitMQBatchConsumer) finalizeNFTAssetsForBatch(ctx context.Context, batchID string, batchType string, chainID int64) error {
 	// Get batch operations
 	operations, err := c.getBatchOperations(ctx, batchID)
 	if err != nil {
@@ -1182,16 +1181,8 @@ func (c *RabbitMQBatchConsumer) finalizeNFTAssetsForBatch(ctx context.Context, b
 		}
 	}
 
-	// Extract and update NFT token IDs for mint operations
-	if batchType == "nft_mint" {
-		err = c.extractAndUpdateNFTTokenIDs(ctx, batchID, txHash)
-		if err != nil {
-			log.Warn().Err(err).
-				Str("batch_id", batchID).
-				Str("tx_hash", txHash).
-				Msg("Failed to extract and update NFT token IDs")
-		}
-	}
+	// Note: NFT token ID extraction and update is now handled before finalization
+	// in the main processing flow to improve performance and reduce transaction time
 
 	// Commit transaction
 	if err = tx.Commit(); err != nil {
@@ -1455,164 +1446,136 @@ func (c *RabbitMQBatchConsumer) extractAndUpdateNFTTokenIDs(ctx context.Context,
 		Strs("token_ids", nftResult.TokenIDs).
 		Msg("Successfully retrieved NFT batch result")
 
-	// Get NFT mint jobs from the batch, ordered by creation time
-	query := `
-		SELECT 
-			tx_id, operation_id, user_id, collection_id
-		FROM transactions 
-		WHERE batch_id = $1 AND tx_type = 'nft_mint' AND nft_token_id = '-1' 
-		ORDER BY created_at ASC`
+	// Use transaction to ensure atomicity of all token ID updates
+	return db.WithTransaction(ctx, c.db, func(tx boil.ContextExecutor) error {
+		// Get NFT mint jobs from the batch, ordered by creation time
+		query := `
+			SELECT 
+				tx_id, operation_id, user_id, collection_id
+			FROM transactions 
+			WHERE batch_id = $1 AND tx_type = 'nft_mint' AND nft_token_id = '-1' 
+			ORDER BY created_at ASC`
 
-	log.Info().
-		Str("batch_id", batchID).
-		Str("query", query).
-		Msg("Querying mint operations from database")
-
-	rows, err := c.db.QueryContext(ctx, query, batchID)
-	if err != nil {
-		log.Error().
-			Err(err).
+		log.Info().
 			Str("batch_id", batchID).
-			Msg("Failed to query mint operations")
-		return err
-	}
-	defer rows.Close()
+			Str("query", query).
+			Msg("Querying mint operations from database")
 
-	var mintOps []struct {
-		TxID         string
-		OperationID  sql.NullString
-		UserID       string
-		CollectionID sql.NullString
-	}
+		rows, err := tx.QueryContext(ctx, query, batchID)
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("batch_id", batchID).
+				Msg("Failed to query mint operations")
+			return err
+		}
+		defer rows.Close()
 
-	for rows.Next() {
-		var op struct {
+		var mintOps []struct {
 			TxID         string
 			OperationID  sql.NullString
 			UserID       string
 			CollectionID sql.NullString
 		}
-		err := rows.Scan(&op.TxID, &op.OperationID, &op.UserID, &op.CollectionID)
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to scan mint operation")
-			continue
-		}
-		mintOps = append(mintOps, op)
-	}
 
-	if err = rows.Err(); err != nil {
-		log.Error().
-			Err(err).
-			Str("batch_id", batchID).
-			Msg("Error iterating mint operations")
-		return err
-	}
-
-	if len(mintOps) == 0 {
-		log.Warn().
-			Str("batch_id", batchID).
-			Str("tx_hash", txHash).
-			Msg("No mint operations found requiring token ID updates")
-		return nil
-	}
-
-	log.Info().
-		Str("batch_id", batchID).
-		Str("tx_hash", txHash).
-		Int("mint_ops_count", len(mintOps)).
-		Int("available_token_ids", len(nftResult.TokenIDs)).
-		Msg("Found mint operations to update")
-
-	// Update token IDs for each mint operation with individual timeouts
-	for i, op := range mintOps {
-		log.Info().
-			Str("batch_id", batchID).
-			Str("tx_id", op.TxID).
-			Str("operation_id", op.OperationID.String).
-			Str("user_id", op.UserID).
-			Str("collection_id", op.CollectionID.String).
-			Int("mint_index", i).
-			Msg("Processing mint operation")
-		if !op.OperationID.Valid || !op.CollectionID.Valid {
-			log.Warn().
-				Str("tx_id", op.TxID).
-				Msg("Missing operation_id or collection_id")
-			continue
+		for rows.Next() {
+			var op struct {
+				TxID         string
+				OperationID  sql.NullString
+				UserID       string
+				CollectionID sql.NullString
+			}
+			err := rows.Scan(&op.TxID, &op.OperationID, &op.UserID, &op.CollectionID)
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to scan mint operation")
+				continue
+			}
+			mintOps = append(mintOps, op)
 		}
 
-		// Use index in the loop as the mint index
-		if i >= len(nftResult.TokenIDs) {
-			log.Warn().
-				Int("mint_index", i).
-				Int("available_token_ids", len(nftResult.TokenIDs)).
-				Str("tx_id", op.TxID).
-				Msg("Not enough token IDs in result")
-			break
-		}
-
-		actualTokenID := nftResult.TokenIDs[i]
-		err := c.updateNFTTokenIDDirect(ctx, op.TxID, actualTokenID, op.CollectionID.String)
-
-		if err != nil {
+		if err = rows.Err(); err != nil {
 			log.Error().
 				Err(err).
-				Str("operation_id", op.OperationID.String).
-				Str("token_id", actualTokenID).
-				Msg("Failed to update NFT token ID")
-			continue
+				Str("batch_id", batchID).
+				Msg("Error iterating mint operations")
+			return err
 		}
 
-		log.Info().
-			Str("operation_id", op.OperationID.String).
-			Str("token_id", actualTokenID).
-			Int("mint_index", i).
-			Msg("Successfully updated NFT token ID")
-	}
-
-	return nil
-}
-
-// updateNFTTokenIDDirect updates NFT token ID with improved error handling and retry logic
-func (c *RabbitMQBatchConsumer) updateNFTTokenIDDirect(ctx context.Context, txID, actualTokenID, collectionID string) error {
-	const maxRetries = 3
-	const baseDelay = 2 * time.Second // 增加基础延迟
-
-	for attempt := 1; attempt <= maxRetries; attempt++ {
-		err := c.updateNFTTokenIDDirectOnce(ctx, txID, actualTokenID, collectionID)
-		if err == nil {
+		if len(mintOps) == 0 {
+			log.Warn().
+				Str("batch_id", batchID).
+				Str("tx_hash", txHash).
+				Msg("No mint operations found requiring token ID updates")
 			return nil
 		}
 
-		// 检查是否是超时或死锁错误
-		errStr := err.Error()
-		isRetryable := strings.Contains(errStr, "canceling statement due to user request") ||
-			strings.Contains(errStr, "deadlock") ||
-			strings.Contains(errStr, "lock timeout") ||
-			strings.Contains(errStr, "connection reset")
+		log.Info().
+			Str("batch_id", batchID).
+			Str("tx_hash", txHash).
+			Int("mint_ops_count", len(mintOps)).
+			Int("available_token_ids", len(nftResult.TokenIDs)).
+			Msg("Found mint operations to update")
 
-		if isRetryable && attempt < maxRetries {
-			// 指数退避：2s, 4s, 8s
-			delay := time.Duration(attempt) * baseDelay
-			log.Warn().
-				Str("tx_id", txID).
-				Str("actual_token_id", actualTokenID).
-				Str("collection_id", collectionID).
-				Int("attempt", attempt).
-				Dur("delay", delay).
-				Str("error", errStr).
-				Msg("Database operation failed, retrying with exponential backoff")
-			time.Sleep(delay)
-			continue
+		// Update token IDs for each mint operation within the transaction
+		for i, op := range mintOps {
+			log.Info().
+				Str("batch_id", batchID).
+				Str("tx_id", op.TxID).
+				Str("operation_id", op.OperationID.String).
+				Str("user_id", op.UserID).
+				Str("collection_id", op.CollectionID.String).
+				Int("mint_index", i).
+				Msg("Processing mint operation")
+
+			if !op.OperationID.Valid || !op.CollectionID.Valid {
+				log.Warn().
+					Str("tx_id", op.TxID).
+					Msg("Missing operation_id or collection_id")
+				continue
+			}
+
+			// Use index in the loop as the mint index
+			if i >= len(nftResult.TokenIDs) {
+				log.Warn().
+					Int("mint_index", i).
+					Int("available_token_ids", len(nftResult.TokenIDs)).
+					Str("tx_id", op.TxID).
+					Msg("Not enough token IDs in result")
+				break
+			}
+
+			actualTokenID := nftResult.TokenIDs[i]
+			err := c.updateNFTTokenIDDirectWithTx(ctx, tx, op.TxID, actualTokenID, op.CollectionID.String)
+
+			if err != nil {
+				log.Error().
+					Err(err).
+					Str("operation_id", op.OperationID.String).
+					Str("token_id", actualTokenID).
+					Msg("Failed to update NFT token ID")
+				return err // Return error to rollback transaction
+			}
+
+			log.Info().
+				Str("operation_id", op.OperationID.String).
+				Str("token_id", actualTokenID).
+				Int("mint_index", i).
+				Msg("Successfully updated NFT token ID")
 		}
 
-		return err
-	}
-	return fmt.Errorf("failed after %d attempts", maxRetries)
+		log.Info().
+			Str("batch_id", batchID).
+			Str("tx_hash", txHash).
+			Int("updated_count", len(mintOps)).
+			Msg("Successfully updated all NFT token IDs in transaction")
+
+		return nil
+	})
 }
 
-// updateNFTTokenIDDirectOnce performs a single attempt to update NFT token ID
-func (c *RabbitMQBatchConsumer) updateNFTTokenIDDirectOnce(ctx context.Context, txID, actualTokenID, collectionID string) error {
-	// 添加连接池状态监控
+// updateNFTTokenIDDirectWithTx updates NFT token ID within an existing transaction
+func (c *RabbitMQBatchConsumer) updateNFTTokenIDDirectWithTx(ctx context.Context, tx boil.ContextExecutor, txID, actualTokenID, collectionID string) error {
+	// Add connection pool status monitoring
 	stats := c.db.Stats()
 	log.Debug().
 		Str("tx_id", txID).
@@ -1623,7 +1586,7 @@ func (c *RabbitMQBatchConsumer) updateNFTTokenIDDirectOnce(ctx context.Context, 
 		Dur("wait_duration", stats.WaitDuration).
 		Msg("Database connection pool status before operation")
 
-	// 减少超时时间到5秒
+	// Reduce timeout to 5 seconds,配合连接池优化
 	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
 
@@ -1631,144 +1594,141 @@ func (c *RabbitMQBatchConsumer) updateNFTTokenIDDirectOnce(ctx context.Context, 
 		Str("tx_id", txID).
 		Str("actual_token_id", actualTokenID).
 		Str("collection_id", collectionID).
-		Msg("Starting updateNFTTokenIDDirect")
+		Msg("Starting updateNFTTokenIDDirectWithTx")
 
-	// 使用事务确保原子性
-	return db.WithTransaction(ctx, c.db, func(tx boil.ContextExecutor) error {
-		// Update nft_assets table using tx_id
-		assetsQuery := `
-			UPDATE nft_assets 
-			SET 
-				token_id = $1,
-				updated_at = $2
-			WHERE tx_id = $3 AND collection_id = $4 AND token_id = '-1'`
+	// Update nft_assets table using tx_id
+	assetsQuery := `
+		UPDATE nft_assets 
+		SET 
+			token_id = $1,
+			updated_at = $2
+		WHERE tx_id = $3 AND collection_id = $4 AND token_id = '-1'`
 
-		log.Debug().
+	log.Debug().
+		Str("tx_id", txID).
+		Str("actual_token_id", actualTokenID).
+		Str("collection_id", collectionID).
+		Str("query", assetsQuery).
+		Msg("Updating nft_assets table")
+
+	start := time.Now()
+	result, err := tx.ExecContext(ctx, assetsQuery, actualTokenID, time.Now(), txID, collectionID)
+	duration := time.Since(start)
+
+	if err != nil {
+		log.Error().
+			Err(err).
 			Str("tx_id", txID).
 			Str("actual_token_id", actualTokenID).
 			Str("collection_id", collectionID).
-			Str("query", assetsQuery).
-			Msg("Updating nft_assets table")
-
-		start := time.Now()
-		result, err := tx.ExecContext(ctx, assetsQuery, actualTokenID, time.Now(), txID, collectionID)
-		duration := time.Since(start)
-
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("tx_id", txID).
-				Str("actual_token_id", actualTokenID).
-				Str("collection_id", collectionID).
-				Dur("duration", duration).
-				Msg("Failed to update NFT token ID in nft_assets")
-			return err
-		}
-
-		// Log slow operations (降低阈值到2秒)
-		if duration > 2*time.Second {
-			log.Warn().
-				Str("tx_id", txID).
-				Dur("duration", duration).
-				Msg("Slow database update detected for nft_assets")
-		}
-
-		rowsAffected, err := result.RowsAffected()
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("tx_id", txID).
-				Msg("Failed to check rows affected for nft_assets")
-			return err
-		}
-
-		log.Info().
-			Str("tx_id", txID).
-			Str("actual_token_id", actualTokenID).
-			Str("collection_id", collectionID).
-			Int64("rows_affected", rowsAffected).
 			Dur("duration", duration).
-			Msg("nft_assets update result")
+			Msg("Failed to update NFT token ID in nft_assets")
+		return err
+	}
 
-		if rowsAffected == 0 {
-			log.Warn().
-				Str("tx_id", txID).
-				Str("collection_id", collectionID).
-				Str("token_id", actualTokenID).
-				Msg("No NFT assets found to update token ID")
-		}
-
-		// Update transactions table using tx_id
-		txQuery := `
-			UPDATE transactions 
-			SET 
-				nft_token_id = $1,
-				updated_at = $2
-			WHERE tx_id = $3 AND collection_id = $4 AND nft_token_id = '-1'`
-
-		log.Debug().
+	// Log slow operations (threshold 2 seconds)
+	if duration > 2*time.Second {
+		log.Warn().
 			Str("tx_id", txID).
-			Str("actual_token_id", actualTokenID).
-			Str("collection_id", collectionID).
-			Str("query", txQuery).
-			Msg("Updating transactions table")
-
-		start = time.Now()
-		result, err = tx.ExecContext(ctx, txQuery, actualTokenID, time.Now(), txID, collectionID)
-		duration = time.Since(start)
-
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("tx_id", txID).
-				Str("actual_token_id", actualTokenID).
-				Str("collection_id", collectionID).
-				Dur("duration", duration).
-				Msg("Failed to update NFT token ID in transactions")
-			return err
-		}
-
-		// Log slow operations (降低阈值到2秒)
-		if duration > 2*time.Second {
-			log.Warn().
-				Str("tx_id", txID).
-				Dur("duration", duration).
-				Msg("Slow database update detected for transactions")
-		}
-
-		rowsAffected, err = result.RowsAffected()
-		if err != nil {
-			log.Error().
-				Err(err).
-				Str("tx_id", txID).
-				Msg("Failed to check rows affected for transactions")
-			return err
-		}
-
-		log.Info().
-			Str("tx_id", txID).
-			Str("actual_token_id", actualTokenID).
-			Str("collection_id", collectionID).
-			Int64("rows_affected", rowsAffected).
 			Dur("duration", duration).
-			Msg("transactions update result")
+			Msg("Slow database update detected for nft_assets")
+	}
 
-		if rowsAffected == 0 {
-			log.Warn().
-				Str("tx_id", txID).
-				Str("collection_id", collectionID).
-				Str("token_id", actualTokenID).
-				Msg("No transactions found to update token ID")
-		}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("tx_id", txID).
+			Msg("Failed to check rows affected for nft_assets")
+		return err
+	}
 
-		log.Info().
+	log.Info().
+		Str("tx_id", txID).
+		Str("actual_token_id", actualTokenID).
+		Str("collection_id", collectionID).
+		Int64("rows_affected", rowsAffected).
+		Dur("duration", duration).
+		Msg("nft_assets update result")
+
+	if rowsAffected == 0 {
+		log.Warn().
+			Str("tx_id", txID).
+			Str("collection_id", collectionID).
+			Str("token_id", actualTokenID).
+			Msg("No NFT assets found to update token ID")
+	}
+
+	// Update transactions table using tx_id
+	txQuery := `
+		UPDATE transactions 
+		SET 
+			nft_token_id = $1,
+			updated_at = $2
+		WHERE tx_id = $3 AND collection_id = $4 AND nft_token_id = '-1'`
+
+	log.Debug().
+		Str("tx_id", txID).
+		Str("actual_token_id", actualTokenID).
+		Str("collection_id", collectionID).
+		Str("query", txQuery).
+		Msg("Updating transactions table")
+
+	start = time.Now()
+	result, err = tx.ExecContext(ctx, txQuery, actualTokenID, time.Now(), txID, collectionID)
+	duration = time.Since(start)
+
+	if err != nil {
+		log.Error().
+			Err(err).
 			Str("tx_id", txID).
 			Str("actual_token_id", actualTokenID).
 			Str("collection_id", collectionID).
-			Msg("Successfully updated NFT token ID")
+			Dur("duration", duration).
+			Msg("Failed to update NFT token ID in transactions")
+		return err
+	}
 
-		return nil
-	})
+	// Log slow operations (threshold 2 seconds)
+	if duration > 2*time.Second {
+		log.Warn().
+			Str("tx_id", txID).
+			Dur("duration", duration).
+			Msg("Slow database update detected for transactions")
+	}
+
+	rowsAffected, err = result.RowsAffected()
+	if err != nil {
+		log.Error().
+			Err(err).
+			Str("tx_id", txID).
+			Msg("Failed to check rows affected for transactions")
+		return err
+	}
+
+	log.Info().
+		Str("tx_id", txID).
+		Str("actual_token_id", actualTokenID).
+		Str("collection_id", collectionID).
+		Int64("rows_affected", rowsAffected).
+		Dur("duration", duration).
+		Msg("transactions update result")
+
+	if rowsAffected == 0 {
+		log.Warn().
+			Str("tx_id", txID).
+			Str("collection_id", collectionID).
+			Str("token_id", actualTokenID).
+			Msg("No transactions found to update token ID")
+	}
+
+	log.Info().
+		Str("tx_id", txID).
+		Str("actual_token_id", actualTokenID).
+		Str("collection_id", collectionID).
+		Msg("Successfully updated NFT token ID")
+
+	return nil
 }
 
 // getNFTBatchResult gets NFT batch result with timeout and improved error handling

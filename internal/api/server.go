@@ -298,12 +298,21 @@ func (s *Server) InitDB(ctx context.Context) error {
 
 	if s.Config.Database.MaxOpenConns > 0 {
 		db.SetMaxOpenConns(s.Config.Database.MaxOpenConns)
+		log.Info().
+			Int("max_open_conns", s.Config.Database.MaxOpenConns).
+			Msg("Database connection pool MaxOpenConns configured")
 	}
 	if s.Config.Database.MaxIdleConns > 0 {
 		db.SetMaxIdleConns(s.Config.Database.MaxIdleConns)
+		log.Info().
+			Int("max_idle_conns", s.Config.Database.MaxIdleConns).
+			Msg("Database connection pool MaxIdleConns configured")
 	}
 	if s.Config.Database.ConnMaxLifetime > 0 {
 		db.SetConnMaxLifetime(s.Config.Database.ConnMaxLifetime)
+		log.Info().
+			Dur("conn_max_lifetime", s.Config.Database.ConnMaxLifetime).
+			Msg("Database connection pool ConnMaxLifetime configured")
 	}
 
 	if err := db.PingContext(ctx); err != nil {

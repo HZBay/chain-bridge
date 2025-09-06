@@ -46,9 +46,9 @@ services:
       PGPORT: &PGPORT "5432"
       PGSSLMODE: &PGSSLMODE "disable"
 
-      # 数据库连接池优化配置
-      DB_MAX_OPEN_CONNS: "20"
-      DB_MAX_IDLE_CONNS: "5"
+      # 数据库连接池优化配置 - 针对高并发场景调整
+      DB_MAX_OPEN_CONNS: "50"  # 增加最大连接数
+      DB_MAX_IDLE_CONNS: "10"  # 增加空闲连接数
       DB_CONN_MAX_LIFETIME_SEC: "300"
 
       # optional: env for sql-boiler (ability to generate models out of a "spec" database)
@@ -105,7 +105,8 @@ services:
     # DO NOT COPY/PASTE THIS BLINDLY.
     # YOU HAVE BEEN WARNED.
     # Apply some performance improvements to pg as these guarantees are not needed while running locally
-    command: "postgres -c 'shared_buffers=128MB' -c 'fsync=off' -c 'synchronous_commit=off' -c 'full_page_writes=off' -c 'max_connections=100' -c 'client_min_messages=warning'"
+    # 针对高并发NFT操作优化的PostgreSQL配置
+    command: "postgres -c 'shared_buffers=256MB' -c 'fsync=off' -c 'synchronous_commit=off' -c 'full_page_writes=off' -c 'max_connections=200' -c 'client_min_messages=warning' -c 'effective_cache_size=512MB' -c 'maintenance_work_mem=64MB' -c 'work_mem=16MB' -c 'wal_buffers=16MB' -c 'max_locks_per_transaction=256'"
     expose:
       - "5432"
     ports:
