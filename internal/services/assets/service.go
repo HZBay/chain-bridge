@@ -162,14 +162,26 @@ func (s *service) AdjustAssets(ctx context.Context, req *types.AssetAdjustReques
 			return nil, nil, err
 		}
 
+		// Validate user has no pending or locked balance for this token
+		if err := s.validateUserBalanceStatus(ctx, *adjustment.UserID, *adjustment.ChainID, tokenID); err != nil {
+			return nil, nil, err
+		}
+
 		// Generate unique transaction ID for this adjustment
 		txID := uuid.New()
 
 		// Determine adjustment type based on amount sign
 		adjustmentType := "mint"
 		amount := *adjustment.Amount
+
 		if len(amount) > 0 && amount[0] == '-' {
 			adjustmentType = "burn"
+		}
+
+		// Remove the sign from amount for processing
+		amountValue := amount
+		if len(amount) > 0 && (amount[0] == '+' || amount[0] == '-') {
+			amountValue = amount[1:]
 		}
 
 		// Create transaction record
@@ -204,7 +216,7 @@ func (s *service) AdjustAssets(ctx context.Context, req *types.AssetAdjustReques
 			transaction.TXType,
 			transaction.BusinessType,
 			transaction.TokenID,
-			amount, // Use string amount directly
+			amountValue, // Use amount without sign
 			transaction.Status,
 			transaction.IsBatchOperation,
 			transaction.ReasonType,
@@ -223,7 +235,7 @@ func (s *service) AdjustAssets(ctx context.Context, req *types.AssetAdjustReques
 			ChainID:        *adjustment.ChainID,
 			TokenID:        tokenID, // Use validated token ID
 			UserID:         *adjustment.UserID,
-			Amount:         amount,
+			Amount:         amount, // Keep original amount with sign for MQ processing
 			AdjustmentType: adjustmentType,
 			BusinessType:   *adjustment.BusinessType,
 			ReasonType:     *adjustment.ReasonType,
@@ -1113,4 +1125,39 @@ func (s *service) buildNFTCollectionInfo(collection *NFTCollectionGroup, valueUs
 		TotalValueUsd:   totalValue,
 		Items:           items,
 	}
+}
+
+// validateUserBalanceStatus checks if user has any pending or locked balance for the token
+func (s *service) validateUserBalanceStatus(ctx context.Context, userID string, chainID int64, tokenID int) error {
+	ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var pendingBalance, lockedBalance sqltypes.NullDecimal
+	err := s.db.QueryRowContext(ctxTimeout, `
+		SELECT pending_balance, locked_balance
+		FROM user_balances
+		WHERE user_id = $1 AND chain_id = $2 AND token_id = $3
+	`, userID, chainID, tokenID).Scan(&pendingBalance, &lockedBalance)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			// User has no balance record, which is fine for new adjustments
+			return nil
+		}
+		return fmt.Errorf("failed to query user balance: %w", err)
+	}
+
+	// Check if user has pending balance
+	if pendingBalance.Big != nil && pendingBalance.Big.Sign() > 0 {
+		return fmt.Errorf("user %s has pending balance %s for token %d on chain %d, cannot process new adjustment",
+			userID, pendingBalance.Big.String(), tokenID, chainID)
+	}
+
+	// Check if user has locked balance
+	if lockedBalance.Big != nil && lockedBalance.Big.Sign() > 0 {
+		return fmt.Errorf("user %s has locked balance %s for token %d on chain %d, cannot process new adjustment",
+			userID, lockedBalance.Big.String(), tokenID, chainID)
+	}
+
+	return nil
 }

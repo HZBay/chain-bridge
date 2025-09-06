@@ -79,7 +79,9 @@ AVAILABLE_TOKEN_IDS=("316" "341" "342" "343" "344" "345" "346" "347" "348" "349"
 
 # 生成随机数据
 generate_random_data() {
+    # 生成标准UUID格式的operation_id
     local operation_id=$(uuidgen | tr '[:upper:]' '[:lower:]')
+    
     # 从实际拥有的NFT token ID中随机选择一个
     local token_id=${AVAILABLE_TOKEN_IDS[$((RANDOM % ${#AVAILABLE_TOKEN_IDS[@]}))]}
     local amount=$((RANDOM % 100 + 1))

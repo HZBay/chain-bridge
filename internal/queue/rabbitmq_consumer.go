@@ -1246,15 +1246,18 @@ func (c *RabbitMQBatchConsumer) finalizeUserBalances(tx *sql.Tx, jobs []BatchJob
 	for _, job := range jobs {
 		switch j := job.(type) {
 		case AssetAdjustJob:
-			if j.AdjustmentType == "mint" {
-				err := c.finalizeBalanceForMint(tx, j)
+			// Check amount sign to determine finalization logic
+			if len(j.Amount) > 0 && j.Amount[0] == '-' {
+				// Negative amount: finalize locked_balance operation
+				err := c.finalizeBalanceForLocked(tx, j)
 				if err != nil {
-					return fmt.Errorf("failed to finalize balance for mint: %w", err)
+					return fmt.Errorf("failed to finalize balance for locked operation: %w", err)
 				}
-			} else if j.AdjustmentType == "burn" {
-				err := c.finalizeBalanceForBurn(tx, j)
+			} else {
+				// Positive amount: finalize pending_balance operation
+				err := c.finalizeBalanceForPending(tx, j)
 				if err != nil {
-					return fmt.Errorf("failed to finalize balance for burn: %w", err)
+					return fmt.Errorf("failed to finalize balance for pending operation: %w", err)
 				}
 			}
 		case TransferJob:
@@ -1267,86 +1270,105 @@ func (c *RabbitMQBatchConsumer) finalizeUserBalances(tx *sql.Tx, jobs []BatchJob
 	return nil
 }
 
-// finalizeBalanceForMint finalizes balance after successful mint
-func (c *RabbitMQBatchConsumer) finalizeBalanceForMint(tx *sql.Tx, job AssetAdjustJob) error {
+// finalizeBalanceForPending finalizes pending_balance after successful positive amount operation
+func (c *RabbitMQBatchConsumer) finalizeBalanceForPending(tx *sql.Tx, job AssetAdjustJob) error {
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
 		log.Error().Err(err).
 			Str("amount", job.Amount).
 			Str("user_id", job.UserID).
-			Msg("Invalid amount format for mint")
+			Msg("Invalid amount format for pending operation")
 		return err
 	}
 
-	// Mint should always be positive
-	if amount.IsNegative() {
-		amount = amount.Abs()
+	// Remove + sign if present
+	if len(job.Amount) > 0 && job.Amount[0] == '+' {
+		amount, _ = decimal.NewFromString(job.Amount[1:])
 	}
 
-	// Add minted amount directly to confirmed_balance
+	// Move from pending_balance to confirmed_balance
 	query := `
-		INSERT INTO user_balances (user_id, chain_id, token_id, confirmed_balance, pending_balance, created_at, updated_at)
-		VALUES ($1, $2, $3, $4, 0, $5, $5)
-		ON CONFLICT (user_id, chain_id, token_id) 
-		DO UPDATE SET 
-			confirmed_balance = user_balances.confirmed_balance + $4,
+		UPDATE user_balances 
+		SET 
+			confirmed_balance = confirmed_balance + $4,
+			pending_balance = pending_balance - $4,
 			updated_at = $5,
-			last_change_time = $5`
+			last_change_time = $5
+		WHERE user_id = $1 AND chain_id = $2 AND token_id = $3 
+		AND pending_balance >= $4`
 
-	_, err = tx.Exec(query, job.UserID, job.ChainID, job.TokenID, amount, time.Now())
+	result, err := tx.Exec(query, job.UserID, job.ChainID, job.TokenID, amount, time.Now())
 	if err != nil {
 		log.Error().Err(err).
 			Str("user_id", job.UserID).
 			Int64("chain_id", job.ChainID).
 			Int("token_id", job.TokenID).
 			Str("amount", job.Amount).
-			Msg("Failed to finalize balance for mint")
+			Msg("Failed to finalize pending balance")
 		return err
 	}
 
-	// Send balance change notification for mint
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("insufficient pending balance to finalize")
+	}
+
+	// Send balance change notification
 	c.sendBalanceChangeNotification(job)
 
 	return nil
 }
 
-// finalizeBalanceForBurn finalizes balance after successful burn
-func (c *RabbitMQBatchConsumer) finalizeBalanceForBurn(tx *sql.Tx, job AssetAdjustJob) error {
+// finalizeBalanceForLocked finalizes locked_balance after successful negative amount operation
+func (c *RabbitMQBatchConsumer) finalizeBalanceForLocked(tx *sql.Tx, job AssetAdjustJob) error {
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
 		log.Error().Err(err).
 			Str("amount", job.Amount).
 			Str("user_id", job.UserID).
-			Msg("Invalid amount format for burn")
+			Msg("Invalid amount format for locked operation")
 		return err
 	}
 
-	// Burn amount might be negative, take absolute value
-	if amount.IsNegative() {
-		amount = amount.Abs()
-	}
+	// Take absolute value for locked_balance
+	amount = amount.Abs()
 
-	// Clear the pending_balance (the amount was already frozen)
+	// Deduct from confirmed_balance and clear locked_balance
 	query := `
 		UPDATE user_balances 
 		SET 
-			pending_balance = pending_balance - $4,
+			confirmed_balance = confirmed_balance - $4,
+			locked_balance = locked_balance - $4,
 			updated_at = $5,
 			last_change_time = $5
-		WHERE user_id = $1 AND chain_id = $2 AND token_id = $3`
+		WHERE user_id = $1 AND chain_id = $2 AND token_id = $3 
+		AND confirmed_balance >= $4 AND locked_balance >= $4`
 
-	_, err = tx.Exec(query, job.UserID, job.ChainID, job.TokenID, amount, time.Now())
+	result, err := tx.Exec(query, job.UserID, job.ChainID, job.TokenID, amount, time.Now())
 	if err != nil {
 		log.Error().Err(err).
 			Str("user_id", job.UserID).
 			Int64("chain_id", job.ChainID).
 			Int("token_id", job.TokenID).
 			Str("amount", job.Amount).
-			Msg("Failed to finalize balance for burn")
+			Msg("Failed to finalize locked balance")
 		return err
 	}
 
-	// Send balance change notification for burn
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get rows affected: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("insufficient confirmed or locked balance to finalize")
+	}
+
+	// Send balance change notification
 	c.sendBalanceChangeNotification(job)
 
 	return nil
@@ -1556,11 +1578,13 @@ func (c *RabbitMQBatchConsumer) createPreparingBatchRecord(tx *sql.Tx, batchID u
 func (c *RabbitMQBatchConsumer) freezeUserBalance(tx *sql.Tx, job BatchJob) error {
 	switch j := job.(type) {
 	case AssetAdjustJob:
-		if j.AdjustmentType == "burn" {
-			return c.freezeBalanceForBurn(tx, j)
+		// Check amount sign to determine which balance field to set
+		if len(j.Amount) > 0 && j.Amount[0] == '-' {
+			// Negative amount: set locked_balance
+			return c.freezeBalanceForLocked(tx, j)
 		}
-		// Mint operations don't need to freeze balance
-		return nil
+		// Positive amount: set pending_balance
+		return c.freezeBalanceForPending(tx, j)
 
 	case TransferJob:
 		return c.freezeBalanceForTransfer(tx, j)
@@ -1574,45 +1598,63 @@ func (c *RabbitMQBatchConsumer) freezeUserBalance(tx *sql.Tx, job BatchJob) erro
 	}
 }
 
-// freezeBalanceForBurn freezes balance for burn operation
-func (c *RabbitMQBatchConsumer) freezeBalanceForBurn(tx *sql.Tx, job AssetAdjustJob) error {
+// freezeBalanceForPending sets pending_balance for positive amounts (+100)
+func (c *RabbitMQBatchConsumer) freezeBalanceForPending(tx *sql.Tx, job AssetAdjustJob) error {
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
 		return fmt.Errorf("invalid amount format: %s", job.Amount)
 	}
 
-	// Burn amount might be negative, take absolute value
-	if amount.IsNegative() {
-		amount = amount.Abs()
+	// Remove + sign if present
+	if len(job.Amount) > 0 && job.Amount[0] == '+' {
+		amount, _ = decimal.NewFromString(job.Amount[1:])
 	}
 
 	now := time.Now()
 
-	// Update user_balances: move from confirmed_balance to pending_balance
-	// Only update existing records, don't insert new ones with negative confirmed_balance
+	// Set pending_balance for positive amounts
 	query := `
-		INSERT INTO user_balances (user_id, chain_id, token_id, confirmed_balance, pending_balance, created_at, updated_at)
-		VALUES ($1, $2, $3, 0, 0, $4, $4)
+		INSERT INTO user_balances (user_id, chain_id, token_id, confirmed_balance, pending_balance, locked_balance, created_at, updated_at)
+		VALUES ($1, $2, $3, 0, $4, 0, $5, $5)
 		ON CONFLICT (user_id, chain_id, token_id) 
 		DO UPDATE SET 
-			confirmed_balance = user_balances.confirmed_balance - $5,
-			pending_balance = user_balances.pending_balance + $5,
-			updated_at = $4,
-			last_change_time = $4
-		WHERE user_balances.confirmed_balance >= $5`
+			pending_balance = user_balances.pending_balance + $4,
+			updated_at = $5,
+			last_change_time = $5`
 
-	result, err := tx.Exec(query, job.UserID, job.ChainID, job.TokenID, now, amount)
+	_, err = tx.Exec(query, job.UserID, job.ChainID, job.TokenID, amount, now)
 	if err != nil {
-		return fmt.Errorf("failed to freeze balance for burn: %w", err)
+		return fmt.Errorf("failed to set pending balance: %w", err)
 	}
 
-	rowsAffected, err := result.RowsAffected()
+	return nil
+}
+
+// freezeBalanceForLocked sets locked_balance for negative amounts (-100)
+func (c *RabbitMQBatchConsumer) freezeBalanceForLocked(tx *sql.Tx, job AssetAdjustJob) error {
+	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
-		return fmt.Errorf("failed to get affected rows: %w", err)
+		return fmt.Errorf("invalid amount format: %s", job.Amount)
 	}
 
-	if rowsAffected == 0 {
-		return fmt.Errorf("insufficient balance to freeze for burn operation")
+	// Take absolute value for locked_balance
+	amount = amount.Abs()
+
+	now := time.Now()
+
+	// Set locked_balance for negative amounts
+	query := `
+		INSERT INTO user_balances (user_id, chain_id, token_id, confirmed_balance, pending_balance, locked_balance, created_at, updated_at)
+		VALUES ($1, $2, $3, 0, 0, $4, $5, $5)
+		ON CONFLICT (user_id, chain_id, token_id) 
+		DO UPDATE SET 
+			locked_balance = user_balances.locked_balance + $4,
+			updated_at = $5,
+			last_change_time = $5`
+
+	_, err = tx.Exec(query, job.UserID, job.ChainID, job.TokenID, amount, now)
+	if err != nil {
+		return fmt.Errorf("failed to set locked balance: %w", err)
 	}
 
 	return nil
@@ -1666,11 +1708,13 @@ func (c *RabbitMQBatchConsumer) freezeBalanceForTransfer(tx *sql.Tx, job Transfe
 func (c *RabbitMQBatchConsumer) unfreezeUserBalance(tx *sql.Tx, job BatchJob) error {
 	switch j := job.(type) {
 	case AssetAdjustJob:
-		if j.AdjustmentType == "burn" {
-			return c.unfreezeBalanceForBurn(tx, j)
+		// Check amount sign to determine unfreeze logic
+		if len(j.Amount) > 0 && j.Amount[0] == '-' {
+			// Negative amount: unfreeze locked_balance
+			return c.unfreezeBalanceForLocked(tx, j)
 		}
-		// Mint operations don't have frozen balance
-		return nil
+		// Positive amount: unfreeze pending_balance
+		return c.unfreezeBalanceForPending(tx, j)
 
 	case TransferJob:
 		return c.unfreezeBalanceForTransfer(tx, j)
@@ -1684,23 +1728,22 @@ func (c *RabbitMQBatchConsumer) unfreezeUserBalance(tx *sql.Tx, job BatchJob) er
 	}
 }
 
-// unfreezeBalanceForBurn unfreezes balance when burn operation fails
-func (c *RabbitMQBatchConsumer) unfreezeBalanceForBurn(tx *sql.Tx, job AssetAdjustJob) error {
+// unfreezeBalanceForPending unfreezes pending_balance when positive amount operation fails
+func (c *RabbitMQBatchConsumer) unfreezeBalanceForPending(tx *sql.Tx, job AssetAdjustJob) error {
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
 		return fmt.Errorf("invalid amount format: %s", job.Amount)
 	}
 
-	// Burn amount might be negative, take absolute value
-	if amount.IsNegative() {
-		amount = amount.Abs()
+	// Remove + sign if present
+	if len(job.Amount) > 0 && job.Amount[0] == '+' {
+		amount, _ = decimal.NewFromString(job.Amount[1:])
 	}
 
-	// Reverse the freeze: move from pending_balance back to confirmed_balance
+	// Clear pending_balance (no need to move back to confirmed_balance for failed operations)
 	query := `
 		UPDATE user_balances 
 		SET 
-			confirmed_balance = confirmed_balance + $4,
 			pending_balance = pending_balance - $4,
 			updated_at = $5,
 			last_change_time = $5
@@ -1709,7 +1752,7 @@ func (c *RabbitMQBatchConsumer) unfreezeBalanceForBurn(tx *sql.Tx, job AssetAdju
 
 	result, err := tx.Exec(query, job.UserID, job.ChainID, job.TokenID, amount, time.Now())
 	if err != nil {
-		return fmt.Errorf("failed to unfreeze balance for burn: %w", err)
+		return fmt.Errorf("failed to unfreeze pending balance: %w", err)
 	}
 
 	rowsAffected, err := result.RowsAffected()
@@ -1718,7 +1761,44 @@ func (c *RabbitMQBatchConsumer) unfreezeBalanceForBurn(tx *sql.Tx, job AssetAdju
 	}
 
 	if rowsAffected == 0 {
-		return fmt.Errorf("no frozen balance found to unfreeze for burn operation")
+		return fmt.Errorf("no pending balance found to unfreeze")
+	}
+
+	return nil
+}
+
+// unfreezeBalanceForLocked unfreezes locked_balance when negative amount operation fails
+func (c *RabbitMQBatchConsumer) unfreezeBalanceForLocked(tx *sql.Tx, job AssetAdjustJob) error {
+	amount, err := decimal.NewFromString(job.Amount)
+	if err != nil {
+		return fmt.Errorf("invalid amount format: %s", job.Amount)
+	}
+
+	// Take absolute value for locked_balance
+	amount = amount.Abs()
+
+	// Clear locked_balance (no need to move back to confirmed_balance for failed operations)
+	query := `
+		UPDATE user_balances 
+		SET 
+			locked_balance = locked_balance - $4,
+			updated_at = $5,
+			last_change_time = $5
+		WHERE user_id = $1 AND chain_id = $2 AND token_id = $3 
+		AND locked_balance >= $4`
+
+	result, err := tx.Exec(query, job.UserID, job.ChainID, job.TokenID, amount, time.Now())
+	if err != nil {
+		return fmt.Errorf("failed to unfreeze locked balance: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("failed to get affected rows: %w", err)
+	}
+
+	if rowsAffected == 0 {
+		return fmt.Errorf("no locked balance found to unfreeze")
 	}
 
 	return nil

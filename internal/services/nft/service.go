@@ -594,8 +594,8 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 			return nil, nil, err
 		}
 
-		// Validate NFT ownership and status
-		if err := s.validateNFTOwnership(ctx, burnOp.OwnerUserID, request.CollectionID, burnOp.TokenID); err != nil {
+		// Validate NFT ownership and status with additional pending transaction check
+		if err := s.validateNFTOwnershipWithPendingCheck(ctx, burnOp.OwnerUserID, request.CollectionID, burnOp.TokenID); err != nil {
 			return nil, nil, err
 		}
 
@@ -787,14 +787,15 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 	batchID := generateBatchID()
 
 	for _, transferOp := range request.TransferOperations {
-		// Validate NFT ownership and status
+		// Validate NFT ownership and status with stricter checks
 		var currentOwner string
 		var isBurned, isMinted, isLocked bool
+		var txID string
 		err := tx.QueryRowContext(ctx, `
-			SELECT owner_user_id, is_burned, is_minted, is_locked
+			SELECT owner_user_id, is_burned, is_minted, is_locked, tx_id
 			FROM nft_assets
 			WHERE collection_id = $1 AND token_id = $2 FOR UPDATE
-		`, request.CollectionID, transferOp.TokenID).Scan(&currentOwner, &isBurned, &isMinted, &isLocked)
+		`, request.CollectionID, transferOp.TokenID).Scan(&currentOwner, &isBurned, &isMinted, &isLocked, &txID)
 
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
@@ -831,6 +832,22 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 			return nil, nil, NFTError{
 				Type:    ErrorTypeOwnership,
 				Message: fmt.Sprintf("User %s does not own NFT with token ID %s", transferOp.FromUserID, transferOp.TokenID),
+			}
+		}
+
+		// Check if NFT has a pending transaction (additional safety check)
+		if txID != "" {
+			var pendingTxStatus string
+			err := tx.QueryRowContext(ctx, `
+				SELECT status FROM transactions 
+				WHERE tx_id = $1 AND status IN ('pending', 'batching', 'submitted')
+			`, txID).Scan(&pendingTxStatus)
+
+			if err == nil {
+				return nil, nil, NFTError{
+					Type:    ErrorTypeValidation,
+					Message: fmt.Sprintf("NFT with token ID %s has a pending transaction (status: %s)", transferOp.TokenID, pendingTxStatus),
+				}
 			}
 		}
 
@@ -1419,6 +1436,77 @@ func convertMetadataToJSON(meta *NFTMetadata) string {
 	return string(jsonData)
 }
 
+// validateNFTOwnershipWithPendingCheck checks if a user owns a specific NFT and has no pending transactions
+func (s *service) validateNFTOwnershipWithPendingCheck(ctx context.Context, userID, collectionID, tokenID string) error {
+	ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var currentOwner string
+	var isBurned, isMinted, isLocked bool
+	var txID string
+	err := s.db.QueryRowContext(ctxTimeout, `
+		SELECT owner_user_id, is_burned, is_minted, is_locked, tx_id
+		FROM nft_assets
+		WHERE collection_id = $1 AND token_id = $2
+	`, collectionID, tokenID).Scan(&currentOwner, &isBurned, &isMinted, &isLocked, &txID)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return NFTError{
+				Type:    ErrorTypeNFTNotFound,
+				Message: fmt.Sprintf("NFT with token ID %s not found in collection %s", tokenID, collectionID),
+			}
+		}
+		return fmt.Errorf("failed to query NFT asset: %w", err)
+	}
+
+	if !isMinted {
+		return NFTError{
+			Type:    ErrorTypeValidation,
+			Message: fmt.Sprintf("NFT with token ID %s is not yet minted", tokenID),
+		}
+	}
+
+	if isBurned {
+		return NFTError{
+			Type:    ErrorTypeValidation,
+			Message: fmt.Sprintf("NFT with token ID %s is already burned", tokenID),
+		}
+	}
+
+	if isLocked {
+		return NFTError{
+			Type:    ErrorTypeValidation,
+			Message: fmt.Sprintf("NFT with token ID %s is locked and cannot be burned", tokenID),
+		}
+	}
+
+	if currentOwner != userID {
+		return NFTError{
+			Type:    ErrorTypeOwnership,
+			Message: fmt.Sprintf("User %s does not own NFT with token ID %s", userID, tokenID),
+		}
+	}
+
+	// Check if NFT has a pending transaction
+	if txID != "" {
+		var pendingTxStatus string
+		err := s.db.QueryRowContext(ctxTimeout, `
+			SELECT status FROM transactions 
+			WHERE tx_id = $1 AND status IN ('pending', 'batching', 'submitted')
+		`, txID).Scan(&pendingTxStatus)
+
+		if err == nil {
+			return NFTError{
+				Type:    ErrorTypeValidation,
+				Message: fmt.Sprintf("NFT with token ID %s has a pending transaction (status: %s)", tokenID, pendingTxStatus),
+			}
+		}
+	}
+
+	return nil
+}
+
 func buildMetadataURI(baseURI, tokenID string) string {
 	if baseURI == "" {
 		return ""
@@ -1665,55 +1753,3 @@ func (s *service) validateUserAccountExists(ctx context.Context, userID string, 
 }
 
 // validateNFTOwnership checks if a user owns a specific NFT
-func (s *service) validateNFTOwnership(ctx context.Context, userID, collectionID, tokenID string) error {
-	ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
-	defer cancel()
-
-	var currentOwner string
-	var isBurned, isMinted, isLocked bool
-	err := s.db.QueryRowContext(ctxTimeout, `
-		SELECT owner_user_id, is_burned, is_minted, is_locked
-		FROM nft_assets
-		WHERE collection_id = $1 AND token_id = $2
-	`, collectionID, tokenID).Scan(&currentOwner, &isBurned, &isMinted, &isLocked)
-
-	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			return NFTError{
-				Type:    ErrorTypeNFTNotFound,
-				Message: fmt.Sprintf("NFT with token ID %s not found in collection %s", tokenID, collectionID),
-			}
-		}
-		return fmt.Errorf("failed to query NFT asset: %w", err)
-	}
-
-	if !isMinted {
-		return NFTError{
-			Type:    ErrorTypeValidation,
-			Message: fmt.Sprintf("NFT with token ID %s is not yet minted", tokenID),
-		}
-	}
-
-	if isBurned {
-		return NFTError{
-			Type:    ErrorTypeValidation,
-			Message: fmt.Sprintf("NFT with token ID %s is already burned", tokenID),
-		}
-	}
-
-	if isLocked {
-		return NFTError{
-			Type:    ErrorTypeValidation,
-			Message: fmt.Sprintf("NFT with token ID %s is locked and cannot be burned", tokenID),
-		}
-	}
-
-	if currentOwner != userID {
-		return NFTError{
-			Type:    ErrorTypeOwnership,
-			Message: fmt.Sprintf("User %s does not own NFT with token ID %s", userID, tokenID),
-		}
-	}
-
-	return nil
-}
