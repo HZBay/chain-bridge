@@ -19,6 +19,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"math/big"
+	"strings"
 	"sync"
 	"time"
 
@@ -32,6 +33,8 @@ import (
 
 	"github.com/hzbay/chain-bridge/internal/blockchain"
 	"github.com/hzbay/chain-bridge/internal/models"
+	"github.com/hzbay/chain-bridge/internal/util/db"
+	"github.com/volatiletech/sqlboiler/v4/boil"
 	"github.com/volatiletech/sqlboiler/v4/queries/qm"
 )
 
@@ -1002,83 +1005,64 @@ func (c *RabbitMQBatchConsumer) handleBatchFailureDuringShutdown(ctx context.Con
 	log.Error().Err(failureErr).Str("batch_id", batchID.String()).Msg("Handling batch failure during shutdown")
 
 	if c.db != nil {
-		tx, err := c.db.BeginTx(ctx, nil)
+		err := db.WithTransaction(ctx, c.db, func(tx boil.ContextExecutor) error {
+
+			// Update batch status to failed
+			batchQuery := `UPDATE batches SET status = 'failed' WHERE batch_id = $1`
+			_, err := tx.Exec(batchQuery, batchID.String())
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to update batch to failed status during shutdown")
+				return err
+			}
+
+			// Update transactions to failed status
+			jobIDs := make([]string, len(messages))
+			for i, msg := range messages {
+				jobIDs[i] = msg.Job.GetID()
+			}
+
+			txQuery := `UPDATE transactions SET status = 'failed' WHERE tx_id = ANY($1)`
+			_, err = tx.Exec(txQuery, pq.Array(jobIDs))
+			if err != nil {
+				log.Error().Err(err).Msg("Failed to update failed transaction statuses during shutdown")
+				return err
+			}
+
+			return nil
+		})
+
 		if err != nil {
-			log.Error().Err(err).Msg("Failed to begin transaction for batch failure handling during shutdown")
-			// During shutdown, don't NACK - just log the failure
+			log.Error().Err(err).Msg("Failed to update database during shutdown batch failure handling")
 			return
 		}
-		defer func() {
-			if err := tx.Rollback(); err != nil {
-				log.Debug().Err(err).Msg("Transaction rollback error (expected if committed)")
+
+		// Send transaction status notifications for failed transactions
+		for _, msg := range messages {
+			var userID string
+			switch job := msg.Job.(type) {
+			case TransferJob:
+				userID = job.FromUserID // Notify sender about failed transaction
+			case AssetAdjustJob:
+				userID = job.UserID
 			}
-		}()
 
-		// Update batch status to failed
-		batchQuery := `UPDATE batches SET status = 'failed' WHERE batch_id = $1`
-		_, err = tx.Exec(batchQuery, batchID.String())
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to update batch to failed status during shutdown")
-		}
-
-		// Update transactions to failed status
-		jobIDs := make([]string, len(messages))
-		for i, msg := range messages {
-			jobIDs[i] = msg.Job.GetID()
-		}
-
-		txQuery := `UPDATE transactions SET status = 'failed' WHERE tx_id = ANY($1)`
-		_, err = tx.Exec(txQuery, pq.Array(jobIDs))
-		if err != nil {
-			log.Error().Err(err).Msg("Failed to update failed transaction statuses during shutdown")
-		} else {
-			// Send transaction status notifications for failed transactions
-			for _, msg := range messages {
-				var userID string
-				switch job := msg.Job.(type) {
-				case TransferJob:
-					userID = job.FromUserID // Notify sender about failed transaction
-				case AssetAdjustJob:
-					userID = job.UserID
-				}
-
-				if userID != "" {
-					if txID, err := uuid.Parse(msg.Job.GetID()); err == nil {
-						extraData := map[string]interface{}{
-							"failure_reason": failureErr.Error(),
-							"batch_id":       batchID.String(),
-							"chain_id":       c.chainID,
-						}
-						c.sendTransactionStatusNotification(ctx, txID, "failed", userID, extraData)
+			if userID != "" {
+				if txID, err := uuid.Parse(msg.Job.GetID()); err == nil {
+					extraData := map[string]interface{}{
+						"failure_reason": failureErr.Error(),
+						"batch_id":       batchID.String(),
+						"chain_id":       c.chainID,
 					}
+					c.sendTransactionStatusNotification(ctx, txID, "failed", userID, extraData)
 				}
 			}
 		}
 
-		// Unfreeze balances for failed operations
-		jobs := make([]BatchJob, len(messages))
-		for i, msg := range messages {
-			jobs[i] = msg.Job
-		}
-
-		for _, job := range jobs {
-			err = c.unfreezeUserBalance(tx, job)
-			if err != nil {
-				log.Error().Err(err).Msg("Failed to unfreeze user balance during shutdown")
-			}
-		}
-
-		if err = tx.Commit(); err != nil {
-			log.Error().Err(err).Msg("Failed to commit batch failure handling during shutdown")
-		} else {
-			// Send batch status notification after successful commit
-			c.sendBatchStatusNotification(ctx, batchID, "failed", map[string]interface{}{
-				"failure_reason":    failureErr.Error(),
-				"transaction_count": len(messages),
-			})
-
-			log.Info().Str("batch_id", batchID.String()).Msg("Successfully handled batch failure during shutdown")
-		}
+		// Send batch status notification after successful commit
+		c.sendBatchStatusNotification(ctx, batchID, "failed", map[string]interface{}{
+			"failure_reason":    failureErr.Error(),
+			"transaction_count": len(messages),
+		})
 	}
 
 	// During shutdown, don't NACK messages to avoid connection errors
@@ -1588,123 +1572,203 @@ func (c *RabbitMQBatchConsumer) extractAndUpdateNFTTokenIDs(ctx context.Context,
 	return nil
 }
 
-// updateNFTTokenIDDirect updates NFT token ID directly in database
+// updateNFTTokenIDDirect updates NFT token ID with improved error handling and retry logic
 func (c *RabbitMQBatchConsumer) updateNFTTokenIDDirect(ctx context.Context, txID, actualTokenID, collectionID string) error {
+	const maxRetries = 3
+	const baseDelay = 2 * time.Second // 增加基础延迟
+
+	for attempt := 1; attempt <= maxRetries; attempt++ {
+		err := c.updateNFTTokenIDDirectOnce(ctx, txID, actualTokenID, collectionID)
+		if err == nil {
+			return nil
+		}
+
+		// 检查是否是超时或死锁错误
+		errStr := err.Error()
+		isRetryable := strings.Contains(errStr, "canceling statement due to user request") ||
+			strings.Contains(errStr, "deadlock") ||
+			strings.Contains(errStr, "lock timeout") ||
+			strings.Contains(errStr, "connection reset")
+
+		if isRetryable && attempt < maxRetries {
+			// 指数退避：2s, 4s, 8s
+			delay := time.Duration(attempt) * baseDelay
+			log.Warn().
+				Str("tx_id", txID).
+				Str("actual_token_id", actualTokenID).
+				Str("collection_id", collectionID).
+				Int("attempt", attempt).
+				Dur("delay", delay).
+				Str("error", errStr).
+				Msg("Database operation failed, retrying with exponential backoff")
+			time.Sleep(delay)
+			continue
+		}
+
+		return err
+	}
+	return fmt.Errorf("failed after %d attempts", maxRetries)
+}
+
+// updateNFTTokenIDDirectOnce performs a single attempt to update NFT token ID
+func (c *RabbitMQBatchConsumer) updateNFTTokenIDDirectOnce(ctx context.Context, txID, actualTokenID, collectionID string) error {
+	// 添加连接池状态监控
+	stats := c.db.Stats()
+	log.Debug().
+		Str("tx_id", txID).
+		Int("open_connections", stats.OpenConnections).
+		Int("in_use", stats.InUse).
+		Int("idle", stats.Idle).
+		Int64("wait_count", stats.WaitCount).
+		Dur("wait_duration", stats.WaitDuration).
+		Msg("Database connection pool status before operation")
+
+	// 减少超时时间到5秒
+	ctx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
 	log.Info().
 		Str("tx_id", txID).
 		Str("actual_token_id", actualTokenID).
 		Str("collection_id", collectionID).
 		Msg("Starting updateNFTTokenIDDirect")
 
-	// Update both nft_assets and transactions tables directly
+	// 使用事务确保原子性
+	return db.WithTransaction(ctx, c.db, func(tx boil.ContextExecutor) error {
+		// Update nft_assets table using tx_id
+		assetsQuery := `
+			UPDATE nft_assets 
+			SET 
+				token_id = $1,
+				updated_at = $2
+			WHERE tx_id = $3 AND collection_id = $4 AND token_id = '-1'`
 
-	// Update nft_assets table using tx_id
-	assetsQuery := `
-		UPDATE nft_assets 
-		SET 
-			token_id = $1,
-			updated_at = $2
-		WHERE tx_id = $3 AND collection_id = $4 AND token_id = '-1'`
-
-	log.Info().
-		Str("tx_id", txID).
-		Str("actual_token_id", actualTokenID).
-		Str("collection_id", collectionID).
-		Str("query", assetsQuery).
-		Msg("Updating nft_assets table")
-
-	result, err := c.db.ExecContext(ctx, assetsQuery, actualTokenID, time.Now(), txID, collectionID)
-	if err != nil {
-		log.Error().
-			Err(err).
+		log.Debug().
 			Str("tx_id", txID).
 			Str("actual_token_id", actualTokenID).
 			Str("collection_id", collectionID).
-			Msg("Failed to update NFT token ID in nft_assets")
-		return err
-	}
+			Str("query", assetsQuery).
+			Msg("Updating nft_assets table")
 
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		log.Error().
-			Err(err).
-			Str("tx_id", txID).
-			Msg("Failed to check rows affected for nft_assets")
-		return err
-	}
+		start := time.Now()
+		result, err := tx.ExecContext(ctx, assetsQuery, actualTokenID, time.Now(), txID, collectionID)
+		duration := time.Since(start)
 
-	log.Info().
-		Str("tx_id", txID).
-		Str("actual_token_id", actualTokenID).
-		Str("collection_id", collectionID).
-		Int64("rows_affected", rowsAffected).
-		Msg("nft_assets update result")
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("tx_id", txID).
+				Str("actual_token_id", actualTokenID).
+				Str("collection_id", collectionID).
+				Dur("duration", duration).
+				Msg("Failed to update NFT token ID in nft_assets")
+			return err
+		}
 
-	if rowsAffected == 0 {
-		log.Warn().
-			Str("tx_id", txID).
-			Str("collection_id", collectionID).
-			Str("token_id", actualTokenID).
-			Msg("No NFT assets found to update token ID")
-	}
+		// Log slow operations (降低阈值到2秒)
+		if duration > 2*time.Second {
+			log.Warn().
+				Str("tx_id", txID).
+				Dur("duration", duration).
+				Msg("Slow database update detected for nft_assets")
+		}
 
-	// Update transactions table using tx_id
-	txQuery := `
-		UPDATE transactions 
-		SET 
-			nft_token_id = $1,
-			updated_at = $2
-		WHERE tx_id = $3 AND collection_id = $4 AND nft_token_id = '-1'`
+		rowsAffected, err := result.RowsAffected()
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("tx_id", txID).
+				Msg("Failed to check rows affected for nft_assets")
+			return err
+		}
 
-	log.Info().
-		Str("tx_id", txID).
-		Str("actual_token_id", actualTokenID).
-		Str("collection_id", collectionID).
-		Str("query", txQuery).
-		Msg("Updating transactions table")
-
-	result, err = c.db.ExecContext(ctx, txQuery, actualTokenID, time.Now(), txID, collectionID)
-	if err != nil {
-		log.Error().
-			Err(err).
+		log.Info().
 			Str("tx_id", txID).
 			Str("actual_token_id", actualTokenID).
 			Str("collection_id", collectionID).
-			Msg("Failed to update NFT token ID in transactions")
-		return err
-	}
+			Int64("rows_affected", rowsAffected).
+			Dur("duration", duration).
+			Msg("nft_assets update result")
 
-	rowsAffected, err = result.RowsAffected()
-	if err != nil {
-		log.Error().
-			Err(err).
+		if rowsAffected == 0 {
+			log.Warn().
+				Str("tx_id", txID).
+				Str("collection_id", collectionID).
+				Str("token_id", actualTokenID).
+				Msg("No NFT assets found to update token ID")
+		}
+
+		// Update transactions table using tx_id
+		txQuery := `
+			UPDATE transactions 
+			SET 
+				nft_token_id = $1,
+				updated_at = $2
+			WHERE tx_id = $3 AND collection_id = $4 AND nft_token_id = '-1'`
+
+		log.Debug().
 			Str("tx_id", txID).
-			Msg("Failed to check rows affected for transactions")
-		return err
-	}
-
-	log.Info().
-		Str("tx_id", txID).
-		Str("actual_token_id", actualTokenID).
-		Str("collection_id", collectionID).
-		Int64("rows_affected", rowsAffected).
-		Msg("transactions update result")
-
-	if rowsAffected == 0 {
-		log.Warn().
-			Str("tx_id", txID).
+			Str("actual_token_id", actualTokenID).
 			Str("collection_id", collectionID).
-			Str("token_id", actualTokenID).
-			Msg("No transactions found to update token ID")
-	}
+			Str("query", txQuery).
+			Msg("Updating transactions table")
 
-	log.Info().
-		Str("tx_id", txID).
-		Str("actual_token_id", actualTokenID).
-		Str("collection_id", collectionID).
-		Msg("Successfully updated NFT token ID")
+		start = time.Now()
+		result, err = tx.ExecContext(ctx, txQuery, actualTokenID, time.Now(), txID, collectionID)
+		duration = time.Since(start)
 
-	return nil
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("tx_id", txID).
+				Str("actual_token_id", actualTokenID).
+				Str("collection_id", collectionID).
+				Dur("duration", duration).
+				Msg("Failed to update NFT token ID in transactions")
+			return err
+		}
+
+		// Log slow operations (降低阈值到2秒)
+		if duration > 2*time.Second {
+			log.Warn().
+				Str("tx_id", txID).
+				Dur("duration", duration).
+				Msg("Slow database update detected for transactions")
+		}
+
+		rowsAffected, err = result.RowsAffected()
+		if err != nil {
+			log.Error().
+				Err(err).
+				Str("tx_id", txID).
+				Msg("Failed to check rows affected for transactions")
+			return err
+		}
+
+		log.Info().
+			Str("tx_id", txID).
+			Str("actual_token_id", actualTokenID).
+			Str("collection_id", collectionID).
+			Int64("rows_affected", rowsAffected).
+			Dur("duration", duration).
+			Msg("transactions update result")
+
+		if rowsAffected == 0 {
+			log.Warn().
+				Str("tx_id", txID).
+				Str("collection_id", collectionID).
+				Str("token_id", actualTokenID).
+				Msg("No transactions found to update token ID")
+		}
+
+		log.Info().
+			Str("tx_id", txID).
+			Str("actual_token_id", actualTokenID).
+			Str("collection_id", collectionID).
+			Msg("Successfully updated NFT token ID")
+
+		return nil
+	})
 }
 
 // getNFTBatchResult gets NFT batch result with timeout and improved error handling
@@ -1810,24 +1874,74 @@ func (c *RabbitMQBatchConsumer) updateConfirmationStatus(
 		blockNum = blockNumber.Uint64()
 	}
 
-	query := `
-		UPDATE batches 
-		SET 
-			confirmations = $2, 
-			confirmed_block = $3,
-			updated_at = $4
-		WHERE tx_hash = $1`
+	var batchID uuid.UUID
+	var oldConfirmations sql.NullInt32
 
-	_, err := c.db.ExecContext(ctx, query, txHash, confirmations, blockNum, time.Now())
-	if err != nil {
-		return fmt.Errorf("failed to update confirmation status: %w", err)
+	err := db.WithTransaction(ctx, c.db, func(tx boil.ContextExecutor) error {
+		// First, get the batch ID and current confirmations
+		getBatchQuery := `
+			SELECT batch_id, confirmations 
+			FROM batches 
+			WHERE tx_hash = $1`
+
+		err := tx.QueryRowContext(ctx, getBatchQuery, txHash).Scan(&batchID, &oldConfirmations)
+		if err != nil {
+			log.Error().Err(err).
+				Str("tx_hash", txHash).
+				Msg("Failed to get batch info for confirmation update")
+			return fmt.Errorf("failed to get batch info: %w", err)
+		}
+
+		// Convert NullInt32 to int, defaulting to 0 if NULL
+		oldConfirmationsValue := 0
+		if oldConfirmations.Valid {
+			oldConfirmationsValue = int(oldConfirmations.Int32)
+		}
+
+		// Update confirmation status
+		updateQuery := `
+			UPDATE batches 
+			SET 
+				confirmations = $2, 
+				confirmed_block = $3,
+				updated_at = $4
+			WHERE tx_hash = $1`
+
+		_, err = tx.Exec(updateQuery, txHash, confirmations, blockNum, time.Now())
+		if err != nil {
+			log.Error().Err(err).
+				Str("tx_hash", txHash).
+				Int("confirmations", confirmations).
+				Msg("Failed to update confirmation status")
+			return fmt.Errorf("failed to update confirmation status: %w", err)
+		}
+
+		log.Debug().
+			Str("tx_hash", txHash).
+			Str("batch_id", batchID.String()).
+			Int("old_confirmations", oldConfirmationsValue).
+			Int("new_confirmations", confirmations).
+			Uint64("block_number", blockNum).
+			Msg("Updated batch confirmation status in database")
+
+		return nil
+	})
+
+	// Send notification after successful database update
+	if err == nil {
+		oldConfirmationsValue := 0
+		if oldConfirmations.Valid {
+			oldConfirmationsValue = int(oldConfirmations.Int32)
+		}
+
+		c.sendBatchStatusNotification(ctx, batchID, "confirmation_updated", map[string]interface{}{
+			"tx_hash":            txHash,
+			"old_confirmations":  oldConfirmationsValue,
+			"new_confirmations":  confirmations,
+			"block_number":       blockNum,
+			"confirmation_delta": confirmations - oldConfirmationsValue,
+		})
 	}
 
-	log.Debug().
-		Str("tx_hash", txHash).
-		Int("confirmations", confirmations).
-		Uint64("block_number", blockNum).
-		Msg("Updated batch confirmation status in database")
-
-	return nil
+	return err
 }

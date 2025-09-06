@@ -143,9 +143,9 @@ func DefaultServiceConfigFromEnv() Server {
 			AdditionalParams: map[string]string{
 				"sslmode": util.GetEnv("PGSSLMODE", "disable"),
 			},
-			MaxOpenConns:    util.GetEnvAsInt("DB_MAX_OPEN_CONNS", runtime.NumCPU()*2),
-			MaxIdleConns:    util.GetEnvAsInt("DB_MAX_IDLE_CONNS", 1),
-			ConnMaxLifetime: time.Second * time.Duration(util.GetEnvAsInt("DB_CONN_MAX_LIFETIME_SEC", 60)),
+			MaxOpenConns:    util.GetEnvAsInt("DB_MAX_OPEN_CONNS", runtime.NumCPU()*4),
+			MaxIdleConns:    util.GetEnvAsInt("DB_MAX_IDLE_CONNS", 5),
+			ConnMaxLifetime: time.Second * time.Duration(util.GetEnvAsInt("DB_CONN_MAX_LIFETIME_SEC", 300)),
 		},
 		Echo: EchoServer{
 			Debug:                          util.GetEnvAsBool("SERVER_ECHO_DEBUG", true),

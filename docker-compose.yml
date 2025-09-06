@@ -46,6 +46,11 @@ services:
       PGPORT: &PGPORT "5432"
       PGSSLMODE: &PGSSLMODE "disable"
 
+      # 数据库连接池优化配置
+      DB_MAX_OPEN_CONNS: "20"
+      DB_MAX_IDLE_CONNS: "5"
+      DB_CONN_MAX_LIFETIME_SEC: "300"
+
       # optional: env for sql-boiler (ability to generate models out of a "spec" database)
       # sql-boiler should operate on a "spec" database only
       PSQL_DBNAME: "spec"

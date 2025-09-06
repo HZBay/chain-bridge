@@ -85,8 +85,8 @@ func (c *RabbitMQBatchConsumer) processBatch(ctx context.Context, messages []*Me
 		log.Error().Err(err).
 			Str("tx_hash", result.TxHash).
 			Msg("Failed to update batch to submitted status")
-		// NOTE: Blockchain operation succeeded but status update failed
-		// The batch will be picked up by the confirmation monitor
+		c.handleBatchFailure(ctx, validMessages, batchID, err)
+		return
 	}
 
 	processingTime := time.Since(startTime)
@@ -935,7 +935,10 @@ func (c *RabbitMQBatchConsumer) updateBatchToSubmitted(ctx context.Context, batc
 	var batchType string
 	err = tx.QueryRow(batchTypeQuery, batchID.String()).Scan(&batchType)
 	if err != nil {
-		return fmt.Errorf("failed to get batch type: %w", err)
+		log.Error().Err(err).
+			Str("batch_id", batchID.String()).
+			Msg("Failed to get batch type")
+		return err
 	}
 
 	// Map batch_type to cpop_operation_type
@@ -981,7 +984,11 @@ func (c *RabbitMQBatchConsumer) updateBatchToSubmitted(ctx context.Context, batc
 		true)              // Assume aggregator was used
 
 	if err != nil {
-		return fmt.Errorf("failed to update batch to submitted: %w", err)
+		log.Error().Err(err).
+			Str("batch_id", batchID.String()).
+			Str("tx_hash", result.TxHash).
+			Msg("Failed to update batch to submitted")
+		return err
 	}
 
 	// Update all associated transactions to submitted status
@@ -994,11 +1001,18 @@ func (c *RabbitMQBatchConsumer) updateBatchToSubmitted(ctx context.Context, batc
 
 	_, err = tx.Exec(txQuery, batchID.String(), result.TxHash)
 	if err != nil {
-		return fmt.Errorf("failed to update transactions to submitted: %w", err)
+		log.Error().Err(err).
+			Str("batch_id", batchID.String()).
+			Str("tx_hash", result.TxHash).
+			Msg("Failed to update transactions to submitted")
+		return err
 	}
 
 	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit submitted status update: %w", err)
+		log.Error().Err(err).
+			Str("batch_id", batchID.String()).
+			Msg("Failed to commit submitted status update")
+		return err
 	}
 
 	// Send batch status notification after successful commit
@@ -1046,13 +1060,21 @@ func (c *RabbitMQBatchConsumer) completeSuccessfulBatch(
 	// Update batch to confirmed status
 	err = c.updateBatchToConfirmed(tx, batchID, result, processingTime)
 	if err != nil {
-		return fmt.Errorf("failed to update batch to confirmed: %w", err)
+		log.Error().Err(err).
+			Str("batch_id", batchID.String()).
+			Str("tx_hash", result.TxHash).
+			Msg("Failed to update batch to confirmed")
+		return err
 	}
 
 	// Update transactions to confirmed status
 	err = c.updateTransactionsToConfirmed(tx, batchID, result)
 	if err != nil {
-		return fmt.Errorf("failed to update transactions to confirmed: %w", err)
+		log.Error().Err(err).
+			Str("batch_id", batchID.String()).
+			Str("tx_hash", result.TxHash).
+			Msg("Failed to update transactions to confirmed")
+		return err
 	}
 
 	// Update user balances based on final operations
@@ -1063,11 +1085,18 @@ func (c *RabbitMQBatchConsumer) completeSuccessfulBatch(
 
 	err = c.finalizeUserBalances(tx, jobs)
 	if err != nil {
-		return fmt.Errorf("failed to finalize user balances: %w", err)
+		log.Error().Err(err).
+			Str("batch_id", batchID.String()).
+			Int("job_count", len(jobs)).
+			Msg("Failed to finalize user balances")
+		return err
 	}
 
 	if err = tx.Commit(); err != nil {
-		return fmt.Errorf("failed to commit successful batch completion: %w", err)
+		log.Error().Err(err).
+			Str("batch_id", batchID.String()).
+			Msg("Failed to commit successful batch completion")
+		return err
 	}
 
 	// Send batch status notification after successful commit
@@ -1130,7 +1159,10 @@ func (c *RabbitMQBatchConsumer) updateTransactionsToConfirmed(tx *sql.Tx, batchI
 
 	rows, err := tx.Query(getQuery, batchID.String())
 	if err != nil {
-		return fmt.Errorf("failed to get transactions for notifications: %w", err)
+		log.Error().Err(err).
+			Str("batch_id", batchID.String()).
+			Msg("Failed to get transactions for notifications")
+		return err
 	}
 	defer rows.Close()
 
@@ -1197,7 +1229,10 @@ func (c *RabbitMQBatchConsumer) updateTransactionsToConfirmed(tx *sql.Tx, batchI
 
 	_, err = tx.Exec(updateQuery, batchID.String(), time.Now())
 	if err != nil {
-		return fmt.Errorf("failed to update transactions to confirmed: %w", err)
+		log.Error().Err(err).
+			Str("batch_id", batchID.String()).
+			Msg("Failed to update transactions to confirmed")
+		return err
 	}
 
 	// Send transaction status notifications (after successful update)
@@ -1236,7 +1271,11 @@ func (c *RabbitMQBatchConsumer) finalizeUserBalances(tx *sql.Tx, jobs []BatchJob
 func (c *RabbitMQBatchConsumer) finalizeBalanceForMint(tx *sql.Tx, job AssetAdjustJob) error {
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
-		return fmt.Errorf("invalid amount format: %s", job.Amount)
+		log.Error().Err(err).
+			Str("amount", job.Amount).
+			Str("user_id", job.UserID).
+			Msg("Invalid amount format for mint")
+		return err
 	}
 
 	// Mint should always be positive
@@ -1256,7 +1295,13 @@ func (c *RabbitMQBatchConsumer) finalizeBalanceForMint(tx *sql.Tx, job AssetAdju
 
 	_, err = tx.Exec(query, job.UserID, job.ChainID, job.TokenID, amount, time.Now())
 	if err != nil {
-		return fmt.Errorf("failed to finalize balance for mint: %w", err)
+		log.Error().Err(err).
+			Str("user_id", job.UserID).
+			Int64("chain_id", job.ChainID).
+			Int("token_id", job.TokenID).
+			Str("amount", job.Amount).
+			Msg("Failed to finalize balance for mint")
+		return err
 	}
 
 	// Send balance change notification for mint
@@ -1269,7 +1314,11 @@ func (c *RabbitMQBatchConsumer) finalizeBalanceForMint(tx *sql.Tx, job AssetAdju
 func (c *RabbitMQBatchConsumer) finalizeBalanceForBurn(tx *sql.Tx, job AssetAdjustJob) error {
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
-		return fmt.Errorf("invalid amount format: %s", job.Amount)
+		log.Error().Err(err).
+			Str("amount", job.Amount).
+			Str("user_id", job.UserID).
+			Msg("Invalid amount format for burn")
+		return err
 	}
 
 	// Burn amount might be negative, take absolute value
@@ -1288,7 +1337,13 @@ func (c *RabbitMQBatchConsumer) finalizeBalanceForBurn(tx *sql.Tx, job AssetAdju
 
 	_, err = tx.Exec(query, job.UserID, job.ChainID, job.TokenID, amount, time.Now())
 	if err != nil {
-		return fmt.Errorf("failed to finalize balance for burn: %w", err)
+		log.Error().Err(err).
+			Str("user_id", job.UserID).
+			Int64("chain_id", job.ChainID).
+			Int("token_id", job.TokenID).
+			Str("amount", job.Amount).
+			Msg("Failed to finalize balance for burn")
+		return err
 	}
 
 	// Send balance change notification for burn
@@ -1301,7 +1356,12 @@ func (c *RabbitMQBatchConsumer) finalizeBalanceForBurn(tx *sql.Tx, job AssetAdju
 func (c *RabbitMQBatchConsumer) finalizeBalanceForTransfer(tx *sql.Tx, job TransferJob) error {
 	amount, err := decimal.NewFromString(job.Amount)
 	if err != nil {
-		return fmt.Errorf("invalid amount format: %s", job.Amount)
+		log.Error().Err(err).
+			Str("amount", job.Amount).
+			Str("from_user_id", job.FromUserID).
+			Str("to_user_id", job.ToUserID).
+			Msg("Invalid amount format for transfer")
+		return err
 	}
 
 	// Clear sender's pending_balance (was frozen)
@@ -1315,7 +1375,13 @@ func (c *RabbitMQBatchConsumer) finalizeBalanceForTransfer(tx *sql.Tx, job Trans
 
 	_, err = tx.Exec(senderQuery, job.FromUserID, job.ChainID, job.TokenID, amount, time.Now())
 	if err != nil {
-		return fmt.Errorf("failed to finalize sender balance for transfer: %w", err)
+		log.Error().Err(err).
+			Str("from_user_id", job.FromUserID).
+			Int64("chain_id", job.ChainID).
+			Int("token_id", job.TokenID).
+			Str("amount", job.Amount).
+			Msg("Failed to finalize sender balance for transfer")
+		return err
 	}
 
 	// Add amount to receiver's confirmed_balance
@@ -1330,7 +1396,13 @@ func (c *RabbitMQBatchConsumer) finalizeBalanceForTransfer(tx *sql.Tx, job Trans
 
 	_, err = tx.Exec(receiverQuery, job.ToUserID, job.ChainID, job.TokenID, amount, time.Now())
 	if err != nil {
-		return fmt.Errorf("failed to finalize receiver balance for transfer: %w", err)
+		log.Error().Err(err).
+			Str("to_user_id", job.ToUserID).
+			Int64("chain_id", job.ChainID).
+			Int("token_id", job.TokenID).
+			Str("amount", job.Amount).
+			Msg("Failed to finalize receiver balance for transfer")
+		return err
 	}
 
 	// Send balance change notifications for transfer
@@ -2232,7 +2304,7 @@ func (c *RabbitMQBatchConsumer) processNFTBatch(
 	}
 
 	confirmed, confirmations, err := c.confirmationWatcher.WaitForConfirmation(
-		ctx, caller, result.TxHash, 6, 10*time.Minute,
+		ctx, caller, result.TxHash, 1, 10*time.Minute,
 	)
 	if err != nil {
 		return fmt.Errorf("NFT confirmation failed: %w", err)

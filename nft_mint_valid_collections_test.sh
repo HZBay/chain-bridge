@@ -19,7 +19,7 @@ curl -X 'POST' \
   -H "Authorization: Bearer $AUTH_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
-  "operation_id": "cc0e8400-e29b-41d4-a716-446655470031",
+  "operation_id": "550e8400-e29b-41d4-a716-446655440000",
   "collection_id": "cpop_official_nft_collection",
   "chain_id": 11155111,
   "mint_operations": [
@@ -57,7 +57,7 @@ curl -X 'POST' \
   -H "Authorization: Bearer $AUTH_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
-  "operation_id": "cc0e8400-e29b-41d4-a716-446655470032",
+  "operation_id": "550e8400-e29b-41d4-a716-446655440001",
   "collection_id": "cpop_official_nft_collection",
   "chain_id": 11155111,
   "mint_operations": [
@@ -119,7 +119,7 @@ curl -X 'POST' \
   -H "Authorization: Bearer $AUTH_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
-  "operation_id": "cc0e8400-e29b-41d4-a716-446655470033",
+  "operation_id": "550e8400-e29b-41d4-a716-446655440002",
   "collection_id": "cpop_official_nft_collection",
   "chain_id": 11155111,
   "mint_operations": [
@@ -147,7 +147,7 @@ curl -X 'POST' \
   -H "Authorization: Bearer $AUTH_TOKEN" \
   -H 'Content-Type: application/json' \
   -d '{
-  "operation_id": "cc0e8400-e29b-41d4-a716-446655470034",
+  "operation_id": "550e8400-e29b-41d4-a716-446655440003",
   "collection_id": "cpop_official_nft_collection",
   "chain_id": 11155111,
   "mint_operations": [
