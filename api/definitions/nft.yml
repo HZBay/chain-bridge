@@ -260,7 +260,7 @@ definitions:
   # NFT销毁操作
   NFTBurnOperation:
     type: object
-    required: [owner_user_id, token_id]
+    required: [owner_user_id, token_id, business_type, reason_type]
     properties:
       owner_user_id:
         type: string
@@ -270,6 +270,19 @@ definitions:
         type: string
         description: "NFT Token ID"
         example: "1"
+      business_type:
+        type: string
+        enum: [transfer, reward, gas_fee, consumption, refund, burn, open_box]
+        description: "Business type"
+        example: "reward"
+      reason_type:
+        type: string
+        description: "Reason type"
+        example: "daily_checkin"
+      reason_detail:
+        type: string
+        description: "Detailed reason"
+        example: "Daily check-in reward"
 
   # NFT销毁请求体
   BatchBurnNFTsBody:
@@ -318,7 +331,7 @@ definitions:
   # NFT转账操作
   NFTTransferOperation:
     type: object
-    required: [from_user_id, to_user_id, token_id]
+    required: [from_user_id, to_user_id, token_id, business_type, reason_type]
     properties:
       from_user_id:
         type: string
@@ -332,6 +345,19 @@ definitions:
         type: string
         description: "NFT Token ID"
         example: "1"
+      business_type:
+        type: string
+        enum: [transfer, reward, gas_fee, consumption, refund, burn, open_box]
+        description: "Business type"
+        example: "reward"
+      reason_type:
+        type: string
+        description: "Reason type"
+        example: "daily_checkin"
+      reason_detail:
+        type: string
+        description: "Detailed reason"
+        example: "Daily check-in reward"
 
   # NFT转账请求体
   BatchTransferNFTsBody:

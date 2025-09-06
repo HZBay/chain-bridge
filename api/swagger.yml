@@ -3732,11 +3732,33 @@ definitions:
     required:
     - owner_user_id
     - token_id
+    - business_type
+    - reason_type
     properties:
+      business_type:
+        description: Business type
+        type: string
+        enum:
+        - transfer
+        - reward
+        - gas_fee
+        - consumption
+        - refund
+        - burn
+        - open_box
+        example: reward
       owner_user_id:
         description: Owner user ID
         type: string
         example: user123
+      reason_detail:
+        description: Detailed reason
+        type: string
+        example: Daily check-in reward
+      reason_type:
+        description: Reason type
+        type: string
+        example: daily_checkin
       token_id:
         description: NFT Token ID
         type: string
@@ -3968,11 +3990,33 @@ definitions:
     - from_user_id
     - to_user_id
     - token_id
+    - business_type
+    - reason_type
     properties:
+      business_type:
+        description: Business type
+        type: string
+        enum:
+        - transfer
+        - reward
+        - gas_fee
+        - consumption
+        - refund
+        - burn
+        - open_box
+        example: reward
       from_user_id:
         description: Sender user ID
         type: string
         example: user123
+      reason_detail:
+        description: Detailed reason
+        type: string
+        example: Daily check-in reward
+      reason_type:
+        description: Reason type
+        type: string
+        example: daily_checkin
       to_user_id:
         description: Recipient user ID
         type: string

@@ -79,8 +79,11 @@ type BatchBurnRequest struct {
 
 // BurnOperation represents a single burn operation
 type BurnOperation struct {
-	OwnerUserID string `json:"owner_user_id"`
-	TokenID     string `json:"token_id"`
+	OwnerUserID  string `json:"owner_user_id"`
+	TokenID      string `json:"token_id"`
+	BusinessType string `json:"business_type"`
+	ReasonType   string `json:"reason_type"`
+	ReasonDetail string `json:"reason_detail"`
 }
 
 // BatchTransferRequest represents a batch transfer request
@@ -94,9 +97,12 @@ type BatchTransferRequest struct {
 
 // TransferOperation represents a single transfer operation
 type TransferOperation struct {
-	FromUserID string `json:"from_user_id"`
-	ToUserID   string `json:"to_user_id"`
-	TokenID    string `json:"token_id"`
+	FromUserID   string `json:"from_user_id"`
+	ToUserID     string `json:"to_user_id"`
+	TokenID      string `json:"token_id"`
+	BusinessType string `json:"business_type"`
+	ReasonType   string `json:"reason_type"`
+	ReasonDetail string `json:"reason_detail"`
 }
 
 // BatchPreferences represents batch processing preferences
@@ -586,10 +592,10 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO transactions (
 				tx_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount, token_id,
-				collection_id, nft_token_id, reason_type, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
-		`, transactionID, mainOperationID.String(), burnOp.OwnerUserID, request.ChainID, "burn", "consumption", "pending",
-			"1", 1, request.CollectionID, burnOp.TokenID, "nft_burn")
+				collection_id, nft_token_id, reason_type, reason_detail, created_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
+		`, transactionID, mainOperationID.String(), burnOp.OwnerUserID, request.ChainID, "burn", burnOp.BusinessType, "pending",
+			"1", 1, request.CollectionID, burnOp.TokenID, burnOp.ReasonType, burnOp.ReasonDetail)
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create transaction record: %w", err)
@@ -615,8 +621,9 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 			CollectionID:  request.CollectionID,
 			OwnerUserID:   burnOp.OwnerUserID,
 			TokenID:       burnOp.TokenID,
-			BusinessType:  "consumption",
-			ReasonType:    "user_burn",
+			BusinessType:  burnOp.BusinessType,
+			ReasonType:    burnOp.ReasonType,
+			ReasonDetail:  burnOp.ReasonDetail,
 			Priority:      queue.PriorityNormal,
 			CreatedAt:     time.Now(),
 			// Store batch operation_id for mapping
@@ -815,15 +822,23 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 			}
 		}
 
+		// Validate recipient has wallet address on the chain
+		if err := s.validateUserAccountExists(ctx, transferOp.ToUserID, request.ChainID); err != nil {
+			return nil, nil, NFTError{
+				Type:    ErrorTypeValidation,
+				Message: fmt.Sprintf("Recipient user %s does not have a wallet address on chain %d", transferOp.ToUserID, request.ChainID),
+			}
+		}
+
 		// Create transaction record with main operation_id for proper tracking
 		transactionID := uuid.New()
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO transactions (
 				tx_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount,
-				token_id, collection_id, nft_token_id, related_user_id, reason_type, reason_detail, created_at
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, NOW())
-		`, transactionID, mainOperationID.String(), transferOp.FromUserID, request.ChainID, "transfer", "transfer", "pending",
-			"1", 1, request.CollectionID, transferOp.TokenID, transferOp.ToUserID, "nft_transfer", "NFT transfer operation")
+				token_id, collection_id, nft_token_id, related_user_id, transfer_direction, reason_type, reason_detail, created_at
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, NOW())
+		`, transactionID, mainOperationID.String(), transferOp.FromUserID, request.ChainID, "transfer", transferOp.BusinessType, "pending",
+			"1", 1, request.CollectionID, transferOp.TokenID, transferOp.ToUserID, "outgoing", transferOp.ReasonType, transferOp.ReasonDetail)
 
 		if err != nil {
 			return nil, nil, fmt.Errorf("failed to create transaction record: %w", err)
@@ -850,8 +865,9 @@ func (s *service) BatchTransferNFTs(ctx context.Context, request *BatchTransferR
 			FromUserID:    transferOp.FromUserID,
 			ToUserID:      transferOp.ToUserID,
 			TokenID:       transferOp.TokenID,
-			BusinessType:  "transfer",
-			ReasonType:    "user_transfer",
+			BusinessType:  transferOp.BusinessType,
+			ReasonType:    transferOp.ReasonType,
+			ReasonDetail:  transferOp.ReasonDetail,
 			Priority:      queue.PriorityNormal,
 			CreatedAt:     time.Now(),
 			// Store batch operation_id for mapping

@@ -68,9 +68,12 @@ func (h *Handler) BatchTransferNFTs(c echo.Context) error {
 	// Convert transfer operations
 	for _, op := range request.TransferOperations {
 		transferOp := nft.TransferOperation{
-			FromUserID: *op.FromUserID,
-			ToUserID:   *op.ToUserID,
-			TokenID:    *op.TokenID,
+			FromUserID:   *op.FromUserID,
+			ToUserID:     *op.ToUserID,
+			TokenID:      *op.TokenID,
+			BusinessType: *op.BusinessType,
+			ReasonType:   *op.ReasonType,
+			ReasonDetail: op.ReasonDetail,
 		}
 
 		serviceRequest.TransferOperations = append(serviceRequest.TransferOperations, transferOp)

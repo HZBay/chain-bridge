@@ -68,8 +68,11 @@ func (h *Handler) BatchBurnNFTs(c echo.Context) error {
 	// Convert burn operations
 	for _, op := range request.BurnOperations {
 		burnOp := nft.BurnOperation{
-			OwnerUserID: *op.OwnerUserID,
-			TokenID:     *op.TokenID,
+			OwnerUserID:  *op.OwnerUserID,
+			TokenID:      *op.TokenID,
+			BusinessType: *op.BusinessType,
+			ReasonType:   *op.ReasonType,
+			ReasonDetail: op.ReasonDetail,
 		}
 
 		serviceRequest.BurnOperations = append(serviceRequest.BurnOperations, burnOp)

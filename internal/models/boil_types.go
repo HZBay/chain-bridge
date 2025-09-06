@@ -179,6 +179,8 @@ const (
 	BusinessTypeGasFee      string = "gas_fee"
 	BusinessTypeConsumption string = "consumption"
 	BusinessTypeRefund      string = "refund"
+	BusinessTypeBurn        string = "burn"
+	BusinessTypeOpenBox     string = "open_box"
 )
 
 func AllBusinessType() []string {
@@ -188,6 +190,8 @@ func AllBusinessType() []string {
 		BusinessTypeGasFee,
 		BusinessTypeConsumption,
 		BusinessTypeRefund,
+		BusinessTypeBurn,
+		BusinessTypeOpenBox,
 	}
 }
 

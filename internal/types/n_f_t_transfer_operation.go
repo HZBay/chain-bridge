@@ -7,6 +7,7 @@ package types
 
 import (
 	"context"
+	"encoding/json"
 
 	"github.com/go-openapi/errors"
 	"github.com/go-openapi/strfmt"
@@ -19,10 +20,25 @@ import (
 // swagger:model nFTTransferOperation
 type NFTTransferOperation struct {
 
+	// Business type
+	// Example: reward
+	// Required: true
+	// Enum: [transfer reward gas_fee consumption refund burn open_box]
+	BusinessType *string `json:"business_type"`
+
 	// Sender user ID
 	// Example: user123
 	// Required: true
 	FromUserID *string `json:"from_user_id"`
+
+	// Detailed reason
+	// Example: Daily check-in reward
+	ReasonDetail string `json:"reason_detail,omitempty"`
+
+	// Reason type
+	// Example: daily_checkin
+	// Required: true
+	ReasonType *string `json:"reason_type"`
 
 	// Recipient user ID
 	// Example: user456
@@ -39,7 +55,15 @@ type NFTTransferOperation struct {
 func (m *NFTTransferOperation) Validate(formats strfmt.Registry) error {
 	var res []error
 
+	if err := m.validateBusinessType(formats); err != nil {
+		res = append(res, err)
+	}
+
 	if err := m.validateFromUserID(formats); err != nil {
+		res = append(res, err)
+	}
+
+	if err := m.validateReasonType(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -57,9 +81,76 @@ func (m *NFTTransferOperation) Validate(formats strfmt.Registry) error {
 	return nil
 }
 
+var nFTTransferOperationTypeBusinessTypePropEnum []interface{}
+
+func init() {
+	var res []string
+	if err := json.Unmarshal([]byte(`["transfer","reward","gas_fee","consumption","refund","burn","open_box"]`), &res); err != nil {
+		panic(err)
+	}
+	for _, v := range res {
+		nFTTransferOperationTypeBusinessTypePropEnum = append(nFTTransferOperationTypeBusinessTypePropEnum, v)
+	}
+}
+
+const (
+
+	// NFTTransferOperationBusinessTypeTransfer captures enum value "transfer"
+	NFTTransferOperationBusinessTypeTransfer string = "transfer"
+
+	// NFTTransferOperationBusinessTypeReward captures enum value "reward"
+	NFTTransferOperationBusinessTypeReward string = "reward"
+
+	// NFTTransferOperationBusinessTypeGasFee captures enum value "gas_fee"
+	NFTTransferOperationBusinessTypeGasFee string = "gas_fee"
+
+	// NFTTransferOperationBusinessTypeConsumption captures enum value "consumption"
+	NFTTransferOperationBusinessTypeConsumption string = "consumption"
+
+	// NFTTransferOperationBusinessTypeRefund captures enum value "refund"
+	NFTTransferOperationBusinessTypeRefund string = "refund"
+
+	// NFTTransferOperationBusinessTypeBurn captures enum value "burn"
+	NFTTransferOperationBusinessTypeBurn string = "burn"
+
+	// NFTTransferOperationBusinessTypeOpenBox captures enum value "open_box"
+	NFTTransferOperationBusinessTypeOpenBox string = "open_box"
+)
+
+// prop value enum
+func (m *NFTTransferOperation) validateBusinessTypeEnum(path, location string, value string) error {
+	if err := validate.EnumCase(path, location, value, nFTTransferOperationTypeBusinessTypePropEnum, true); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (m *NFTTransferOperation) validateBusinessType(formats strfmt.Registry) error {
+
+	if err := validate.Required("business_type", "body", m.BusinessType); err != nil {
+		return err
+	}
+
+	// value enum
+	if err := m.validateBusinessTypeEnum("business_type", "body", *m.BusinessType); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 func (m *NFTTransferOperation) validateFromUserID(formats strfmt.Registry) error {
 
 	if err := validate.Required("from_user_id", "body", m.FromUserID); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+func (m *NFTTransferOperation) validateReasonType(formats strfmt.Registry) error {
+
+	if err := validate.Required("reason_type", "body", m.ReasonType); err != nil {
 		return err
 	}
 

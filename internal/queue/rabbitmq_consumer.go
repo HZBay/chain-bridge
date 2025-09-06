@@ -554,9 +554,9 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 		query = `
 			INSERT INTO transactions (
 				tx_id, operation_id, user_id, chain_id, tx_type, business_type,
-				related_user_id, collection_id, nft_token_id, status, batch_id, is_batch_operation,
+				related_user_id, transfer_direction, collection_id, nft_token_id, status, batch_id, is_batch_operation,
 				reason_type, reason_detail, created_at, amount
-			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
+			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
 			ON CONFLICT (tx_id) DO UPDATE SET
 				status = 'batching',
 				batch_id = EXCLUDED.batch_id,
@@ -564,8 +564,8 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 				updated_at = NOW()`
 
 		args = []interface{}{
-			j.TransactionID, j.GetOperationID(), j.FromUserID, j.ChainID, "nft_transfer", j.BusinessType,
-			j.ToUserID, j.CollectionID, j.TokenID, "batching", batchID, true,
+			j.TransactionID, j.GetOperationID(), j.FromUserID, j.ChainID, "transfer", j.BusinessType,
+			j.ToUserID, "outgoing", j.CollectionID, j.TokenID, "batching", batchID, true,
 			j.ReasonType, j.ReasonDetail, j.CreatedAt, "1", // 设置 amount 为 "1"
 		}
 
