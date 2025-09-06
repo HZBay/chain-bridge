@@ -38,7 +38,7 @@ type TransactionInfo struct {
 
 	// Business type
 	// Required: true
-	// Enum: [transfer reward gas_fee consumption refund]
+	// Enum: [transfer reward gas_fee consumption refund burn open_box]
 	BusinessType *string `json:"business_type"`
 
 	// Chain ID
@@ -106,7 +106,7 @@ type TransactionInfo struct {
 
 	// Transaction type
 	// Required: true
-	// Enum: [mint burn transfer]
+	// Enum: [mint burn transfer nft_mint nft_burn nft_transfer]
 	TxType *string `json:"tx_type"`
 }
 
@@ -173,7 +173,7 @@ var transactionInfoTypeBusinessTypePropEnum []interface{}
 
 func init() {
 	var res []string
-	if err := json.Unmarshal([]byte(`["transfer","reward","gas_fee","consumption","refund"]`), &res); err != nil {
+	if err := json.Unmarshal([]byte(`["transfer","reward","gas_fee","consumption","refund","burn","open_box"]`), &res); err != nil {
 		panic(err)
 	}
 	for _, v := range res {
@@ -197,6 +197,12 @@ const (
 
 	// TransactionInfoBusinessTypeRefund captures enum value "refund"
 	TransactionInfoBusinessTypeRefund string = "refund"
+
+	// TransactionInfoBusinessTypeBurn captures enum value "burn"
+	TransactionInfoBusinessTypeBurn string = "burn"
+
+	// TransactionInfoBusinessTypeOpenBox captures enum value "open_box"
+	TransactionInfoBusinessTypeOpenBox string = "open_box"
 )
 
 // prop value enum
@@ -370,7 +376,7 @@ var transactionInfoTypeTxTypePropEnum []interface{}
 
 func init() {
 	var res []string
-	if err := json.Unmarshal([]byte(`["mint","burn","transfer"]`), &res); err != nil {
+	if err := json.Unmarshal([]byte(`["mint","burn","transfer","nft_mint","nft_burn","nft_transfer"]`), &res); err != nil {
 		panic(err)
 	}
 	for _, v := range res {
@@ -388,6 +394,15 @@ const (
 
 	// TransactionInfoTxTypeTransfer captures enum value "transfer"
 	TransactionInfoTxTypeTransfer string = "transfer"
+
+	// TransactionInfoTxTypeNftMint captures enum value "nft_mint"
+	TransactionInfoTxTypeNftMint string = "nft_mint"
+
+	// TransactionInfoTxTypeNftBurn captures enum value "nft_burn"
+	TransactionInfoTxTypeNftBurn string = "nft_burn"
+
+	// TransactionInfoTxTypeNftTransfer captures enum value "nft_transfer"
+	TransactionInfoTxTypeNftTransfer string = "nft_transfer"
 )
 
 // prop value enum

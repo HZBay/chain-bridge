@@ -38,7 +38,7 @@ func (h *GetUserTransactionsHandler) Handle(c echo.Context) error {
 
 	// Parse and validate parameters
 	params := cpop.NewGetUserTransactionsParams()
-	if err := util.BindAndValidatePathParams(c, &params); err != nil {
+	if err := util.BindAndValidatePathAndQueryParams(c, &params); err != nil {
 		log.Debug().Err(err).Msg("Failed to bind request parameters")
 		return err
 	}
@@ -54,6 +54,7 @@ func (h *GetUserTransactionsHandler) Handle(c echo.Context) error {
 		ChainID:     params.ChainID,
 		TokenSymbol: params.TokenSymbol,
 		TxType:      params.TxType,
+		Status:      params.Status,
 		Page:        1,  // Default page
 		Limit:       20, // Default limit
 		StartDate:   convertDateToString(params.StartDate),

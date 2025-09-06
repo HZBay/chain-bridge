@@ -34,6 +34,7 @@ type GetTransactionsParams struct {
 	ChainID     *int64
 	TokenSymbol *string
 	TxType      *string
+	Status      *string
 	Page        int
 	Limit       int
 	StartDate   *string
@@ -98,6 +99,10 @@ func (s *service) GetUserTransactions(ctx context.Context, userID string, params
 	if params.TxType != nil {
 		queryMods = append(queryMods, models.TransactionWhere.TXType.EQ(*params.TxType))
 		countQueryMods = append(countQueryMods, models.TransactionWhere.TXType.EQ(*params.TxType))
+	}
+	if params.Status != nil {
+		queryMods = append(queryMods, models.TransactionWhere.Status.EQ(null.StringFrom(*params.Status)))
+		countQueryMods = append(countQueryMods, models.TransactionWhere.Status.EQ(null.StringFrom(*params.Status)))
 	}
 	if params.StartDate != nil {
 		queryMods = append(queryMods, qm.Where("transactions.created_at >= ?", *params.StartDate))

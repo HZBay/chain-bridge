@@ -35,11 +35,11 @@ definitions:
         example: "CPOP"
       tx_type:
         type: string
-        enum: [mint, burn, transfer]
+        enum: [mint, burn, transfer, nft_mint, nft_burn, nft_transfer]
         description: "Transaction type"
       business_type:
         type: string
-        enum: [transfer, reward, gas_fee, consumption, refund]
+        enum: [transfer, reward, gas_fee, consumption, refund, burn, open_box]
         description: "Business type"
       transfer_direction:
         type: string

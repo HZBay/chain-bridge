@@ -68,6 +68,10 @@ type GetUserTransactionsParams struct {
 	  In: query
 	*/
 	StartDate *strfmt.Date `query:"start_date"`
+	/*Filter by transaction status
+	  In: query
+	*/
+	Status *string `query:"status"`
 	/*Filter by token symbol
 	  In: query
 	*/
@@ -116,6 +120,11 @@ func (o *GetUserTransactionsParams) BindRequest(r *http.Request, route *middlewa
 
 	qStartDate, qhkStartDate, _ := qs.GetOK("start_date")
 	if err := o.bindStartDate(qStartDate, qhkStartDate, route.Formats); err != nil {
+		res = append(res, err)
+	}
+
+	qStatus, qhkStatus, _ := qs.GetOK("status")
+	if err := o.bindStatus(qStatus, qhkStatus, route.Formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -176,6 +185,14 @@ func (o *GetUserTransactionsParams) Validate(formats strfmt.Registry) error {
 	// AllowEmptyValue: false
 
 	if err := o.validateStartDate(formats); err != nil {
+		res = append(res, err)
+	}
+
+	// status
+	// Required: false
+	// AllowEmptyValue: false
+
+	if err := o.validateStatus(formats); err != nil {
 		res = append(res, err)
 	}
 
@@ -393,6 +410,43 @@ func (o *GetUserTransactionsParams) validateStartDate(formats strfmt.Registry) e
 	return nil
 }
 
+// bindStatus binds and validates parameter Status from query.
+func (o *GetUserTransactionsParams) bindStatus(rawData []string, hasKey bool, formats strfmt.Registry) error {
+	var raw string
+	if len(rawData) > 0 {
+		raw = rawData[len(rawData)-1]
+	}
+
+	// Required: false
+	// AllowEmptyValue: false
+	if raw == "" { // empty values pass all other validations
+		return nil
+	}
+
+	o.Status = &raw
+
+	if err := o.validateStatus(formats); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// validateStatus carries on validations for parameter Status
+func (o *GetUserTransactionsParams) validateStatus(formats strfmt.Registry) error {
+
+	// Required: false
+	if o.Status == nil {
+		return nil
+	}
+
+	if err := validate.EnumCase("status", "query", *o.Status, []interface{}{"pending", "batching", "submitted", "confirmed", "failed"}, true); err != nil {
+		return err
+	}
+
+	return nil
+}
+
 // bindTokenSymbol binds and validates parameter TokenSymbol from query.
 func (o *GetUserTransactionsParams) bindTokenSymbol(rawData []string, hasKey bool, formats strfmt.Registry) error {
 	var raw string
@@ -441,7 +495,7 @@ func (o *GetUserTransactionsParams) validateTxType(formats strfmt.Registry) erro
 		return nil
 	}
 
-	if err := validate.EnumCase("tx_type", "query", *o.TxType, []interface{}{"mint", "burn", "transfer"}, true); err != nil {
+	if err := validate.EnumCase("tx_type", "query", *o.TxType, []interface{}{"mint", "burn", "transfer", "nft_mint", "nft_burn", "nft_transfer"}, true); err != nil {
 		return err
 	}
 

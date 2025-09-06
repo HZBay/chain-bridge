@@ -128,7 +128,13 @@ paths:
           description: Filter by transaction type
           required: false
           type: string
-          enum: [ mint, burn, transfer ]
+          enum: [ mint, burn, transfer, nft_mint, nft_burn, nft_transfer ]
+        - name: status
+          in: query
+          description: Filter by transaction status
+          required: false
+          type: string
+          enum: [ pending, batching, submitted, confirmed, failed ]
         - name: page
           in: query
           description: Page number (1-based)

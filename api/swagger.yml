@@ -2117,9 +2117,22 @@ paths:
         - mint
         - burn
         - transfer
+        - nft_mint
+        - nft_burn
+        - nft_transfer
         type: string
         description: Filter by transaction type
         name: tx_type
+        in: query
+      - enum:
+        - pending
+        - batching
+        - submitted
+        - confirmed
+        - failed
+        type: string
+        description: Filter by transaction status
+        name: status
         in: query
       - minimum: 1
         type: integer
@@ -2226,6 +2239,8 @@ paths:
                       - gas_fee
                       - consumption
                       - refund
+                      - burn
+                      - open_box
                     chain_id:
                       description: Chain ID
                       type: integer
@@ -2303,6 +2318,9 @@ paths:
                       - mint
                       - burn
                       - transfer
+                      - nft_mint
+                      - nft_burn
+                      - nft_transfer
               user_id:
                 description: User ID
                 type: string
@@ -4878,6 +4896,8 @@ definitions:
         - gas_fee
         - consumption
         - refund
+        - burn
+        - open_box
       chain_id:
         description: Chain ID
         type: integer
@@ -4955,6 +4975,9 @@ definitions:
         - mint
         - burn
         - transfer
+        - nft_mint
+        - nft_burn
+        - nft_transfer
   transferOperation:
     type: object
     required:
