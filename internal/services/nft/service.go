@@ -531,7 +531,12 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 	// OperationID 不存在，继续正常处理
 	log.Debug().Str("operation_id", request.OperationID).Msg("New operation, proceeding with processing")
 
-	// 2. Validate collection exists and is enabled
+	// 2. Validate chain exists and is enabled
+	if err := s.validateChainExists(request.ChainID); err != nil {
+		return nil, nil, err
+	}
+
+	// 3. Validate collection exists and is enabled
 	collection, err := s.GetCollection(ctx, request.CollectionID)
 	if err != nil {
 		return nil, nil, err
@@ -566,44 +571,14 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 	batchID := generateBatchID()
 
 	for _, burnOp := range request.BurnOperations {
-		// Validate NFT ownership
-		var currentOwner string
-		var isBurned, isMinted bool
-		err := tx.QueryRowContext(ctx, `
-			SELECT owner_user_id, is_burned, is_minted
-			FROM nft_assets
-			WHERE collection_id = $1 AND token_id = $2
-		`, request.CollectionID, burnOp.TokenID).Scan(&currentOwner, &isBurned, &isMinted)
-
-		if err != nil {
-			if errors.Is(err, sql.ErrNoRows) {
-				return nil, nil, NFTError{
-					Type:    ErrorTypeNFTNotFound,
-					Message: fmt.Sprintf("NFT with token ID %s not found in collection %s", burnOp.TokenID, request.CollectionID),
-				}
-			}
-			return nil, nil, fmt.Errorf("failed to query NFT asset: %w", err)
+		// Validate user account exists on the chain
+		if err := s.validateUserAccountExists(ctx, burnOp.OwnerUserID, request.ChainID); err != nil {
+			return nil, nil, err
 		}
 
-		if !isMinted {
-			return nil, nil, NFTError{
-				Type:    ErrorTypeValidation,
-				Message: fmt.Sprintf("NFT with token ID %s is not yet minted", burnOp.TokenID),
-			}
-		}
-
-		if isBurned {
-			return nil, nil, NFTError{
-				Type:    ErrorTypeValidation,
-				Message: fmt.Sprintf("NFT with token ID %s is already burned", burnOp.TokenID),
-			}
-		}
-
-		if currentOwner != burnOp.OwnerUserID {
-			return nil, nil, NFTError{
-				Type:    ErrorTypeOwnership,
-				Message: fmt.Sprintf("User %s does not own NFT with token ID %s", burnOp.OwnerUserID, burnOp.TokenID),
-			}
+		// Validate NFT ownership and status
+		if err := s.validateNFTOwnership(ctx, burnOp.OwnerUserID, request.CollectionID, burnOp.TokenID); err != nil {
+			return nil, nil, err
 		}
 
 		// Create transaction record with main operation_id for proper tracking
@@ -613,7 +588,7 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 				tx_id, operation_id, user_id, chain_id, tx_type, business_type, status, amount, token_id,
 				collection_id, nft_token_id, reason_type, created_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
-		`, transactionID, mainOperationID.String(), burnOp.OwnerUserID, request.ChainID, "nft_burn", "consumption", "pending",
+		`, transactionID, mainOperationID.String(), burnOp.OwnerUserID, request.ChainID, "burn", "consumption", "pending",
 			"1", 1, request.CollectionID, burnOp.TokenID, "nft_burn")
 
 		if err != nil {
@@ -640,7 +615,7 @@ func (s *service) BatchBurnNFTs(ctx context.Context, request *BatchBurnRequest) 
 			CollectionID:  request.CollectionID,
 			OwnerUserID:   burnOp.OwnerUserID,
 			TokenID:       burnOp.TokenID,
-			BusinessType:  "burn",
+			BusinessType:  "consumption",
 			ReasonType:    "user_burn",
 			Priority:      queue.PriorityNormal,
 			CreatedAt:     time.Now(),
@@ -1611,6 +1586,99 @@ func (s *service) UpdateTokenIDAfterMinting(ctx context.Context, operationID, ac
 		Str("actual_token_id", actualTokenID).
 		Str("metadata_uri", metadataURI).
 		Msg("Successfully updated token_id after minting")
+
+	return nil
+}
+
+// validateChainExists checks if a chain exists and is enabled
+func (s *service) validateChainExists(chainID int64) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	err := s.db.QueryRowContext(ctx, `
+		SELECT chain_id FROM chains 
+		WHERE chain_id = $1 AND is_enabled = true
+	`, chainID).Scan(&chainID)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return NFTError{
+				Type:    ErrorTypeValidation,
+				Message: fmt.Sprintf("Chain %d not found or disabled", chainID),
+			}
+		}
+		return fmt.Errorf("failed to validate chain: %w", err)
+	}
+
+	return nil
+}
+
+// validateUserAccountExists checks if a user has an account on the specified chain
+func (s *service) validateUserAccountExists(ctx context.Context, userID string, chainID int64) error {
+	ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	err := s.db.QueryRowContext(ctxTimeout, `
+		SELECT user_id FROM user_accounts 
+		WHERE user_id = $1 AND chain_id = $2
+	`, userID, chainID).Scan(&userID)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return NFTError{
+				Type:    ErrorTypeValidation,
+				Message: fmt.Sprintf("User %s does not have an account on chain %d", userID, chainID),
+			}
+		}
+		return fmt.Errorf("failed to validate user account: %w", err)
+	}
+
+	return nil
+}
+
+// validateNFTOwnership checks if a user owns a specific NFT
+func (s *service) validateNFTOwnership(ctx context.Context, userID, collectionID, tokenID string) error {
+	ctxTimeout, cancel := context.WithTimeout(ctx, 5*time.Second)
+	defer cancel()
+
+	var currentOwner string
+	var isBurned, isMinted bool
+	err := s.db.QueryRowContext(ctxTimeout, `
+		SELECT owner_user_id, is_burned, is_minted
+		FROM nft_assets
+		WHERE collection_id = $1 AND token_id = $2
+	`, collectionID, tokenID).Scan(&currentOwner, &isBurned, &isMinted)
+
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return NFTError{
+				Type:    ErrorTypeNFTNotFound,
+				Message: fmt.Sprintf("NFT with token ID %s not found in collection %s", tokenID, collectionID),
+			}
+		}
+		return fmt.Errorf("failed to query NFT asset: %w", err)
+	}
+
+	if !isMinted {
+		return NFTError{
+			Type:    ErrorTypeValidation,
+			Message: fmt.Sprintf("NFT with token ID %s is not yet minted", tokenID),
+		}
+	}
+
+	if isBurned {
+		return NFTError{
+			Type:    ErrorTypeValidation,
+			Message: fmt.Sprintf("NFT with token ID %s is already burned", tokenID),
+		}
+	}
+
+	if currentOwner != userID {
+		return NFTError{
+			Type:    ErrorTypeOwnership,
+			Message: fmt.Sprintf("User %s does not own NFT with token ID %s", userID, tokenID),
+		}
+	}
 
 	return nil
 }

@@ -545,7 +545,7 @@ func (c *RabbitMQBatchConsumer) upsertTransactionRecord(tx *sql.Tx, job BatchJob
 				updated_at = NOW()`
 
 		args = []interface{}{
-			j.TransactionID, j.GetOperationID(), j.OwnerUserID, j.ChainID, "nft_burn", j.BusinessType,
+			j.TransactionID, j.GetOperationID(), j.OwnerUserID, j.ChainID, "burn", j.BusinessType,
 			j.CollectionID, j.TokenID, "batching", batchID, true,
 			j.ReasonType, j.ReasonDetail, j.CreatedAt, "1", // 设置 amount 为 "1"
 		}
